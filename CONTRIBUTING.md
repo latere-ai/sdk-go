@@ -36,8 +36,12 @@ vets the refresh tool under `tools/`.
 
 - `latere/` is the core every package shares: configuration, credentials,
   the error type, retries, pagination and streams.
-- `agents/`, `account/`, `apps/`, `connections/` and later packages each
-  cover one capability of the API, and call the API only through the core.
+- `agents/`, `account/`, `apps/`, `connections/`, `llm/` and later
+  packages each cover one capability of the API, and call the API only
+  through the core.
+- `llm/wire/` holds the Lux dialect's request, response and stream types,
+  which the service's codec imports too; it depends on the standard
+  library alone.
 - `signin/` signs a person in; the core does not depend on it.
 - `internal/` holds code no caller imports.
 - `openapi/` holds the API's OpenAPI documents the tests check the models
@@ -96,10 +100,12 @@ review checks:
 - Every resource a capability returns keeps the JSON it was decoded from,
   behind `RawJSON`; the parts of a resource do not. `llm`'s types, the Lux
   dialect's own definition, are the exception.
-- A method that creates or sends something sends an idempotency key,
-  generated when the caller gives none, unless its part of the API takes
-  no key or a repeat may have run already (a model's generation); such a
-  method is sent once, and its doc says so.
+- A method that creates or sends something by `POST` sends an
+  idempotency key, generated when the caller gives none. A `PATCH` that
+  only sets values sets `RetryAlways`. A call that a repeat could perform
+  twice, because its part of the API takes no key, forgets the key on a
+  failure, or a model may have run already, sets `RetryNever`; its doc
+  says it is sent once, and the README and `latere/doc.go` list it.
 
 ## Pull requests
 

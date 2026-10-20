@@ -113,15 +113,34 @@ and the API's token exchanges are small enough to write and test here.
 and turns anything else into a `*latere.Error`.
 
 A request is retried when the network failed or the API answered 408, 429,
-500, 502, 503 or 504, and only when it is safe to send twice: a `GET`,
-`HEAD`, `PUT`, `DELETE` or `OPTIONS`, or a request carrying an idempotency
-key. Every method that creates or sends something sends an
-`Idempotency-Key`, generated when the caller gives none, so retries never
-create a second session or send a message twice. Where a part of the API
-takes no key, as the apps part does not yet, its creating methods send no
-key and are not retried: a repeat could create a second app, or answer
-an invite's people as already invited and count them twice against the
-day's invitations, and the caller is better placed to decide. A repeat that arrives
+500, 502, 503 or 504, and only when it is safe to send twice, which its
+`RetryRule` says. The zero rule goes by the method: a `GET`, `HEAD`, `PUT`,
+`DELETE` or `OPTIONS`, or a `POST` carrying an idempotency key. The API
+reads `Idempotency-Key` on `POST` alone, so a key does not make any other
+method safe to repeat; the rule is set on the request rather than inferred
+from the key. A `PATCH` that only sets values, such as a session's title or
+model, has the same effect sent twice and carries `RetryAlways`, as does
+counting a request's tokens, which changes nothing.
+
+Every method that creates or sends something by `POST` sends a key,
+generated when the caller gives none, so retries never create a second
+session or send a message twice. The calls a key cannot make safe carry
+`RetryNever`, are sent once, and say so in their docs:
+
+- `apps.CreateApp` and `apps.Invite`: the apps part takes no key yet, so a
+  repeat could create a second app, or answer an invite's people as
+  already invited and count them twice against the day's invitations.
+- `agents.FireTrigger`: the API forgets a firing's key when it answers
+  with a server error, so a repeat fires the trigger again. The caller may
+  fire again with the same key.
+- `connections.ConfirmConnection`: a finished sign-in answers a repeat
+  with 410, which would hide that the first confirmation succeeded.
+- `connections.ReconnectConnection`: a person signs in once at a time, and
+  a repeat replaces the sign-in the first call started.
+- `llm.Generate` and `llm.Stream`: see [the models
+  capability](#the-models-capability).
+
+In each case the caller is better placed to decide. A repeat that arrives
 while the first request is still being answered is refused with 409, which
 the SDK does not retry, since it cannot tell it from a real conflict; the
 first request still succeeds, and the docs tell the caller to read the
@@ -152,10 +171,14 @@ message and details. The SDK returns all of it in one type,
 what support needs to find the request. `Error.Is` maps statuses to
 sentinels (`ErrNotFound`, `ErrUnauthorized`, `ErrForbidden`, `ErrConflict`,
 `ErrRateLimited`), so the common checks need `errors.Is` and no type
-assertion. An answer that is not the envelope still produces an `Error`,
-with the body's start or the status text as its message. `Error.Body`
-keeps the whole response, up to the 64 KiB the SDK reads, for the few
-refusals that carry more than the error: a trigger whose firing failed to
+assertion. An answer that is not the envelope, such as a proxy's error page, still
+produces an `Error`, with the HTTP status text as its message: the page
+was not written for the program's user, and a message is what a program
+shows them. `Error.Body` keeps the whole response, up to the 64 KiB the
+SDK reads, cut at a character boundary so it stays valid UTF-8. An
+envelope cut at that limit still gives its code and message, read from
+its start. `Body` also serves the few refusals that carry more than the
+error: a trigger whose firing failed to
 start its session answers 503 with the firing, and `FireTrigger` returns
 that firing decoded beside the error.
 
@@ -186,11 +209,16 @@ whose credentials are a token source sends its token, which the service
 accepts only when it is a key's value.
 
 A generation is not idempotent: the model runs, and the call is billed.
-`llm` sends it without an idempotency key, so the core never sends it
-again, and a generation's stream is read once, with no reconnect, unlike a
-session's log: a dropped stream ends with `io.ErrUnexpectedEOF`. Counting
-tokens changes nothing, so it carries an idempotency key and is retried as
-any safe request.
+`llm` sends it with `RetryNever`, so the core never sends it again, and a
+generation's stream is read once, with no reconnect, unlike a session's
+log: a dropped stream ends with `io.ErrUnexpectedEOF`. Counting tokens
+changes nothing, so it carries `RetryAlways` and no key, which the service
+would not read.
+
+A request's labels follow the service's rule, at most eight pairs of a key
+of letters, digits, `.`, `_` and `-` and a value that may also hold `:` and
+`/`. The service drops a pair it cannot read; `llm` leaves such a pair out
+before sending, so a label holding `,` or `=` cannot change another.
 
 The Lux dialect's request, response and stream types are its one public
 definition, and the service's own codec uses them, so a field cannot be
@@ -245,7 +273,7 @@ fetches the documents and fails when they changed, which is the signal to
 update the models.
 
 Every resource a package returns, a session, an event, a trigger, a wallet,
-an app or a connection, keeps the bytes it was decoded from, returned by
+a pin, a device, an app, a connection or a finished sign-in, keeps the bytes it was decoded from, returned by
 `RawJSON`, as Stainless-generated SDKs and stripe-go do. A program that
 shows or stores the API's answer, a command line's `--json` output or a
 server that passes answers on, gets every field, including those added

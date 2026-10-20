@@ -43,7 +43,9 @@ same targets.
   per endpoint on a capability's client, named verb first; named types for
   statuses, states and kinds; `time.Time` for timestamps; `RawJSON` on
   every resource a capability returns; an idempotency key on every creating
-  call, or a doc saying why it is sent once.
+  `POST`; `RetryAlways` on a `PATCH` that only sets values; `RetryNever`
+  and a doc saying why on a call sent once, listed in the README and
+  `latere/doc.go`.
 - Comments in code say what the code does and why, never the history of a
   change.
 - Handle every error; a dropped one carries a comment saying why that is

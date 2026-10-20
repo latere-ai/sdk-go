@@ -249,8 +249,16 @@ file, err := st.UploadFile(ctx, storage.Me, "files/videos/talk.mp4", f, info.Siz
 ```
 
 `ReadFile` streams a file back, `ListFiles` walks a folder, and
-`GetDownloadURL` answers a link that serves the file for five minutes
-without a credential.
+`GetDownloadURL` answers a link that serves the file without a credential
+for five minutes; a public file's link without `Attachment` does not
+expire. A link is a credential while it lasts, and the SDK never puts one
+in an error.
+
+Sending a file's bytes takes as long as the network allows, so each
+attempt of a write or a part has the timeout and two minutes for every
+16 MiB, and an attempt cut off is sent again. An upload in parts that
+fails once it is open is given up, and its error is a
+`*storage.UploadError` naming it.
 
 A message to a session carries pictures for the model to see and files for
 the agent to work on. A file of up to 5 MiB goes with the message; a larger
@@ -405,7 +413,6 @@ two. These calls are sent once instead, never again after a failure:
 | `connections.ConfirmConnection` | a finished sign-in answers 410 to a repeat |
 | `connections.ReconnectConnection` | a repeat replaces the sign-in the first one started |
 | `storage.StartUpload` | the storage API takes no key; an upload left open lapses by itself |
-| `storage.CompleteUpload` | a completed upload is gone, so a repeat answers 404 though the first succeeded |
 | `llm.Generate`, `llm.Stream` | the model may have run and been billed |
 
 A repeat that reaches the API while the first request is still being
@@ -413,7 +420,11 @@ answered gets 409 (`latere.ErrConflict`) even though the first succeeds;
 read the resource to learn the outcome. A request you send with
 `Config.Do` follows its method, or `latere.Request.Retry`:
 `latere.RetryAlways` for one that is safe to repeat whatever its method,
-`latere.RetryNever` for one that is not.
+`latere.RetryNever` for one that is not, and `latere.RetryAnswers` for one
+the API can resume but not repeat: it is sent again after an answer that
+says it failed, never after a failure on the network.
+`storage.CompleteUpload` is sent that way, since the API keeps an upload
+until it completes and a completed one is gone.
 
 A 401 is retried once with a fresh token when the token source can get one:
 keys, `latere.NewActorTokens` and `signin`'s sources can, and a source of
@@ -429,7 +440,7 @@ refuses, such as a revoked key, is not retried.
 | `WithHTTPClient` | `http.DefaultClient` |
 | `WithMaxRetries` | 2 |
 | `WithBackoff` | 500ms, doubling up to 30s |
-| `WithTimeout` | 80s for a call and its retries when its context has no deadline; a stream only until it connects; 0 turns it off |
+| `WithTimeout` | 80s for a call and its retries when its context has no deadline; a stream only until it connects; each attempt of a file's bytes, the timeout and two minutes per 16 MiB; 0 turns it off |
 | `WithUserAgent` | adds your product before the SDK's own token |
 | `WithHooks` | none; called before and after every attempt |
 

@@ -141,12 +141,17 @@ session or send a message twice. The calls a key cannot make safe carry
   a repeat replaces the sign-in the first call started.
 - `llm.Generate` and `llm.Stream`: see [the models
   capability](#the-models-capability).
-- `storage.StartUpload` and `storage.CompleteUpload`: the storage part
-  takes no key, so a repeat could open a second upload, and a completed
-  upload is gone, so the repeat of a completion whose answer was lost is
-  refused with 404 though it succeeded. `StatFile` on the path tells. An
-  upload left open lapses by itself after a day, and `UploadFile` gives up
-  one that failed.
+- `storage.StartUpload`: the storage part takes no key, so a repeat could
+  open a second upload. An upload left open lapses by itself after a day,
+  and `UploadFile` gives up one that failed.
+
+`storage.CompleteUpload` carries `RetryAnswers`, a rule between the two:
+the storage part keeps an upload until it completes, so a completion it
+answered with a server error is sent again and resumes, but one that
+failed on the network is not, since a completed upload is gone and its
+repeat would be refused with 404 though it succeeded; `StatFile` on the
+path tells. `UploadFile` gives up an upload whose completion fails for
+good, and returns an `*UploadError` naming it.
 
 In each case the caller is better placed to decide. A repeat that arrives
 while the first request is still being answered is refused with 409, which
@@ -161,10 +166,16 @@ drained stream, and the length goes ahead of the body, as the storage API
 requires. A part of a large upload goes to the link object storage signed
 for it, `Request.SignedURL`, which carries its own authority: the request
 carries no credential there, and a 401 there is not answered by renewing
-the token. A call whose answer is the link itself, such as
-`storage.GetDownloadURL`, keeps the redirect with `Request.KeepRedirect`;
-any other redirect is followed, and Go's client leaves the credential
-behind when the redirect leaves the API's host.
+the token, and a request that also sets `SendKey` is refused. A call
+whose answer is the link itself, such as `storage.GetDownloadURL`, keeps
+the redirect with `Request.KeepRedirect`. `storage.ReadFile` keeps it
+too and follows the one link itself, as a signed URL, to an https
+address (http only when the API is reached over http, as on a machine of
+one's own), and refuses a second redirect: Go's client would forward the
+credential to the same host on another port and to its subdomains. A
+signed link's query is its credential, so an error names a signed URL,
+and any address of another host than the API's, by its scheme, host and
+path alone, and never quotes a Location net/http could not parse.
 
 The wait between attempts doubles from 500ms up to 30s, and is drawn at
 random from the upper half of that range so that many clients failing
@@ -176,7 +187,12 @@ whether to wait that long.
 A call whose context has no deadline is bounded by `DefaultTimeout`, 80
 seconds as in Stripe's SDK, or by `WithTimeout`, for the call and all of
 its retries, including reading the answer: a server that stops answering
-cannot hold a program forever. The caller's own deadline is the more
+cannot hold a program forever. A request that sends a file's bytes is the
+exception: object storage answers a part only once its body is in, so a
+bound meant for an answer would fail every slow upload. Each of its
+attempts is bounded instead by the timeout and `TransferTime` for its
+length, two minutes for every 16 MiB begun, the pace Latere Chat gives a
+part, and an attempt cut off is sent again by its rule. The caller's own deadline is the more
 specific choice and replaces the bound. A stream is bounded only until the
 API's first answer, by a timer rather than a deadline, since the stream
 then lasts as long as the session. A call cut off by its context, during

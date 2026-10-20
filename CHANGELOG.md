@@ -12,17 +12,23 @@ minor version may break code, and every such change is marked **Breaking**.
 - Package `storage`: write, read, inspect and list the files of Latere
   Storage, answer a download link, and upload a file of any size up to
   5 GiB, in one request or in parts put straight to object storage, with
-  its progress. The steps of an upload in parts are there on their own too.
+  its progress and the write's conditions. The steps of an upload in
+  parts are there on their own too; an upload that fails once it is open
+  is given up and named by an `*UploadError`.
 - Package `agents`: a message carries pictures, built with `ImageBlock`,
   and files, `SendMessageParams.Attachments`, by their bytes or by their
   path in Storage, and may hold files alone. A `UserMessage` records the
   files it carried. The limits the platform holds a message to are
-  constants, such as `MaxAttachmentBytes`.
+  constants, such as `MaxAttachmentBytes` and `MaxSourcePath`.
 - The core `latere`: `Request.Content` sends raw bytes of a declared
   length, read again from the start for a retry; `Request.SignedURL` sends
   a request to a signed link without the credential; `Request.KeepRedirect`
-  has `Config.Open` return a redirect rather than follow it; and
-  `ErrPreconditionFailed` matches a 412.
+  has `Config.Open` return a redirect rather than follow it;
+  `RetryAnswers` sends a request again after an answer that says it
+  failed but never after a failure on the network; and
+  `ErrPreconditionFailed` matches a 412. A request with `Content` bounds
+  each attempt by the timeout and `TransferTime` for its length and sends
+  an attempt cut off again. An error never names a signed URL's query.
 
 ## [0.1.0] - 2026-10-20
 

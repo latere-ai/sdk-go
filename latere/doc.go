@@ -75,8 +75,11 @@
 //	connections.ConfirmConnection    a finished sign-in answers 410 to a repeat
 //	connections.ReconnectConnection  a repeat replaces the sign-in it started
 //	storage.StartUpload              the storage API takes no key; an open upload lapses
-//	storage.CompleteUpload           a completed upload is gone, so a repeat answers 404
 //	llm.Generate, llm.Stream         the model may have run and been billed
+//
+// storage.CompleteUpload is sent again after an answer of a server error,
+// which leaves the upload open, but never after a failure on the network,
+// after which a completed upload is gone ([RetryAnswers]).
 //
 // [WithMaxRetries] sets how many times; zero turns retries off. A 401 is
 // retried once with a new token when the token source implements
@@ -84,7 +87,12 @@
 //
 // A call whose context has no deadline is bounded by [DefaultTimeout], or
 // the bound [WithTimeout] gives; a call cut off returns an error matching
-// [context.DeadlineExceeded].
+// [context.DeadlineExceeded]. A request that sends a file's bytes bounds
+// each attempt instead, by the timeout and [TransferTime] for their
+// length, and sends an attempt cut off again.
+//
+// A signed link, such as an upload part's, carries its credential in its
+// query; an error names it without the query.
 //
 // # Pagination
 //

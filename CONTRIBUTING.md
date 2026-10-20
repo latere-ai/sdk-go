@@ -93,6 +93,13 @@ review checks:
   after the API's resource: `GetSession`, `ListSessions`, `CreateSession`.
 - A status, a state or a kind, a value a program branches on, has a
   named string type with constants. A timestamp is a `time.Time`.
+- Every resource a capability returns keeps the JSON it was decoded from,
+  behind `RawJSON`; the parts of a resource do not. `llm`'s types, the Lux
+  dialect's own definition, are the exception.
+- A method that creates or sends something sends an idempotency key,
+  generated when the caller gives none, unless its part of the API takes
+  no key or a repeat may have run already (a model's generation); such a
+  method is sent once, and its doc says so.
 
 ## Pull requests
 

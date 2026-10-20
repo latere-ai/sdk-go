@@ -41,7 +41,9 @@ same targets.
 - Follow the design rules in [CONTRIBUTING.md](CONTRIBUTING.md): exported
   fields only on plain data and configuration filled in once; one method
   per endpoint on a capability's client, named verb first; named types for
-  statuses, states and kinds; `time.Time` for timestamps.
+  statuses, states and kinds; `time.Time` for timestamps; `RawJSON` on
+  every resource a capability returns; an idempotency key on every creating
+  call, or a doc saying why it is sent once.
 - Comments in code say what the code does and why, never the history of a
   change.
 - Handle every error; a dropped one carries a comment saying why that is

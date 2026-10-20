@@ -52,8 +52,8 @@ type Release struct {
 	// Deploy is the ID of the deploy that serves the release; empty until
 	// it is created.
 	Deploy string `json:"deploy"`
-	// Via is how the release was asked for: "push" or "api".
-	Via string `json:"via"`
+	// Via is how the release was asked for.
+	Via ReleaseVia `json:"via"`
 	// CreatedBy is the subject that asked for the release.
 	CreatedBy string `json:"created_by"`
 	// CreatedAt is when the release was asked for.
@@ -137,3 +137,14 @@ func (c *Client) GetRelease(ctx context.Context, slug, tag string) (*ReleaseDeta
 	}
 	return &out, nil
 }
+
+// ReleaseVia is how a release was asked for.
+type ReleaseVia string
+
+// The ways a release is asked for.
+const (
+	// ReleaseViaPush is a pushed tag that starts with v.
+	ReleaseViaPush ReleaseVia = "push"
+	// ReleaseViaAPI is a call to the API.
+	ReleaseViaAPI ReleaseVia = "api"
+)

@@ -108,15 +108,22 @@ const (
 // Action is something the caller may do with an app now.
 type Action string
 
-// Actions.
+// Actions, in the order a program shows them.
 const (
-	ActionOpen             Action = "open"
-	ActionCopyLink         Action = "copy_link"
-	ActionShare            Action = "share"
-	ActionUnpublish        Action = "unpublish"
-	ActionPublish          Action = "publish"
+	// ActionOpen opens the app.
+	ActionOpen Action = "open"
+	// ActionCopyLink copies the app's address.
+	ActionCopyLink Action = "copy_link"
+	// ActionShare changes who may open a private app.
+	ActionShare Action = "share"
+	// ActionUnpublish takes the app off its address.
+	ActionUnpublish Action = "unpublish"
+	// ActionPublish puts it back on its address.
+	ActionPublish Action = "publish"
+	// ActionChangeVisibility changes whether the app is public.
 	ActionChangeVisibility Action = "change_visibility"
-	ActionDelete           Action = "delete"
+	// ActionDelete deletes the app.
+	ActionDelete Action = "delete"
 )
 
 // PreviewVisibility says who may open an app's previews.

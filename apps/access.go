@@ -203,9 +203,8 @@ func (i *Invites) UnmarshalJSON(b []byte) error {
 type SkippedInvite struct {
 	// Email is the address.
 	Email string `json:"email"`
-	// Reason is "self" for the caller's own address and "listed" for an
-	// address already invited or named twice.
-	Reason string `json:"reason"`
+	// Reason is why the address was skipped.
+	Reason SkipReason `json:"reason"`
 }
 
 // Invite invites people to the app appID names by their email addresses.
@@ -267,3 +266,14 @@ func (c *Client) RemovePassword(ctx context.Context, appID string) error {
 	}
 	return c.cfg.Do(ctx, &latere.Request{Method: http.MethodDelete, Path: accessPath(appID, "password")}, nil)
 }
+
+// SkipReason is why an invite skipped an address.
+type SkipReason string
+
+// The reasons an invite skips an address.
+const (
+	// SkipSelf is the caller's own address.
+	SkipSelf SkipReason = "self"
+	// SkipListed is an address already invited, or named twice.
+	SkipListed SkipReason = "listed"
+)

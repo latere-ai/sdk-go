@@ -42,11 +42,18 @@ type DeployStatus string
 
 // Deploy statuses, in the order a deploy moves through them.
 const (
-	DeployWaiting   DeployStatus = "waiting"
-	DeployQueued    DeployStatus = "queued"
-	DeployBuilding  DeployStatus = "building"
-	DeployBuilt     DeployStatus = "built"
-	DeployScanning  DeployStatus = "scanning"
+	// DeployWaiting is a push that waits while another deploy of the app
+	// is queued or building; a newer push replaces it.
+	DeployWaiting DeployStatus = "waiting"
+	// DeployQueued waits for its build to start.
+	DeployQueued DeployStatus = "queued"
+	// DeployBuilding is being built.
+	DeployBuilding DeployStatus = "building"
+	// DeployBuilt has every component built.
+	DeployBuilt DeployStatus = "built"
+	// DeployScanning has its image scanned before it deploys.
+	DeployScanning DeployStatus = "scanning"
+	// DeployDeploying rolls its service components out.
 	DeployDeploying DeployStatus = "deploying"
 	// DeployReady is a preview that serves at its own address.
 	DeployReady DeployStatus = "ready"
@@ -55,8 +62,12 @@ const (
 	DeployLive DeployStatus = "live"
 	// DeploySuperseded is the deploy of a release a newer one replaced.
 	DeploySuperseded DeployStatus = "superseded"
-	DeployFailed     DeployStatus = "failed"
-	DeployCanceled   DeployStatus = "canceled"
+	// DeployFailed failed to build, pass the scan or roll out; it ends
+	// there.
+	DeployFailed DeployStatus = "failed"
+	// DeployCanceled was canceled or replaced by a newer push; it ends
+	// there.
+	DeployCanceled DeployStatus = "canceled"
 )
 
 // ComponentStatus is where a component's build is.
@@ -64,10 +75,15 @@ type ComponentStatus string
 
 // Component statuses.
 const (
-	ComponentQueued   ComponentStatus = "queued"
+	// ComponentQueued waits for its build to start.
+	ComponentQueued ComponentStatus = "queued"
+	// ComponentBuilding is being built.
 	ComponentBuilding ComponentStatus = "building"
-	ComponentBuilt    ComponentStatus = "built"
-	ComponentFailed   ComponentStatus = "failed"
+	// ComponentBuilt is built.
+	ComponentBuilt ComponentStatus = "built"
+	// ComponentFailed failed to build or timed out.
+	ComponentFailed ComponentStatus = "failed"
+	// ComponentCanceled was canceled with its deploy.
 	ComponentCanceled ComponentStatus = "canceled"
 )
 
@@ -91,9 +107,8 @@ type Deploy struct {
 	// Ref is the branch or tag that was pushed, as a full reference name
 	// such as "refs/heads/main".
 	Ref string `json:"ref"`
-	// Client is what created the deploy: "cli", "harness", "console",
-	// "api" or "push".
-	Client string `json:"client"`
+	// Client is what created the deploy.
+	Client DeployClient `json:"client"`
 	// CreatedBy is the subject that created the deploy.
 	CreatedBy string `json:"created_by"`
 	// URL is the app's address.
@@ -221,9 +236,8 @@ type LogLine struct {
 	Seq int64 `json:"seq"`
 	// Time is when the line was written.
 	Time time.Time `json:"ts"`
-	// Step is the step of the build that wrote the line: "fetch",
-	// "build", "publish" or "platform".
-	Step string `json:"src"`
+	// Step is the step of the build that wrote the line.
+	Step BuildStep `json:"src"`
 	// Component is the component whose log the line belongs to.
 	Component string `json:"component"`
 	// Text is the line, without its line break.
@@ -429,3 +443,35 @@ func decodeLogFrame(f latere.Frame) (LogEvent, error) {
 	}
 	return LogEvent{Line: &l}, nil
 }
+
+// DeployClient is what created a deploy.
+type DeployClient string
+
+// The clients that create deploys.
+const (
+	// DeployClientCLI is the latere command.
+	DeployClientCLI DeployClient = "cli"
+	// DeployClientHarness is an agent's session.
+	DeployClientHarness DeployClient = "harness"
+	// DeployClientConsole is the platform's console.
+	DeployClientConsole DeployClient = "console"
+	// DeployClientAPI is a call to the API.
+	DeployClientAPI DeployClient = "api"
+	// DeployClientPush is a git push.
+	DeployClientPush DeployClient = "push"
+)
+
+// BuildStep is the step of a build that wrote a log line.
+type BuildStep string
+
+// The steps of a build.
+const (
+	// StepFetch fetches the commit.
+	StepFetch BuildStep = "fetch"
+	// StepBuild builds the components.
+	StepBuild BuildStep = "build"
+	// StepPublish publishes what was built.
+	StepPublish BuildStep = "publish"
+	// StepPlatform is the platform's own line about the deploy.
+	StepPlatform BuildStep = "platform"
+)

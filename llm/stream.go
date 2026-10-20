@@ -16,6 +16,7 @@ import (
 	"sync"
 
 	"latere.ai/x/sdk-go/internal/sse"
+	"latere.ai/x/sdk-go/latere"
 )
 
 // Stream is an answer arriving as events. Range over Events once; the
@@ -114,16 +115,18 @@ func (e *StreamError) Error() string {
 // it sends. A refusal returns a *latere.Error before any event.
 //
 // The Config's timeout bounds the wait for the service to accept the
-// request; the events then arrive for as long as ctx allows. A stream is not
-// sent again after it has begun, since the model has run: a dropped
-// connection ends the iteration with io.ErrUnexpectedEOF.
+// request; the events then arrive for as long as ctx allows.
+//
+// Stream is sent once, never again after a failure, since the model may
+// have run and been billed: a dropped connection ends the iteration with
+// io.ErrUnexpectedEOF.
 func (c *Client) Stream(ctx context.Context, req *Request) (*Stream, error) {
 	if req == nil {
 		return nil, errNoRequest
 	}
 	wire := *req
 	wire.Stream = true
-	r := c.request(generatePath, &wire, "")
+	r := c.request(generatePath, &wire, latere.RetryNever)
 	if r.Header == nil {
 		r.Header = http.Header{}
 	}

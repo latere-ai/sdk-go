@@ -99,16 +99,18 @@ var errNoRequest = errors.New("llm: the request is nil")
 //
 // The answer must arrive within the Config's timeout, latere.DefaultTimeout
 // unless WithTimeout changed it, or within ctx's deadline when ctx has one;
-// for a long answer, use Stream or a longer deadline. Generate does not send
-// a request again after a failure, since the model may have run: a refusal
-// returns a *latere.Error, a failure on the way the transport's error.
+// for a long answer, use Stream or a longer deadline.
+//
+// Generate is sent once, never again after a failure, since the model may
+// have run and been billed: a refusal returns a *latere.Error, a failure on
+// the way the transport's error.
 func (c *Client) Generate(ctx context.Context, req *Request) (*Result, error) {
 	if req == nil {
 		return nil, errNoRequest
 	}
 	wire := *req
 	wire.Stream = false
-	resp, err := c.cfg.Open(ctx, c.request(generatePath, &wire, ""))
+	resp, err := c.cfg.Open(ctx, c.request(generatePath, &wire, latere.RetryNever))
 	if err != nil {
 		return nil, err
 	}
@@ -134,14 +136,14 @@ type TokenCount struct {
 // CountTokens returns how many input tokens req holds, without generating
 // anything. It is not billed, and counts as one request against the key's
 // rate limit. Since counting changes nothing, it is sent again after a
-// failure that may pass, as configured.
+// failure that may pass, as the Config's retries allow.
 func (c *Client) CountTokens(ctx context.Context, req *Request) (*TokenCount, error) {
 	if req == nil {
 		return nil, errNoRequest
 	}
 	wire := *req
 	wire.Stream = false
-	resp, err := c.cfg.Open(ctx, c.request(countTokensPath, &wire, latere.NewIdempotencyKey()))
+	resp, err := c.cfg.Open(ctx, c.request(countTokensPath, &wire, latere.RetryAlways))
 	if err != nil {
 		return nil, err
 	}
@@ -241,9 +243,10 @@ func (c *Client) ListModels(ctx context.Context) ([]Model, error) {
 }
 
 // request builds a POST of body to path, with the key itself as the
-// credential and the Client's labels.
-func (c *Client) request(path string, body *Request, idempotencyKey string) *latere.Request {
-	r := &latere.Request{Method: http.MethodPost, Path: path, Body: body, SendKey: true, IdempotencyKey: idempotencyKey}
+// credential, the Client's labels, and retry, the rule for sending it
+// again. The models capability reads no idempotency key, so none is sent.
+func (c *Client) request(path string, body *Request, retry latere.RetryRule) *latere.Request {
+	r := &latere.Request{Method: http.MethodPost, Path: path, Body: body, SendKey: true, Retry: retry}
 	if c.labels != "" {
 		r.Header = http.Header{labelsHeader: {c.labels}}
 	}

@@ -163,8 +163,8 @@ func TestCountTokensRetriesAndReportsAnEstimate(t *testing.T) {
 			w.WriteHeader(http.StatusServiceUnavailable)
 			return
 		}
-		if r.Header.Get("Authorization") != "Bearer pat_test" || r.Header.Get("Idempotency-Key") == "" {
-			t.Errorf("headers = %v", r.Header)
+		if r.Header.Get("Authorization") != "Bearer pat_test" || r.Header.Get("Idempotency-Key") != "" {
+			t.Errorf("headers = %v; want the key and no idempotency key, which the models capability does not read", r.Header)
 		}
 		w.Header().Set("Lux-Estimated", "true")
 		w.Header().Set("Lux-Request-Id", "req_3")

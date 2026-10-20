@@ -280,14 +280,14 @@ type CreateAppParams struct {
 // the next push. A slug another app holds returns an error matching
 // latere.ErrConflict. params may be nil.
 //
-// CreateApp is not retried: the apps API takes no idempotency key, so a
-// repeat could not be told from a second create.
+// CreateApp is sent once, never again after a failure: the apps API takes
+// no idempotency key, so a repeat could not be told from a second create.
 func (c *Client) CreateApp(ctx context.Context, params *CreateAppParams) (*App, error) {
 	if params == nil {
 		params = &CreateAppParams{}
 	}
 	var out App
-	if err := c.cfg.Do(ctx, &latere.Request{Method: http.MethodPost, Path: basePath, Body: params}, &out); err != nil {
+	if err := c.cfg.Do(ctx, &latere.Request{Method: http.MethodPost, Path: basePath, Body: params, Retry: latere.RetryNever}, &out); err != nil {
 		return nil, err
 	}
 	return &out, nil
@@ -418,7 +418,9 @@ func (c *Client) UpdateApp(ctx context.Context, slug string, params *UpdateAppPa
 		return nil, errors.New("apps: UpdateApp: no change was given")
 	}
 	var out App
-	if err := c.cfg.Do(ctx, &latere.Request{Method: http.MethodPatch, Path: appPath(slug), Body: params}, &out); err != nil {
+	// A change sets values, so sending it again has the effect of sending it
+	// once, and it is retried.
+	if err := c.cfg.Do(ctx, &latere.Request{Method: http.MethodPatch, Path: appPath(slug), Body: params, Retry: latere.RetryAlways}, &out); err != nil {
 		return nil, err
 	}
 	return &out, nil

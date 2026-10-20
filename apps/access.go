@@ -215,7 +215,9 @@ type SkippedInvite struct {
 // than refused. Inviting too many people in a day returns an error
 // matching latere.ErrRateLimited.
 //
-// Invite is not retried: this part of the API takes no idempotency key.
+// Invite is sent once, never again after a failure: this part of the API
+// takes no idempotency key, and a repeat would count the people again
+// against the day's invitations.
 func (c *Client) Invite(ctx context.Context, appID string, params *InviteParams) (*Invites, error) {
 	if appID == "" {
 		return nil, errNoAppID
@@ -224,7 +226,7 @@ func (c *Client) Invite(ctx context.Context, appID string, params *InviteParams)
 		return nil, errors.New("apps: Invite: no email address was given")
 	}
 	var out Invites
-	if err := c.cfg.Do(ctx, &latere.Request{Method: http.MethodPost, Path: accessPath(appID, "invites"), Body: params}, &out); err != nil {
+	if err := c.cfg.Do(ctx, &latere.Request{Method: http.MethodPost, Path: accessPath(appID, "invites"), Body: params, Retry: latere.RetryNever}, &out); err != nil {
 		return nil, err
 	}
 	return &out, nil

@@ -19,6 +19,7 @@ they share. Import the ones you use:
 | [`latere`](https://pkg.go.dev/latere.ai/x/sdk-go/latere) | The core: configuration, credentials, errors, retries, pagination |
 | [`agents`](https://pkg.go.dev/latere.ai/x/sdk-go/agents) | Sessions with agents: create, list, follow, answer, approve, end |
 | [`account`](https://pkg.go.dev/latere.ai/x/sdk-go/account) | Your Effort levels, wallet, preferences, pins and computers |
+| [`llm`](https://pkg.go.dev/latere.ai/x/sdk-go/llm) | Calling models in the Lux dialect: generate, stream, count tokens, list models |
 | [`signin`](https://pkg.go.dev/latere.ai/x/sdk-go/signin) | Signing a person in, for apps Latere registers |
 
 Create a key under **Keys** in the
@@ -64,7 +65,7 @@ func main() {
 ```
 
 More packages will follow the same pattern: storage, apps, repos,
-environments, connections, and `llm` for calling models.
+environments and connections.
 
 ## Requirements
 
@@ -133,6 +134,35 @@ levels, err := acct.GetEffortLevels(ctx) // what each Effort level costs now
 devices, err := acct.ListDevices(ctx)    // the person's computers sessions can work on
 _, err = acct.PinSession(ctx, s.ID)
 ```
+
+## Models
+
+Package `llm` calls models in the Lux dialect, one request, response and
+streaming shape for every catalog model. The models capability takes the
+key itself rather than a token exchanged for it, which the package handles:
+build its Client from a `Config` whose credentials are a key.
+
+```go
+models := llm.New(cfg)
+res, err := models.Generate(ctx, &llm.Request{
+	Model:    "anthropic/claude-sonnet-4.5",
+	Messages: []llm.Message{llm.UserText("Hello")},
+})
+if err != nil {
+	return err
+}
+fmt.Println(res.Text())
+```
+
+`Stream` delivers the answer as typed events, `CountTokens` counts a
+request's input tokens without spending any, and `ListModels` lists what
+the key may call. A field the model's provider cannot represent is named in
+`Result.Loss` rather than dropped silently. A generation is never sent a
+second time after a failure, since the model may have run.
+
+Programs built on the OpenAI or Anthropic SDKs reach the same models with
+the same key through the models capability's compatible endpoints; see
+[Providers and doors](https://platform.latere.ai/docs/models/providers).
 
 ## Streaming
 

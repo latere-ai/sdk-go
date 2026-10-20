@@ -20,6 +20,7 @@ they share. Import the ones you use:
 | [`agents`](https://pkg.go.dev/latere.ai/x/sdk-go/agents) | Sessions with agents: create, list, follow, answer, approve, end |
 | [`account`](https://pkg.go.dev/latere.ai/x/sdk-go/account) | Your Effort levels, wallet, preferences, pins and computers |
 | [`llm`](https://pkg.go.dev/latere.ai/x/sdk-go/llm) | Calling models in the Lux dialect: generate, stream, count tokens, list models |
+| [`llm/wire`](https://pkg.go.dev/latere.ai/x/sdk-go/llm/wire) | The Lux dialect's types alone, for code that reads or writes the format without calling the API |
 | [`signin`](https://pkg.go.dev/latere.ai/x/sdk-go/signin) | Signing a person in, for apps Latere registers |
 
 Create a key under **Keys** in the

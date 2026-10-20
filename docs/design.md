@@ -168,9 +168,15 @@ session's log: a dropped stream ends with `io.ErrUnexpectedEOF`. Counting
 tokens changes nothing, so it carries an idempotency key and is retried as
 any safe request.
 
-The Lux dialect's request, response and stream types live in `llm` as the
-dialect's one public definition. The service's own codec uses these types,
-so a field cannot be added on one side and missed on the other.
+The Lux dialect's request, response and stream types are its one public
+definition, and the service's own codec uses them, so a field cannot be
+added on one side and missed on the other. They live in `llm/wire`, not in
+`llm`, because the codec runs inside the gateway: importing `llm` would put
+this module's HTTP client and token exchange in the gateway's build, where
+its architecture admits no identity library. `wire` imports the standard
+library alone. `llm` names each type as an alias and each constant again,
+so a program imports one package, and a test fails when `wire` exports a
+name `llm` does not.
 
 ## Streams
 

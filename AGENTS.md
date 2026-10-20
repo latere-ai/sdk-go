@@ -12,6 +12,10 @@ too.
 - `agents/`, `account/`, `llm/`: one package per capability of the API,
   named for the capability (`llm` for the models capability, since
   `models` is a common package name in the programs that import it).
+- `llm/wire/`: the Lux dialect's types with nothing that sends them, which
+  the Lux gateway's codec imports. It imports the standard library alone;
+  `llm` names every type and constant of it, and a test holds the two to
+  the same set.
 - `signin/`: signing a person in. The core must not import it.
 - `internal/sse/`: the server-sent events reader.
 - `openapi/`: the API's documents the spec tests read. Refresh them with

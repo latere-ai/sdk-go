@@ -32,6 +32,9 @@ minor version may break code, and every such change is marked **Breaking**.
   `luxsdk` package of `latere.ai/x/pkg`, with the same wire types; calls
   straight to a provider with your own key, which `luxsdk` also made, are
   `latere.ai/x/pkg/llmdirect`, on these types.
+- Package `llm/wire`: the Lux dialect's types alone, importing the standard
+  library and nothing that sends a request, for code that reads or writes
+  the format without calling the API. `llm` names all of them.
 - `latere.Request.SendKey` sends the key itself, which the models
   capability authenticates, and an error names its request from the error's
   details when the response carries no `X-Request-Id`.

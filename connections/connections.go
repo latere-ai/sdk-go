@@ -464,7 +464,9 @@ func (c *Client) RenameConnection(ctx context.Context, id, name string) (*Connec
 		return nil, errNoConnection
 	}
 	var out Connection
-	req := &latere.Request{Method: http.MethodPatch, Path: connectionPath(id, ""), Body: map[string]string{"name": name}}
+	// A rename sets a value, so sending it again has the effect of sending
+	// it once, and it is retried.
+	req := &latere.Request{Method: http.MethodPatch, Path: connectionPath(id, ""), Body: map[string]string{"name": name}, Retry: latere.RetryAlways}
 	if err := c.cfg.Do(ctx, req, &out); err != nil {
 		return nil, err
 	}
@@ -482,14 +484,21 @@ func (c *Client) DeleteConnection(ctx context.Context, id string) error {
 
 // ConfirmConnection finishes the sign-in of the connection id names with
 // the one-time code the browser brought back to ReturnTo, and returns the
-// connection. A code used before, or a sign-in that took too long,
-// returns an error with status 409 or 410.
+// connection. A wrong code returns an error with status 400 and code
+// invalid_code, and ends the sign-in. A sign-in that took too long, or
+// one already finished, returns status 410 and code flow_expired, and one
+// whose browser has not come back yet status 409. After a 400 or a 410,
+// start a new sign-in with ReconnectConnection.
+//
+// ConfirmConnection is sent once, never again after a failure: a finished
+// sign-in answers 410, so a repeat would fail even when the first
+// succeeded; read the connection to learn its state.
 func (c *Client) ConfirmConnection(ctx context.Context, id, code string) (*Connection, error) {
 	if id == "" {
 		return nil, errNoConnection
 	}
 	var out Connection
-	req := &latere.Request{Method: http.MethodPost, Path: connectionPath(id, "/confirm"), Body: map[string]string{"code": code}}
+	req := &latere.Request{Method: http.MethodPost, Path: connectionPath(id, "/confirm"), Body: map[string]string{"code": code}, Retry: latere.RetryNever}
 	if err := c.cfg.Do(ctx, req, &out); err != nil {
 		return nil, err
 	}
@@ -508,6 +517,10 @@ type ReconnectConnectionParams struct {
 // ReconnectConnection starts a new sign-in for the connection id names,
 // for one that needs reconnecting or to ask for more scopes. It returns
 // the page to send the person to; finish it with Client.ConfirmConnection.
+//
+// ReconnectConnection is sent once, never again after a failure: a
+// connection has one sign-in at a time, so a repeat would replace the
+// sign-in whose page the first call returned.
 func (c *Client) ReconnectConnection(ctx context.Context, id string, params *ReconnectConnectionParams) (*Connected, error) {
 	if id == "" {
 		return nil, errNoConnection
@@ -520,7 +533,7 @@ func (c *Client) ReconnectConnection(ctx context.Context, id string, params *Rec
 		body["scopes"] = params.Scopes
 	}
 	var s started
-	req := &latere.Request{Method: http.MethodPost, Path: connectionPath(id, "/reconnect"), Body: body}
+	req := &latere.Request{Method: http.MethodPost, Path: connectionPath(id, "/reconnect"), Body: body, Retry: latere.RetryNever}
 	if err := c.cfg.Do(ctx, req, &s); err != nil {
 		return nil, err
 	}
@@ -903,8 +916,13 @@ func (c *Client) UpdateConnector(ctx context.Context, ref string, params *Update
 			body["tools"] = params.Tools
 		}
 	}
+	if len(body) == 0 {
+		return nil, errors.New("connections: UpdateConnector: no change was given")
+	}
 	var out Connector
-	if err := c.cfg.Do(ctx, &latere.Request{Method: http.MethodPatch, Path: connectorPath(ref), Body: body}, &out); err != nil {
+	// A change sets values, so sending it again has the effect of sending it
+	// once, and it is retried.
+	if err := c.cfg.Do(ctx, &latere.Request{Method: http.MethodPatch, Path: connectorPath(ref), Body: body, Retry: latere.RetryAlways}, &out); err != nil {
 		return nil, err
 	}
 	return &out, nil

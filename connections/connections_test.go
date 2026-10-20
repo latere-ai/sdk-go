@@ -305,8 +305,14 @@ func TestConnectors(t *testing.T) {
 	if b := (*calls)[4].Body; b["disabled"] != true || b["title"] != "Team notes" || b["tools"] == nil {
 		t.Errorf("update sent %v", b)
 	}
-	if _, err := c.UpdateConnector(t.Context(), "notes", nil); err != nil {
-		t.Errorf("an empty update: %v", err)
+	n = len(*calls)
+	for name, params := range map[string]*connections.UpdateConnectorParams{"nil": nil, "empty": {}} {
+		if _, err := c.UpdateConnector(t.Context(), "notes", params); err == nil {
+			t.Errorf("a %s update was not refused", name)
+		}
+	}
+	if len(*calls) != n {
+		t.Errorf("an empty update was sent: %+v", (*calls)[n:])
 	}
 	if err := c.DeleteConnector(t.Context(), "notes"); err != nil {
 		t.Fatal(err)
@@ -357,7 +363,7 @@ func TestCallsReturnTheAPIsRefusal(t *testing.T) {
 	_, checks["connectors"] = c.ListConnectorsPage(ctx, nil)
 	_, checks["connector"] = c.GetConnector(ctx, "x")
 	_, checks["add"] = c.CreateConnector(ctx, &connections.CreateConnectorParams{Name: "n", Title: "t", URL: "https://example.com"})
-	_, checks["update"] = c.UpdateConnector(ctx, "x", nil)
+	_, checks["update"] = c.UpdateConnector(ctx, "x", &connections.UpdateConnectorParams{Title: "t"})
 	for name, err := range checks {
 		if !errors.Is(err, latere.ErrNotFound) {
 			t.Errorf("%s: %v", name, err)

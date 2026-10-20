@@ -4,6 +4,7 @@
 package latere
 
 import (
+	"bufio"
 	"context"
 	"errors"
 	"fmt"
@@ -14,6 +15,8 @@ import (
 	"sync/atomic"
 	"testing"
 	"time"
+
+	"latere.ai/x/sdk-go/internal/sse"
 )
 
 func TestItemsFetchesPagesAsNeeded(t *testing.T) {
@@ -211,5 +214,117 @@ func TestStreamStopsWhenTheWaitIsCanceled(t *testing.T) {
 	}
 	if !errors.Is(last, context.Canceled) {
 		t.Errorf("a canceled wait ended with %v", last)
+	}
+}
+
+// liveServer serves three frames, then holds the connection open with a
+// keepalive comment every 100ms, as the API does for a session that is
+// still open.
+func liveServer(t *testing.T) *httptest.Server {
+	t.Helper()
+	return httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Content-Type", "text/event-stream")
+		for i := 1; i <= 3; i++ {
+			fmt.Fprintf(w, "id: %d\ndata: {}\n\n", i)
+		}
+		w.(http.Flusher).Flush()
+		tick := time.NewTicker(100 * time.Millisecond)
+		defer tick.Stop()
+		for {
+			select {
+			case <-r.Context().Done():
+				return
+			case <-tick.C:
+				fmt.Fprint(w, ": keepalive\n\n")
+				w.(http.Flusher).Flush()
+			}
+		}
+	}))
+}
+
+func TestStreamStopsAtOnceOnALiveConnection(t *testing.T) {
+	srv := liveServer(t)
+	defer srv.Close()
+	c, _ := testConfig(t, srv)
+	done := make(chan error, 1)
+	go func() {
+		// No deadline: stopping must not wait for the stream to end.
+		for f, err := range c.Stream(context.Background(), &Request{Method: http.MethodGet, Path: "/s"}, nil) {
+			if err != nil {
+				done <- err
+				return
+			}
+			if f.ID == "2" {
+				break
+			}
+		}
+		done <- nil
+	}()
+	select {
+	case err := <-done:
+		if err != nil {
+			t.Fatal(err)
+		}
+	case <-time.After(2 * time.Second):
+		t.Fatal("the loop stopped, but Stream did not return while the connection stayed open")
+	}
+}
+
+func TestStreamTimeoutBoundsTheConnect(t *testing.T) {
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		<-r.Context().Done()
+	}))
+	defer srv.Close()
+	c, _ := testConfig(t, srv, WithTimeout(50*time.Millisecond), WithMaxRetries(0))
+	start := time.Now()
+	for _, err := range c.Stream(t.Context(), &Request{Method: http.MethodGet, Path: "/s"}, nil) {
+		if !errors.Is(err, context.DeadlineExceeded) {
+			t.Errorf("a stream that never answers: %v", err)
+		}
+	}
+	if took := time.Since(start); took > 5*time.Second {
+		t.Errorf("the stream waited %v past a 50ms timeout", took)
+	}
+}
+
+func TestStreamTimeoutSparesTheStream(t *testing.T) {
+	srv := liveServer(t)
+	defer srv.Close()
+	c, _ := testConfig(t, srv, WithTimeout(50*time.Millisecond))
+	ctx, cancel := context.WithTimeout(t.Context(), 5*time.Second)
+	defer cancel()
+	n := 0
+	start := time.Now()
+	for _, err := range c.Stream(ctx, &Request{Method: http.MethodGet, Path: "/s"}, nil) {
+		if err != nil {
+			t.Fatal(err)
+		}
+		if n++; n == 3 {
+			break
+		}
+		// A reader slower than the timeout keeps its stream.
+		time.Sleep(100 * time.Millisecond)
+	}
+	if time.Since(start) < 150*time.Millisecond {
+		t.Error("the reader did not outlast the timeout")
+	}
+}
+
+func TestStreamEndsOnAnOversizedEvent(t *testing.T) {
+	var connects atomic.Int32
+	big := strings.Repeat("x", sse.MaxLine+1)
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		connects.Add(1)
+		w.Header().Set("Content-Type", "text/event-stream")
+		fmt.Fprintf(w, "id: 1\ndata: {}\n\nid: 2\ndata: %s\n\n", big)
+	}))
+	defer srv.Close()
+	c, _ := testConfig(t, srv)
+	var last error
+	for _, err := range c.Stream(t.Context(), &Request{Method: http.MethodGet, Path: "/s"}, nil) {
+		last = err
+	}
+	if !errors.Is(last, bufio.ErrTooLong) || connects.Load() != 1 {
+		t.Errorf("an event past the bound: %v after %d connections, want ErrTooLong after 1", last, connects.Load())
 	}
 }

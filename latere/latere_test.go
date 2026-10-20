@@ -11,6 +11,9 @@ import (
 	"io"
 	"net/http"
 	"net/http/httptest"
+	"net/url"
+	"os"
+	"regexp"
 	"strings"
 	"sync"
 	"sync/atomic"
@@ -62,7 +65,7 @@ func TestNewConfigReadsTheEnvironment(t *testing.T) {
 	if got := c.BaseURL(); got != "https://example.test/base" {
 		t.Errorf("BaseURL = %q, want the environment's without its trailing slash", got)
 	}
-	if kt, ok := c.tokens.(*KeyTokens); !ok || kt.Key != "pat_env" {
+	if kt, ok := c.tokens.(*KeyTokens); !ok || kt.key != "pat_env" {
 		t.Errorf("tokens = %#v, want KeyTokens with the environment's key", c.tokens)
 	}
 	t.Setenv(EnvBaseURL, "not a url")
@@ -82,7 +85,7 @@ func TestOptionsRefuseBadValues(t *testing.T) {
 		"WithUserAgent":   WithUserAgent("bad\nagent"),
 		"WithMaxRetries":  WithMaxRetries(-1),
 		"WithBackoff":     WithBackoff(time.Second, time.Millisecond),
-		"WithTimeout":     WithTimeout(0),
+		"WithTimeout":     WithTimeout(-time.Second),
 	} {
 		if _, err := NewConfig(opt); err == nil {
 			t.Errorf("%s accepted a bad value", name)
@@ -345,7 +348,7 @@ func TestRetriesANetworkError(t *testing.T) {
 	}
 }
 
-func TestAStoppedRetryReturnsTheError(t *testing.T) {
+func TestAStoppedRetryReturnsTheContextsError(t *testing.T) {
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		writeError(w, http.StatusServiceUnavailable, "unavailable", "Down.")
 	}))
@@ -355,8 +358,19 @@ func TestAStoppedRetryReturnsTheError(t *testing.T) {
 	c.sleep = func(context.Context, time.Duration) error { cancel(); return context.Canceled }
 	err := c.Do(ctx, &Request{Method: http.MethodGet, Path: "/v1/x"}, nil)
 	var apiErr *Error
-	if !errors.As(err, &apiErr) || apiErr.Code != "unavailable" {
-		t.Errorf("a canceled wait returned %v, want the last answer", err)
+	if !errors.Is(err, context.Canceled) || !errors.As(err, &apiErr) || apiErr.Code != "unavailable" {
+		t.Errorf("a canceled wait returned %v, want the context's error and the last answer", err)
+	}
+
+	// A deadline that passes during the wait reads as one.
+	c, err = NewConfig(WithBaseURL(srv.URL), WithTokenSource(StaticToken("t")), WithBackoff(2*time.Second, 2*time.Second))
+	if err != nil {
+		t.Fatal(err)
+	}
+	ctx, cancel = context.WithTimeout(t.Context(), 100*time.Millisecond)
+	defer cancel()
+	if err := c.Do(ctx, &Request{Method: http.MethodGet, Path: "/v1/x"}, nil); !errors.Is(err, context.DeadlineExceeded) || !errors.As(err, &apiErr) {
+		t.Errorf("a deadline during the wait returned %v, want context.DeadlineExceeded", err)
 	}
 }
 
@@ -402,10 +416,43 @@ func TestA401ResetsTheTokenOnce(t *testing.T) {
 func TestATokenErrorIsReturned(t *testing.T) {
 	srv := httptest.NewServer(http.NotFoundHandler())
 	defer srv.Close()
-	boom := errors.New("keychain locked")
-	c, _ := testConfig(t, srv, WithTokenSource(TokenSourceFunc(func(context.Context) (Token, error) { return Token{}, boom })))
-	if err := c.Do(t.Context(), &Request{Method: http.MethodGet, Path: "/v1/x"}, nil); !errors.Is(err, boom) {
-		t.Errorf("a failing token source returned %v", err)
+	for name, tc := range map[string]struct {
+		err   error
+		tries int32
+	}{
+		"a source of its own":    {errors.New("keychain locked"), 1},
+		"a revoked key":          {&Error{StatusCode: http.StatusUnauthorized, Code: "invalid_client"}, 1},
+		"an issuer that is down": {&Error{StatusCode: http.StatusServiceUnavailable}, 1 + DefaultMaxRetries},
+		"an unreachable issuer":  {&url.Error{Op: "Post", URL: "https://auth.example.test/token", Err: errors.New("connection refused")}, 1 + DefaultMaxRetries},
+	} {
+		var tries atomic.Int32
+		c, _ := testConfig(t, srv, WithTokenSource(TokenSourceFunc(func(context.Context) (Token, error) {
+			tries.Add(1)
+			return Token{}, tc.err
+		})))
+		if err := c.Do(t.Context(), &Request{Method: http.MethodGet, Path: "/v1/x"}, nil); !errors.Is(err, tc.err) || tries.Load() != tc.tries {
+			t.Errorf("%s: %v after %d tries, want it after %d", name, err, tries.Load(), tc.tries)
+		}
+	}
+}
+
+func TestACallOnAConfigNotBuilt(t *testing.T) {
+	r := &Request{Method: http.MethodGet, Path: "/v1/x"}
+	for name, c := range map[string]*Config{"nil": nil, "zero": {}} {
+		if err := c.Do(t.Context(), r, nil); !errors.Is(err, errNotBuilt) {
+			t.Errorf("Do on a %s Config: %v", name, err)
+		}
+		if _, err := c.Open(t.Context(), r); !errors.Is(err, errNotBuilt) {
+			t.Errorf("Open on a %s Config: %v", name, err)
+		}
+		for _, err := range c.Stream(t.Context(), r, nil) {
+			if !errors.Is(err, errNotBuilt) {
+				t.Errorf("Stream on a %s Config: %v", name, err)
+			}
+		}
+		if c.BaseURL() != "" {
+			t.Errorf("BaseURL of a %s Config: %q", name, c.BaseURL())
+		}
 	}
 }
 
@@ -419,6 +466,28 @@ func TestTimeoutBoundsTheCall(t *testing.T) {
 	err := c.Do(t.Context(), &Request{Method: http.MethodGet, Path: "/v1/x"}, nil)
 	if !errors.Is(err, context.DeadlineExceeded) || time.Since(start) > 5*time.Second {
 		t.Errorf("a call past its timeout: %v after %v", err, time.Since(start))
+	}
+	if c, _ := testConfig(t, srv); c.timeout != DefaultTimeout {
+		t.Errorf("the default timeout is %v, want DefaultTimeout", c.timeout)
+	}
+	if c, _ := testConfig(t, srv, WithTimeout(0)); c.timeout != 0 {
+		t.Errorf("WithTimeout(0) left %v", c.timeout)
+	}
+}
+
+func TestTimeoutDoesNotCutTheAnswerShort(t *testing.T) {
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		// The answer's body arrives after its headers, as a large one does.
+		fmt.Fprint(w, `{"id":`)
+		w.(http.Flusher).Flush()
+		time.Sleep(50 * time.Millisecond)
+		fmt.Fprint(w, `"ses_1"}`)
+	}))
+	defer srv.Close()
+	c, _ := testConfig(t, srv, WithTimeout(10*time.Second))
+	var out struct{ ID string }
+	if err := c.Do(t.Context(), &Request{Method: http.MethodGet, Path: "/v1/x"}, &out); err != nil || out.ID != "ses_1" {
+		t.Errorf("an answer whose body came after its headers: %+v, %v", out, err)
 	}
 }
 
@@ -466,5 +535,19 @@ func TestNewIdempotencyKeyIsRandom(t *testing.T) {
 	a, b := NewIdempotencyKey(), NewIdempotencyKey()
 	if a == b || len(a) < 20 {
 		t.Errorf("keys %q and %q", a, b)
+	}
+}
+
+func TestVersionMatchesTheChangelog(t *testing.T) {
+	raw, err := os.ReadFile("../CHANGELOG.md")
+	if err != nil {
+		t.Fatal(err)
+	}
+	m := regexp.MustCompile(`(?m)^## \[(\d+\.\d+\.\d+)\]`).FindSubmatch(raw)
+	switch {
+	case m == nil && !strings.HasSuffix(Version, "-dev"):
+		t.Errorf("CHANGELOG.md has no release, so Version %q should end in -dev", Version)
+	case m != nil && Version != string(m[1]):
+		t.Errorf("Version is %q, and the newest release in CHANGELOG.md is %s", Version, m[1])
 	}
 }

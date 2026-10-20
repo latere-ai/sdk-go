@@ -35,15 +35,31 @@ type Request struct {
 	Header http.Header
 	// IdempotencyKey is sent as the Idempotency-Key header. The API answers
 	// a repeated request with the same key with its first answer, so a
-	// request that carries one is retried whatever its method.
+	// request that carries one is retried whatever its method. A repeat
+	// that arrives while the first request is still being answered is
+	// refused with 409 and ErrConflict, even though the first succeeds:
+	// read the resource to learn the outcome.
 	IdempotencyKey string
 }
 
 // Do sends r and decodes the JSON answer into out, which may be nil to
 // discard it. A request the API refused returns an *Error; a request that
-// never got an answer returns the transport's error, wrapped.
+// never got an answer returns the transport's error, wrapped, or the
+// context's when ctx ended.
 func (c *Config) Do(ctx context.Context, r *Request, out any) error {
-	resp, err := c.send(ctx, r, true)
+	if err := c.built(); err != nil {
+		return err
+	}
+	if c.timeout > 0 {
+		if _, has := ctx.Deadline(); !has {
+			var cancel context.CancelFunc
+			ctx, cancel = context.WithTimeout(ctx, c.timeout)
+			// The answer is read below, so the bound ends with Do and not
+			// with send.
+			defer cancel()
+		}
+	}
+	resp, err := c.send(ctx, r)
 	if err != nil {
 		return err
 	}
@@ -52,17 +68,69 @@ func (c *Config) Do(ctx context.Context, r *Request, out any) error {
 		return nil
 	}
 	if err := json.NewDecoder(resp.Body).Decode(out); err != nil {
-		return fmt.Errorf("latere: decoding the answer to %s %s: %w", r.Method, r.Path, err)
+		return fmt.Errorf("latere: decoding the answer to %s %s: %w", r.Method, r.Path, causeOr(ctx, err))
 	}
 	return nil
 }
 
 // Open sends r and returns the response with its body unread, for an
 // answer that is a stream. Retries and errors work as for Do while the
-// request connects; once a 2xx response arrives, reading it is the
-// caller's, who must close its body.
+// request connects, and WithTimeout bounds the wait for the first answer;
+// once a 2xx response arrives, reading it is the caller's, for as long as
+// ctx allows, and the caller must close its body.
 func (c *Config) Open(ctx context.Context, r *Request) (*http.Response, error) {
-	return c.send(ctx, r, false)
+	if err := c.built(); err != nil {
+		return nil, err
+	}
+	if c.timeout <= 0 {
+		return c.send(ctx, r)
+	}
+	if _, has := ctx.Deadline(); has {
+		return c.send(ctx, r)
+	}
+	// A deadline would also end the body, so a timer cancels the request
+	// instead, and stops once the answer arrives.
+	ctx, cancel := context.WithCancelCause(ctx)
+	timer := time.AfterFunc(c.timeout, func() { cancel(context.DeadlineExceeded) })
+	resp, err := c.send(ctx, r)
+	if !timer.Stop() {
+		// The timer fired, even if an answer arrived at the same moment.
+		if err == nil {
+			closeStream(resp)
+			err = fmt.Errorf("latere: %s %s: %w", r.Method, r.Path, context.DeadlineExceeded)
+		}
+		cancel(nil)
+		return nil, err
+	}
+	if err != nil {
+		cancel(nil)
+		return nil, err
+	}
+	resp.Body = &cancelOnClose{ReadCloser: resp.Body, cancel: func() { cancel(nil) }}
+	return resp, nil
+}
+
+// cancelOnClose releases the context of a stream's request when the stream
+// is closed.
+type cancelOnClose struct {
+	io.ReadCloser
+	cancel func()
+}
+
+func (b *cancelOnClose) Close() error {
+	err := b.ReadCloser.Close()
+	b.cancel()
+	return err
+}
+
+// causeOr returns why ctx ended, when it has, and err otherwise, so a call
+// cut off by its deadline returns an error matching
+// context.DeadlineExceeded rather than the transport's description of it.
+func causeOr(ctx context.Context, err error) error {
+	if ctx.Err() != nil {
+		return context.Cause(ctx)
+	}
+	return err
 }
 
 // retryable reports whether a status is worth sending the request again
@@ -87,19 +155,8 @@ func safeToRepeat(r *Request) bool {
 	return r.IdempotencyKey != ""
 }
 
-// send performs r with retries and returns a 2xx response. With bounded set,
-// WithTimeout bounds the whole call; without it, only the attempts that
-// fail before a response arrives, since a stream's body outlives send.
-func (c *Config) send(ctx context.Context, r *Request, bounded bool) (*http.Response, error) {
-	if bounded && c.timeout > 0 {
-		if _, has := ctx.Deadline(); !has {
-			var cancel context.CancelFunc
-			ctx, cancel = context.WithTimeout(ctx, c.timeout)
-			// The body is read before Do returns, so the timeout may end
-			// with send's caller.
-			defer cancel()
-		}
-	}
+// send performs r with retries and returns a 2xx response.
+func (c *Config) send(ctx context.Context, r *Request) (*http.Response, error) {
 	target, err := c.url(r)
 	if err != nil {
 		return nil, err
@@ -115,11 +172,14 @@ func (c *Config) send(ctx context.Context, r *Request, bounded bool) (*http.Resp
 	for attempt := 0; ; attempt++ {
 		resp, err := c.attempt(ctx, r, target, body)
 		if err != nil {
-			if ctx.Err() != nil || !repeatable || attempt >= c.maxRetries {
+			if ctx.Err() != nil {
+				return nil, fmt.Errorf("latere: %s %s: %w", r.Method, r.Path, context.Cause(ctx))
+			}
+			if !repeatable || attempt >= c.maxRetries || !temporary(err) {
 				return nil, fmt.Errorf("latere: %s %s: %w", r.Method, r.Path, err)
 			}
 			if err := c.sleep(ctx, c.backoff(attempt)); err != nil {
-				return nil, fmt.Errorf("latere: %s %s: %w", r.Method, r.Path, err)
+				return nil, fmt.Errorf("latere: %s %s: %w", r.Method, r.Path, context.Cause(ctx))
 			}
 			continue
 		}
@@ -129,7 +189,7 @@ func (c *Config) send(ctx context.Context, r *Request, bounded bool) (*http.Resp
 		raw, readErr := io.ReadAll(io.LimitReader(resp.Body, maxErrorBody))
 		closeBody(resp)
 		if readErr != nil {
-			return nil, fmt.Errorf("latere: %s %s: reading the %d answer: %w", r.Method, r.Path, resp.StatusCode, readErr)
+			return nil, fmt.Errorf("latere: %s %s: reading the %d answer: %w", r.Method, r.Path, resp.StatusCode, causeOr(ctx, readErr))
 		}
 		apiErr := newError(resp, raw)
 		// A 401 means the request was not acted on, so it is safe to send
@@ -153,16 +213,40 @@ func (c *Config) send(ctx context.Context, r *Request, bounded bool) (*http.Resp
 			wait = apiErr.RetryAfter
 		}
 		if err := c.sleep(ctx, wait); err != nil {
-			return nil, apiErr
+			return nil, fmt.Errorf("latere: %s %s: %w while waiting to retry after: %w", r.Method, r.Path, context.Cause(ctx), apiErr)
 		}
 	}
+}
+
+// tokenError is a failure of the token source, before any request was
+// sent.
+type tokenError struct{ err error }
+
+func (e *tokenError) Error() string { return "the token: " + e.err.Error() }
+func (e *tokenError) Unwrap() error { return e.err }
+
+// temporary reports whether an attempt's failure may pass if the request
+// is sent again: a failure on the network does, and so does a token source
+// that failed on the network or met an issuer that is down. A refusal from
+// the issuer, such as a revoked key's, does not.
+func temporary(err error) bool {
+	var te *tokenError
+	if !errors.As(err, &te) {
+		return true
+	}
+	var apiErr *Error
+	if errors.As(te.err, &apiErr) {
+		return retryable(apiErr.StatusCode)
+	}
+	var netErr *url.Error
+	return errors.As(te.err, &netErr)
 }
 
 // attempt sends r once.
 func (c *Config) attempt(ctx context.Context, r *Request, target string, body []byte) (*http.Response, error) {
 	token, err := c.tokens.Token(ctx)
 	if err != nil {
-		return nil, fmt.Errorf("the token: %w", err)
+		return nil, &tokenError{err}
 	}
 	var reader io.Reader
 	if body != nil {

@@ -25,8 +25,10 @@ type Frame struct {
 }
 
 // MaxLine bounds one line of the stream; a longer line ends the read with
-// bufio.ErrTooLong.
-const MaxLine = 4 << 20
+// bufio.ErrTooLong. An event's JSON is one line, and the API takes request
+// bodies of at most 8 MiB, so twice that leaves room for what the server
+// adds to an event. The buffer grows to it only for a line that needs it.
+const MaxLine = 16 << 20
 
 // A Reader reads frames from a stream.
 type Reader struct {

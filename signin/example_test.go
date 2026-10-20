@@ -29,11 +29,15 @@ func ExampleConfig_Browser() {
 		// Store t.RefreshToken in the system keychain here.
 		return nil
 	})
-	cfg, err := latere.NewConfig(latere.WithTokenSource(&latere.ActorTokens{Session: session}))
+	tokens, err := latere.NewActorTokens(session)
 	if err != nil {
 		log.Fatal(err)
 	}
-	_ = cfg
+	cfg, err := latere.NewConfig(latere.WithTokenSource(tokens))
+	if err != nil {
+		log.Fatal(err)
+	}
+	fmt.Println(cfg.BaseURL())
 }
 
 // Signing a person in from a terminal with a code they enter elsewhere.

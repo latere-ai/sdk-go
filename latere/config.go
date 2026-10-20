@@ -16,8 +16,10 @@ import (
 	"time"
 )
 
-// Version is the release of this module, sent in the User-Agent header.
-const Version = "0.1.0"
+// Version is the release of this module, sent in the User-Agent header:
+// the newest release in CHANGELOG.md, or the coming one with "-dev" before
+// the first.
+const Version = "0.1.0-dev"
 
 // DefaultBaseURL is the address of the Latere API.
 const DefaultBaseURL = "https://api.latere.ai"
@@ -32,6 +34,10 @@ const (
 	// longest Retry-After the SDK waits out; a longer one is returned to the
 	// caller as the error.
 	DefaultMaxBackoff = 30 * time.Second
+	// DefaultTimeout bounds a call whose context has no deadline, its
+	// retries included, so a server that stops answering cannot hold a
+	// call forever. A stream is bounded only until its first answer.
+	DefaultTimeout = 80 * time.Second
 )
 
 // Environment variables NewConfig reads when the matching option is absent.
@@ -46,6 +52,10 @@ const (
 // ErrNoCredentials is returned by NewConfig when no credentials were given
 // and LATERE_KEY is not set.
 var ErrNoCredentials = errors.New("latere: no credentials: use WithKey or WithTokenSource, or set " + EnvKey)
+
+// errNotBuilt is returned by a call on a nil Config or one not built with
+// NewConfig, which has no address or credentials to send with.
+var errNotBuilt = errors.New("latere: the Config is nil or was not built with NewConfig")
 
 // Config is what a capability client is built from: where the API is, how a
 // request is authenticated, and how it is sent and retried. Build one with
@@ -69,17 +79,18 @@ type Config struct {
 	// environment is read only when it did not.
 	baseURLSet bool
 	tokensSet  bool
-	// keyTokens records that WithKey built the token source, so the key's
-	// exchange uses the client WithHTTPClient gave, whichever came first.
-	keyTokens bool
 }
 
-// Hooks are called around every HTTP attempt, for logging or metrics without
+// Hooks are called around every HTTP attempt, the token exchanges of
+// NewKeyTokens and NewActorTokens included, for logging or metrics without
 // the SDK depending on a telemetry library. Either may be nil. For tracing,
 // prefer an instrumented transport given with WithHTTPClient.
 type Hooks struct {
 	// BeforeRequest is called with an attempt's request just before it is
-	// sent. It may add headers; it must not read or replace the body.
+	// sent. It may add headers; it must not read or replace the body. The
+	// request carries credentials in its Authorization header, a bearer
+	// token or, for a key's exchange, the key itself: never log that
+	// header.
 	BeforeRequest func(req *http.Request)
 	// AfterResponse is called when an attempt ends, with its response or the
 	// error that ended it, and how long it took. It must not read or close
@@ -91,17 +102,18 @@ type Hooks struct {
 type Option func(*Config) error
 
 // NewConfig returns a Config with the options applied over the defaults:
-// DefaultBaseURL, http.DefaultClient, DefaultMaxRetries and the backoff
-// bounds above. Without WithKey or WithTokenSource it uses the key in
-// LATERE_KEY, and without WithBaseURL the address in
-// LATERE_BASE_URL. It returns ErrNoCredentials when there are no credentials
-// at all, and an error naming the option when an option's value is invalid.
+// DefaultBaseURL, http.DefaultClient, DefaultMaxRetries, the backoff bounds
+// and DefaultTimeout. Without WithKey or WithTokenSource it uses the key in
+// LATERE_KEY, and without WithBaseURL the address in LATERE_BASE_URL. It
+// returns ErrNoCredentials when there are no credentials at all, and an
+// error naming the option when an option's value is invalid.
 func NewConfig(opts ...Option) (*Config, error) {
 	c := &Config{
 		httpClient: http.DefaultClient,
 		maxRetries: DefaultMaxRetries,
 		minBackoff: DefaultMinBackoff,
 		maxBackoff: DefaultMaxBackoff,
+		timeout:    DefaultTimeout,
 		userAgent:  defaultUserAgent(),
 		sleep:      sleepContext,
 	}
@@ -121,15 +133,21 @@ func NewConfig(opts ...Option) (*Config, error) {
 		}
 		c.baseURL = u
 	}
-	if kt, ok := c.tokens.(*KeyTokens); ok && c.keyTokens {
-		kt.HTTPClient = c.httpClient
-	}
 	if !c.tokensSet {
 		key := os.Getenv(EnvKey)
 		if key == "" {
 			return nil, ErrNoCredentials
 		}
-		c.tokens = &KeyTokens{Key: key, HTTPClient: c.httpClient}
+		kt, err := NewKeyTokens(key)
+		if err != nil {
+			return nil, fmt.Errorf("latere: %s: %w", EnvKey, err)
+		}
+		c.tokens = kt
+	}
+	// The token exchanges go through the same client, User-Agent and hooks
+	// as the requests they sign, whichever order the options came in.
+	if x, ok := c.tokens.(exchanger); ok {
+		x.bind(&transport{client: c.httpClient, userAgent: c.userAgent, hooks: c.hooks})
 	}
 	return c, nil
 }
@@ -139,24 +157,24 @@ func NewConfig(opts ...Option) (*Config, error) {
 // short-lived token, renewed before it expires; see KeyTokens.
 func WithKey(key string) Option {
 	return func(c *Config) error {
-		if key == "" {
-			return errors.New("latere: WithKey: the key is empty")
+		kt, err := NewKeyTokens(key)
+		if err != nil {
+			return fmt.Errorf("latere: WithKey: %w", err)
 		}
-		c.tokens, c.tokensSet = &KeyTokens{Key: key}, true
-		c.keyTokens = true
+		c.tokens, c.tokensSet = kt, true
 		return nil
 	}
 }
 
 // WithTokenSource authenticates every request with a token from ts, asked
-// before each attempt. Use it with ActorTokens for a program that acts for a
-// person who signed in.
+// before each attempt. Use it with NewActorTokens for a program that acts
+// for a person who signed in.
 func WithTokenSource(ts TokenSource) Option {
 	return func(c *Config) error {
 		if ts == nil {
 			return errors.New("latere: WithTokenSource: the token source is nil")
 		}
-		c.tokens, c.tokensSet, c.keyTokens = ts, true, false
+		c.tokens, c.tokensSet = ts, true
 		return nil
 	}
 }
@@ -174,9 +192,10 @@ func WithBaseURL(rawURL string) Option {
 	}
 }
 
-// WithHTTPClient sends requests with hc instead of http.DefaultClient. Give
-// a client whose transport traces, measures or proxies requests. The SDK
-// sets no timeout on hc; see WithTimeout.
+// WithHTTPClient sends requests, and the token exchanges of NewKeyTokens
+// and NewActorTokens, with hc instead of http.DefaultClient. Give a client
+// whose transport traces, measures or proxies requests. Bound calls with
+// WithTimeout rather than hc's Timeout, which would also cut off streams.
 func WithHTTPClient(hc *http.Client) Option {
 	return func(c *Config) error {
 		if hc == nil {
@@ -225,13 +244,14 @@ func WithBackoff(min, max time.Duration) Option {
 	}
 }
 
-// WithTimeout bounds every call, its retries included, to d when the call's
-// context has no deadline of its own. A stream is bounded only while it
-// connects.
+// WithTimeout bounds every call, its retries included, to d instead of
+// DefaultTimeout when the call's context has no deadline of its own; zero
+// leaves such calls unbounded. A stream is bounded only until the API's
+// first answer, since it then lasts as long as the session.
 func WithTimeout(d time.Duration) Option {
 	return func(c *Config) error {
-		if d <= 0 {
-			return fmt.Errorf("latere: WithTimeout: %v is not positive", d)
+		if d < 0 {
+			return fmt.Errorf("latere: WithTimeout: %v is negative", d)
 		}
 		c.timeout = d
 		return nil
@@ -246,8 +266,22 @@ func WithHooks(h Hooks) Option {
 	}
 }
 
-// BaseURL returns the address requests are sent to.
-func (c *Config) BaseURL() string { return c.baseURL.String() }
+// BaseURL returns the address requests are sent to; empty for a Config not
+// built with NewConfig.
+func (c *Config) BaseURL() string {
+	if c == nil || c.baseURL == nil {
+		return ""
+	}
+	return c.baseURL.String()
+}
+
+// built returns errNotBuilt when c cannot send a request.
+func (c *Config) built() error {
+	if c == nil || c.baseURL == nil || c.tokens == nil || c.httpClient == nil || c.sleep == nil {
+		return errNotBuilt
+	}
+	return nil
+}
 
 // parseBaseURL checks that raw is an absolute http or https URL and drops a
 // trailing slash, so a request path joins it with exactly one.

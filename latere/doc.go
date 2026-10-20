@@ -10,27 +10,27 @@
 //
 //	latere.ai/x/sdk-go/agents   sessions with agents, and the events of a session
 //	latere.ai/x/sdk-go/account  your Effort levels, wallet, preferences and computers
-//	latere.ai/x/sdk-go/signin   signing a person in from a desktop app or a terminal
+//	latere.ai/x/sdk-go/signin   signing a person in, for apps Latere registers
 //
 // Build one [Config] and hand it to the New function of each capability:
 //
-//	cfg, err := latere.NewConfig(latere.WithKey(os.Getenv("LATERE_KEY")))
+//	cfg, err := latere.NewConfig() // the key in LATERE_KEY
 //	if err != nil {
 //		return err
 //	}
-//	sessions := agents.New(cfg).Sessions
-//	wallet, err := account.New(cfg).Wallet(ctx)
+//	ag := agents.New(cfg)
+//	wallet, err := account.New(cfg).GetWallet(ctx)
 //
 // # Credentials
 //
 // Every request carries a bearer token from a [TokenSource]. The simplest is
 // a key created under Keys in the console, given with [WithKey] or in the
 // LATERE_KEY environment variable: the SDK exchanges it for a token of a few
-// minutes and renews the token before it expires ([KeyTokens]). A program
-// that acts for a person who signed in, a desktop app for instance, wraps
-// the person's sign-in in [ActorTokens] instead, which exchanges it for
-// tokens addressed to the API; package signin obtains and refreshes that
-// sign-in.
+// minutes and renews the token before it expires ([NewKeyTokens]). A
+// program that acts for a person who signed in, a desktop app for instance,
+// passes the person's sign-in to [NewActorTokens] instead, which exchanges
+// it for tokens addressed to the API; package signin obtains and refreshes
+// that sign-in.
 //
 // # Errors
 //
@@ -57,14 +57,19 @@
 // PUT and DELETE, and POST or PATCH requests that carry an idempotency key.
 // The capability packages send an idempotency key on every request that
 // creates something, so those are retried too. [WithMaxRetries] sets how many
-// times; zero turns retries off.
+// times; zero turns retries off. A 401 is retried once with a new token when
+// the token source implements [Resetter], as the SDK's own sources do.
+//
+// A call whose context has no deadline is bounded by [DefaultTimeout], or
+// the bound [WithTimeout] gives; a call cut off returns an error matching
+// [context.DeadlineExceeded].
 //
 // # Pagination
 //
 // A list method returns an [iter.Seq2] that fetches pages as the loop needs
 // them:
 //
-//	for s, err := range sessions.List(ctx, nil) {
+//	for s, err := range ag.ListSessions(ctx, nil) {
 //		if err != nil {
 //			return err
 //		}

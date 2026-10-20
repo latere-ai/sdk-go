@@ -4,6 +4,7 @@
 package latere
 
 import (
+	"bufio"
 	"context"
 	"errors"
 	"fmt"
@@ -33,8 +34,10 @@ type Frame struct {
 // error after the configured number of retries in a row that read no frame.
 //
 // The iteration ends after the frame done reports, when the loop stops,
-// when ctx ends, or with an error. Each yielded frame's Data is the caller's
-// to keep. done may be nil for a stream that ends only with ctx.
+// when ctx ends, or with an error. A frame longer than sse.MaxLine ends it
+// with an error matching bufio.ErrTooLong, since reconnecting would read
+// the same frame again. Each yielded frame's Data is the caller's to keep.
+// done may be nil for a stream that ends only with ctx.
 func (c *Config) Stream(ctx context.Context, r *Request, done func(Frame) bool) iter.Seq2[Frame, error] {
 	return func(yield func(Frame, error) bool) {
 		req := *r
@@ -51,8 +54,12 @@ func (c *Config) Stream(ctx context.Context, r *Request, done func(Frame) bool) 
 				return
 			}
 			lastID, read, finished, stopped, readErr := c.readFrames(resp, done, yield)
-			closeBody(resp)
+			closeStream(resp)
 			if finished || stopped {
+				return
+			}
+			if errors.Is(readErr, bufio.ErrTooLong) {
+				yield(Frame{}, fmt.Errorf("latere: the stream of %s holds an event larger than %d bytes, the most the SDK reads: %w", r.Path, sse.MaxLine, readErr))
 				return
 			}
 			if ctx.Err() != nil {
@@ -104,4 +111,12 @@ func (c *Config) readFrames(resp *http.Response, done func(Frame) bool, yield fu
 			return lastID, read, true, false, nil
 		}
 	}
+}
+
+// closeStream closes a stream's body without reading what is left of it: a
+// live stream never ends on its own, so draining it would wait for the
+// next keepalive or for ctx. The connection is not reused, and a failed
+// close changes nothing for a stream that is done, so the error is dropped.
+func closeStream(resp *http.Response) {
+	_ = resp.Body.Close()
 }

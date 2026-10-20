@@ -13,31 +13,55 @@ import (
 	"time"
 
 	"latere.ai/x/sdk-go/latere"
+	"latere.ai/x/sdk-go/signin"
 )
 
-// A program that calls the API with a key created in the console.
+// A program that calls the API with the key in LATERE_KEY, naming itself
+// and bounding each call to 30 seconds.
 func ExampleNewConfig() {
 	cfg, err := latere.NewConfig(
-		latere.WithKey(os.Getenv("LATERE_KEY")),
 		latere.WithUserAgent("my-app/1.0"),
 		latere.WithTimeout(30*time.Second),
 	)
+	if errors.Is(err, latere.ErrNoCredentials) {
+		log.Fatal("create a key under Keys in the console and set LATERE_KEY")
+	}
 	if err != nil {
 		log.Fatal(err)
 	}
 	fmt.Println(cfg.BaseURL())
 }
 
-// A program that acts for a person who signed in: their sign-in token is
-// exchanged for short-lived API tokens. Package signin obtains and
-// refreshes the sign-in token.
-func ExampleActorTokens() {
-	var session latere.TokenSource // from signin.Config.TokenSource
-	cfg, err := latere.NewConfig(latere.WithTokenSource(&latere.ActorTokens{Session: session}))
+// A program that keeps its key somewhere other than LATERE_KEY.
+func ExampleWithKey() {
+	cfg, err := latere.NewConfig(latere.WithKey(os.Getenv("MY_APP_LATERE_KEY")))
 	if err != nil {
 		log.Fatal(err)
 	}
-	_ = cfg
+	fmt.Println(cfg.BaseURL())
+}
+
+// A program that acts for a person who signed in: their sign-in, from
+// package signin, is exchanged for short-lived API tokens.
+func ExampleNewActorTokens() {
+	ctx := context.Background()
+	signer := &signin.Config{ClientID: "my-app"}
+	tok, err := signer.Device(ctx, func(c signin.DeviceCode) error {
+		fmt.Printf("Open %s and enter %s\n", c.VerificationURI, c.UserCode)
+		return nil
+	})
+	if err != nil {
+		log.Fatal(err)
+	}
+	tokens, err := latere.NewActorTokens(signer.TokenSource(tok, nil))
+	if err != nil {
+		log.Fatal(err)
+	}
+	cfg, err := latere.NewConfig(latere.WithTokenSource(tokens))
+	if err != nil {
+		log.Fatal(err)
+	}
+	fmt.Println(cfg.BaseURL())
 }
 
 // Telling the common errors apart, and reading the API's code.

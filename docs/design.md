@@ -24,16 +24,18 @@ work; the README says how to use them.
 flowchart TD
     agents --> latere
     account --> latere
+    apps --> latere
     signin --> latere
     latere --> sse[internal/sse]
     app[your program] --> agents
     app --> account
+    app --> apps
     app -. a person's sign-in .-> signin
 ```
 
 `latere` is the core: configuration, credentials, the error type, the
 request loop, pagination and streams. A capability package (`agents`,
-`account`, and those to come) holds typed models and one method per
+`account`, `apps`, and those to come) holds typed models and one method per
 endpoint, and calls the API only through `Config.Do`, `Config.Stream` and
 `latere.Items`. `signin` is separate because most programs, those that run
 with a key, never sign a person in; the core does not import it.
@@ -108,7 +110,10 @@ A request is retried when the network failed or the API answered 408, 429,
 `HEAD`, `PUT`, `DELETE` or `OPTIONS`, or a request carrying an idempotency
 key. Every method that creates or sends something sends an
 `Idempotency-Key`, generated when the caller gives none, so retries never
-create a second session or send a message twice. A repeat that arrives
+create a second session or send a message twice. Where a part of the API
+takes no key, as the apps part does not yet, its creating methods send no
+key and are not retried: a repeat could create a second app or send an
+invite twice, and the caller is better placed to decide. A repeat that arrives
 while the first request is still being answered is refused with 409, which
 the SDK does not retry, since it cannot tell it from a real conflict; the
 first request still succeeds, and the docs tell the caller to read the
@@ -194,6 +199,13 @@ YAML parser it needs never reaches the SDK's `go.mod`. A weekly workflow
 fetches the documents and fails when they changed, which is the signal to
 update the models.
 
+Each model the apps API answers keeps the bytes it was decoded from,
+returned by `RawJSON`, as Stainless-generated SDKs and stripe-go do. A
+program that shows or stores the API's answer, a command line's `--json`
+output for one, gets every field, including those added after its SDK
+version was released, without waiting for the SDK to model them. A model
+a program builds itself has none.
+
 ## Observability
 
 The SDK sends every request through the `*http.Client` it was given, so
@@ -232,8 +244,9 @@ The design borrows from three widely used Go SDKs:
   and an 80-second default timeout. Not taken: the package-level key and backends,
   which are global state.
 - **Anthropic's Go SDK:** retrying only requests that can be replayed,
-  retrying on 408, 429 and 5xx answers, honoring `Retry-After`, and a
-  server-sent events stream consumed as an iterator. Not taken: optional
+  retrying on 408, 429 and 5xx answers, honoring `Retry-After`, a
+  server-sent events stream consumed as an iterator, and the answer's JSON
+  kept on each model for `RawJSON`. Not taken: optional
   parameter wrapper types and per-call request options; plain structs with
   `omitempty` fields and a context cover this API.
 

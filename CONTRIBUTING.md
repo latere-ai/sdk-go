@@ -36,7 +36,7 @@ vets the refresh tool under `tools/`.
 
 - `latere/` is the core every package shares: configuration, credentials,
   the error type, retries, pagination and streams.
-- `agents/`, `account/` and later packages each cover one capability of the
+- `agents/`, `account/`, `apps/` and later packages each cover one capability of the
   API, and call the API only through the core.
 - `signin/` signs a person in; the core does not depend on it.
 - `internal/` holds code no caller imports.

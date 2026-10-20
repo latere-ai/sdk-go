@@ -9,7 +9,7 @@ too.
 - `latere/`: the core every package shares (configuration, credentials,
   errors, retries, pagination, streams). Capability packages call the API
   only through it.
-- `agents/`, `account/`: one package per capability of the API, named for
+- `agents/`, `account/`, `apps/`: one package per capability of the API, named for
   the capability.
 - `signin/`: signing a person in. The core must not import it.
 - `internal/sse/`: the server-sent events reader.

@@ -23,6 +23,11 @@ minor version may break code, and every such change is marked **Breaking**.
   and session errors.
 - Package `account`: Effort levels, the wallet, preferences, pinning
   sessions, the person's computers, and applying a managed agent.
+- Package `apps`: create, list, read, change and delete apps; list and
+  read their deploys; read a deploy's build log or follow it live, resuming
+  after a dropped connection; list and read releases; and read, invite to,
+  revoke and password-protect who may open a private app. Every model
+  keeps the JSON the API answered, returned by `RawJSON`.
 - Package `signin`: signing a person in through their browser or with a
   device code, refreshing the sign-in, reading who signed in, and signing
   out, for programs whose client Latere registers.

@@ -5,7 +5,7 @@
 
 The official Go client for the [Latere API](https://platform.latere.ai/docs):
 start sessions with agents, follow them as they work, answer what they ask,
-and read your account. It depends on the Go standard library alone.
+publish apps, and read your account. It depends on the Go standard library alone.
 
 ```sh
 go get latere.ai/x/sdk-go
@@ -19,6 +19,7 @@ they share. Import the ones you use:
 | [`latere`](https://pkg.go.dev/latere.ai/x/sdk-go/latere) | The core: configuration, credentials, errors, retries, pagination |
 | [`agents`](https://pkg.go.dev/latere.ai/x/sdk-go/agents) | Sessions with agents: create, list, follow, answer, approve, end |
 | [`account`](https://pkg.go.dev/latere.ai/x/sdk-go/account) | Your Effort levels, wallet, preferences, pins and computers |
+| [`apps`](https://pkg.go.dev/latere.ai/x/sdk-go/apps) | Apps: create, list, change, delete; their deploys, build logs, releases and who may open them |
 | [`signin`](https://pkg.go.dev/latere.ai/x/sdk-go/signin) | Signing a person in, for apps Latere registers |
 
 Create a key under **Keys** in the
@@ -63,7 +64,7 @@ func main() {
 }
 ```
 
-More packages will follow the same pattern: storage, apps, repos,
+More packages will follow the same pattern: storage, repos,
 environments, connections, and `llm` for calling models.
 
 ## Requirements
@@ -133,6 +134,39 @@ levels, err := acct.GetEffortLevels(ctx) // what each Effort level costs now
 devices, err := acct.ListDevices(ctx)    // the person's computers sessions can work on
 _, err = acct.PinSession(ctx, s.ID)
 ```
+
+## Apps
+
+An app is a git repository and an address. A push to a branch builds a
+preview, and a pushed tag that starts with `v` releases that commit to the
+app's address; each build is a deploy with a log.
+
+```go
+ap := apps.New(cfg)
+a, err := ap.CreateApp(ctx, &apps.CreateAppParams{Name: "Tide tables"})
+if err != nil {
+	return err
+}
+fmt.Println("push to", a.Repository.PushURL, "to publish at", a.URL)
+
+deploys, err := ap.ListDeploys(ctx, a.Slug)
+if err != nil {
+	return err
+}
+for ev, err := range ap.FollowDeployLog(ctx, a.Slug, deploys[0].ID, nil) {
+	if err != nil {
+		return err
+	}
+	if ev.Line != nil {
+		fmt.Println(ev.Line.Component, ev.Line.Text)
+	}
+}
+```
+
+Deploying is a git push, which the package does not do. Calls about who
+may open a private app take the app's ID, which never changes; the others
+take its slug. Every model keeps the JSON the API answered, which
+`RawJSON` returns with every field.
 
 ## Streaming
 
@@ -209,7 +243,8 @@ backoff and jitter, and after the wait a `Retry-After` header asks for.
 Only requests that are safe to repeat are retried: `GET`, `PUT` and
 `DELETE`, and requests that carry an idempotency key. Every method that
 creates or sends something sends a key, generated when you give none, so a
-retried `CreateSession` makes one session, not two. A repeat that reaches
+retried `CreateSession` makes one session, not two. The apps part of the
+API takes no key yet, so `apps.CreateApp` and `apps.Invite` are sent once. A repeat that reaches
 the API while the first request is still being answered gets 409
 (`latere.ErrConflict`) even though the first succeeds; read the session to
 learn the outcome.

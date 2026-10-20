@@ -231,8 +231,23 @@ func TestATruncatedErrorKeepsItsCode(t *testing.T) {
 	if code, _ := envelopeStart([]byte(`{"items":[]}`)); code != "" {
 		t.Errorf("a body that is not the envelope yielded the code %q", code)
 	}
+	for body, want := range map[string][2]string{
+		`{"error":{"code":"x"`:               {"x", ""},
+		`{"error":{"code":"x","message":`:    {"x", ""},
+		`{"error":{"message":"m","code":"x"`: {"x", "m"},
+	} {
+		if code, message := envelopeStart([]byte(body)); code != want[0] || message != want[1] {
+			t.Errorf("envelopeStart(%s) = %q, %q; want %q, %q", body, code, message, want[0], want[1])
+		}
+	}
 	if got := validUTF8Prefix([]byte("ab\xffcd")); string(got) != "ab\xffcd" {
 		t.Errorf("a body with an invalid byte inside was cut to %q", got)
+	}
+	if got := validUTF8Prefix([]byte("ab€")[:4]); string(got) != "ab" {
+		t.Errorf("a body cut two bytes into a three-byte rune was kept as %q; want %q", got, "ab")
+	}
+	if got := validUTF8Prefix([]byte("\x80\x80\x80\x80\x80")); len(got) != 5 {
+		t.Errorf("a body ending in stray continuation bytes was cut to %q; it holds no rune to finish", got)
 	}
 }
 

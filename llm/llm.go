@@ -63,8 +63,11 @@ type Option func(*Client)
 // request history. Labels never change who is billed or what the key may
 // do. The service keeps up to 8 labels, each key 1 to 64 characters of
 // letters, digits and ._- and each value 1 to 128 characters of letters,
-// digits and ._:/-; it drops any other label and still serves the request.
-// Build one Client per set of labels; Clients share their Config.
+// digits and ._:/-. A label outside that rule is left out before the
+// request is sent, as the service would drop it, so a value holding a
+// comma or an equals sign cannot change the labels beside it; past 8
+// valid labels, those first in key order are sent. Build one Client per
+// set of labels; Clients share their Config.
 func WithLabels(labels map[string]string) Option {
 	return func(c *Client) { c.labels = formatLabels(labels) }
 }
@@ -253,19 +256,51 @@ func (c *Client) request(path string, body *Request, retry latere.RetryRule) *la
 	return r
 }
 
+// maxLabels, maxLabelKey and maxLabelValue are the bounds the service
+// keeps labels to.
+const (
+	maxLabels     = 8
+	maxLabelKey   = 64
+	maxLabelValue = 128
+)
+
 // formatLabels writes labels in the header's form: key=value pairs sorted
-// by key, joined by commas. A nil or empty map yields "".
+// by key, joined by commas, at most maxLabels of them. A label the service
+// would drop is left out, so no key or value can hold the comma or the
+// equals sign the form separates pairs with. A nil or empty map yields "".
 func formatLabels(labels map[string]string) string {
 	var b strings.Builder
-	for i, k := range slices.Sorted(maps.Keys(labels)) {
-		if i > 0 {
+	n := 0
+	for _, k := range slices.Sorted(maps.Keys(labels)) {
+		v := labels[k]
+		if n == maxLabels || !labelText(k, maxLabelKey, "") || !labelText(v, maxLabelValue, ":/") {
+			continue
+		}
+		if n > 0 {
 			b.WriteByte(',')
 		}
 		b.WriteString(k)
 		b.WriteByte('=')
-		b.WriteString(labels[k])
+		b.WriteString(v)
+		n++
 	}
 	return b.String()
+}
+
+// labelText reports whether s is 1 to max characters of letters, digits,
+// '.', '_', '-' and the characters extra names.
+func labelText(s string, max int, extra string) bool {
+	if s == "" || len(s) > max {
+		return false
+	}
+	for _, r := range s {
+		switch {
+		case 'a' <= r && r <= 'z', 'A' <= r && r <= 'Z', '0' <= r && r <= '9', strings.ContainsRune("._-"+extra, r):
+		default:
+			return false
+		}
+	}
+	return true
 }
 
 // parseLoss reads the fields the provider could not represent.

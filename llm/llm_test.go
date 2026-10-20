@@ -151,6 +151,44 @@ func TestLabelsTravelSorted(t *testing.T) {
 	}
 }
 
+// A label the service would drop is left out, so a comma or an equals sign
+// in one cannot change the others, and at most eight are sent.
+func TestLabelsTheServiceWouldDropAreLeftOut(t *testing.T) {
+	var got string
+	labels := map[string]string{
+		"tenant":     "acme",
+		"bad,key":    "x",
+		"injected":   "a,owner=mallory",
+		"equals":     "a=b",
+		"empty":      "",
+		"path":       "team/web:prod",
+		"with space": "x",
+	}
+	for i := range 10 {
+		labels[fmt.Sprintf("k%d", i)] = "v"
+	}
+	c := newClient(t, func(w http.ResponseWriter, r *http.Request) {
+		got = r.Header.Get("Lux-Labels")
+		fmt.Fprint(w, `{"blocks":[],"usage":{}}`)
+	}, llm.WithLabels(labels))
+	if _, err := c.Generate(t.Context(), hello()); err != nil {
+		t.Fatal(err)
+	}
+	if want := "k0=v,k1=v,k2=v,k3=v,k4=v,k5=v,k6=v,k7=v"; got != want {
+		t.Errorf("labels = %q, want %q", got, want)
+	}
+	c = newClient(t, func(w http.ResponseWriter, r *http.Request) {
+		got = r.Header.Get("Lux-Labels")
+		fmt.Fprint(w, `{"blocks":[],"usage":{}}`)
+	}, llm.WithLabels(map[string]string{"tenant": "acme", "injected": "a,owner=mallory", "path": "team/web:prod"}))
+	if _, err := c.Generate(t.Context(), hello()); err != nil {
+		t.Fatal(err)
+	}
+	if want := "path=team/web:prod,tenant=acme"; got != want {
+		t.Errorf("labels = %q, want %q", got, want)
+	}
+}
+
 // Counting changes nothing, so a failure that may pass is retried.
 func TestCountTokensRetriesAndReportsAnEstimate(t *testing.T) {
 	var calls atomic.Int32

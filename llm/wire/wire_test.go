@@ -33,7 +33,7 @@ func TestRequestWireFormat(t *testing.T) {
 		MaxTokens:   &maxTokens, Temperature: &temperature, TopP: &topP, TopK: &topK,
 		StopSequences:   []string{"END"},
 		Stream:          true,
-		Reasoning:       &wire.Reasoning{Effort: wire.EffortHigh},
+		Reasoning:       &wire.Reasoning{Level: wire.ReasoningHigh},
 		Schema:          &wire.ResponseSchema{Name: "answer", Schema: json.RawMessage(`{"type":"object"}`), Strict: true},
 		WebSearch:       &wire.WebSearch{ContextSize: "low"},
 		UserID:          "u_1",
@@ -69,7 +69,7 @@ func TestResponseAndEventWireFormat(t *testing.T) {
 	res := wire.Response{
 		ID: "msg_1", Model: "m", StopReason: wire.StopStopSequence, StopSequence: "END",
 		Blocks:   []wire.Block{{Type: wire.BlockThinking, Text: "hm", Signature: "sig"}, {Type: wire.BlockOpaque, Opaque: &wire.Opaque{Dialect: wire.DialectOpenAIResponses, Kind: "reasoning", Raw: json.RawMessage(`{"id":"rs_1"}`)}}},
-		Usage:    wire.Usage{InputTokens: 3, OutputTokens: 4, CacheReadInputTokens: &read, ReasoningTokens: 2, CostUSDMicro: &cost},
+		Usage:    wire.Usage{InputTokens: 3, OutputTokens: 4, CacheReadInputTokens: &read, ReasoningTokens: 2, CostMicroUSD: &cost},
 		LogProbs: []wire.TokenLogProb{{Token: "a", Bytes: []byte("a"), LogProb: wire.LogProb(math.Inf(-1)), Top: []wire.TokenLogProb{{Token: "b", LogProb: -0.5}}}},
 	}
 	got, err := json.Marshal(res)

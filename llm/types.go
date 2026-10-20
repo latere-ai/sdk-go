@@ -31,7 +31,7 @@ type (
 	Role           = wire.Role
 	BlockType      = wire.BlockType
 	ToolChoiceMode = wire.ToolChoiceMode
-	Effort         = wire.Effort
+	ReasoningLevel = wire.ReasoningLevel
 	StopReason     = wire.StopReason
 	EventType      = wire.EventType
 	Dialect        = wire.Dialect
@@ -66,13 +66,13 @@ const (
 	ToolChoiceTool = wire.ToolChoiceTool
 )
 
-// The thinking efforts. A provider's own levels pass through unchanged, so
-// an Effort beyond these is not an error.
+// The reasoning levels. A provider's own levels pass through unchanged, so
+// a ReasoningLevel beyond these is not an error.
 const (
-	EffortMinimal = wire.EffortMinimal
-	EffortLow     = wire.EffortLow
-	EffortMedium  = wire.EffortMedium
-	EffortHigh    = wire.EffortHigh
+	ReasoningMinimal = wire.ReasoningMinimal
+	ReasoningLow     = wire.ReasoningLow
+	ReasoningMedium  = wire.ReasoningMedium
+	ReasoningHigh    = wire.ReasoningHigh
 )
 
 // The reasons an answer ends.

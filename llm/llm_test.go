@@ -73,8 +73,8 @@ func TestGenerateSendsTheKeyAndReadsTheAnswer(t *testing.T) {
 	if res.Text() != "Hello" || res.StopReason != llm.StopEndTurn || res.Usage.InputTokens != 12 {
 		t.Errorf("result = %+v", res)
 	}
-	if res.Usage.CostUSDMicro == nil || *res.Usage.CostUSDMicro != 0 {
-		t.Errorf("cost = %v, want a reported zero", res.Usage.CostUSDMicro)
+	if res.Usage.CostMicroUSD == nil || *res.Usage.CostMicroUSD != 0 {
+		t.Errorf("cost = %v, want a reported zero", res.Usage.CostMicroUSD)
 	}
 	if !slices.Equal(res.Loss, []string{"top_k", "cache_control"}) || res.RequestID != "req_1" {
 		t.Errorf("loss = %v, request = %q", res.Loss, res.RequestID)

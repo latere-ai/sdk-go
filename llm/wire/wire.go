@@ -185,11 +185,11 @@ type ToolChoice struct {
 	DisableParallel bool `json:"disable_parallel,omitempty"`
 }
 
-// Reasoning turns on extended thinking. Set Effort or BudgetTokens, not
+// Reasoning turns on extended thinking. Set Level or BudgetTokens, not
 // both.
 type Reasoning struct {
-	// Effort is how hard the model thinks, on a provider-neutral scale.
-	Effort Effort `json:"effort,omitempty"`
+	// Level is how much the model reasons, on a provider-neutral scale.
+	Level ReasoningLevel `json:"effort,omitempty"`
 	// BudgetTokens is how many tokens the model may spend thinking.
 	BudgetTokens int64 `json:"budget_tokens,omitempty"`
 }
@@ -219,10 +219,10 @@ type Usage struct {
 	CacheWriteInputTokens *int64 `json:"cache_write_input_tokens,omitempty"`
 	// ReasoningTokens are the output tokens spent thinking.
 	ReasoningTokens int64 `json:"reasoning_tokens,omitempty"`
-	// CostUSDMicro is what the generation cost, in millionths of a US
+	// CostMicroUSD is what the generation cost, in millionths of a US
 	// dollar, or nil when no cost was reported. Nil means unknown, not free:
 	// a reported zero cost is a pointer to zero.
-	CostUSDMicro *int64 `json:"cost_usd_micro,omitempty"`
+	CostMicroUSD *int64 `json:"cost_usd_micro,omitempty"`
 }
 
 // Response is a complete answer. Its blocks use the request's vocabulary, so
@@ -358,16 +358,17 @@ const (
 	ToolChoiceTool ToolChoiceMode = "tool"
 )
 
-// Effort is how hard the model thinks. A provider's own levels pass through
-// unchanged, so a value beyond these constants is not an error.
-type Effort string
+// ReasoningLevel is how much a model reasons before it answers. A
+// provider's own levels pass through unchanged, so a value beyond these
+// constants is not an error. The wire names it effort.
+type ReasoningLevel string
 
-// The thinking efforts.
+// The reasoning levels.
 const (
-	EffortMinimal Effort = "minimal"
-	EffortLow     Effort = "low"
-	EffortMedium  Effort = "medium"
-	EffortHigh    Effort = "high"
+	ReasoningMinimal ReasoningLevel = "minimal"
+	ReasoningLow     ReasoningLevel = "low"
+	ReasoningMedium  ReasoningLevel = "medium"
+	ReasoningHigh    ReasoningLevel = "high"
 )
 
 // StopReason says why an answer ended.

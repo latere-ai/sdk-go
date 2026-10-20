@@ -29,7 +29,9 @@ minor version may break code, and every such change is marked **Breaking**.
 - Package `llm`: calling models in the Lux dialect. Generate an answer,
   stream it as typed events, count a request's tokens, and list the models
   a key may call; label requests for your own reporting. It replaces the
-  `luxsdk` package of `latere.ai/x/pkg`, with the same wire types.
+  `luxsdk` package of `latere.ai/x/pkg`, with the same wire types; calls
+  straight to a provider with your own key, which `luxsdk` also made, are
+  `latere.ai/x/pkg/llmdirect`, on these types.
 - `latere.Request.SendKey` sends the key itself, which the models
   capability authenticates, and an error names its request from the error's
   details when the response carries no `X-Request-Id`.

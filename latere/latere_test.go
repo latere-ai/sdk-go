@@ -252,7 +252,7 @@ func TestATruncatedErrorKeepsItsCode(t *testing.T) {
 }
 
 func TestErrorIsMatchesEachSentinel(t *testing.T) {
-	for status, sentinel := range map[int]error{401: ErrUnauthorized, 403: ErrForbidden, 404: ErrNotFound, 409: ErrConflict, 429: ErrRateLimited} {
+	for status, sentinel := range map[int]error{401: ErrUnauthorized, 403: ErrForbidden, 404: ErrNotFound, 409: ErrConflict, 412: ErrPreconditionFailed, 429: ErrRateLimited} {
 		if !errors.Is(&Error{StatusCode: status}, sentinel) {
 			t.Errorf("a %d does not match %v", status, sentinel)
 		}

@@ -29,6 +29,10 @@ var (
 	// ErrConflict matches a 409: the request conflicts with the resource's
 	// current state, or an idempotency key was reused with another body.
 	ErrConflict = errors.New("latere: conflict")
+	// ErrPreconditionFailed matches a 412: a conditional request found the
+	// resource in another state than it named, such as a write that names
+	// the checksum the file no longer has.
+	ErrPreconditionFailed = errors.New("latere: precondition failed")
 	// ErrRateLimited matches a 429: too many requests; Error.RetryAfter says
 	// how long to wait when the API said.
 	ErrRateLimited = errors.New("latere: rate limited")
@@ -87,6 +91,8 @@ func (e *Error) Is(target error) bool {
 		return e.StatusCode == http.StatusNotFound
 	case ErrConflict:
 		return e.StatusCode == http.StatusConflict
+	case ErrPreconditionFailed:
+		return e.StatusCode == http.StatusPreconditionFailed
 	case ErrRateLimited:
 		return e.StatusCode == http.StatusTooManyRequests
 	}

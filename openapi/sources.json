@@ -6,5 +6,9 @@
   "agents": {
     "url": "https://platform.latere.ai/docs/agents/openapi.yaml",
     "sha256": "6f1472338e112cab9c95ade91ba61704fb23f48004bc3b5a2e1ea2c24a87b457"
+  },
+  "connections": {
+    "url": "https://platform.latere.ai/docs/connections/openapi.yaml",
+    "sha256": "24769cfc18d7b3cc178e25f9344eb7becbda667c69ae6c920d25bcacc78a2208"
   }
 }

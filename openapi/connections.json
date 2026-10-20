@@ -1,0 +1,1755 @@
+{
+  "components": {
+    "parameters": {
+      "ConnectionID": {
+        "description": "The connection's id.",
+        "in": "path",
+        "name": "id",
+        "required": true,
+        "schema": {
+          "pattern": "^con_[0-9a-z]{26}$",
+          "type": "string"
+        }
+      },
+      "Cursor": {
+        "description": "The next_cursor of the page before. Opaque.",
+        "in": "query",
+        "name": "cursor",
+        "schema": {
+          "type": "string"
+        }
+      },
+      "IdempotencyKey": {
+        "description": "The same key from the same caller within 24 hours creates nothing and answers what the first request made, with a new authorization_url while a sign-in is still pending.",
+        "in": "header",
+        "name": "Idempotency-Key",
+        "schema": {
+          "type": "string"
+        }
+      },
+      "Limit": {
+        "description": "How many items a page holds, 50 by default and 200 at most.",
+        "in": "query",
+        "name": "limit",
+        "schema": {
+          "minimum": 1,
+          "type": "integer"
+        }
+      }
+    },
+    "responses": {
+      "Error": {
+        "content": {
+          "application/json": {
+            "schema": {
+              "$ref": "#/components/schemas/Error"
+            }
+          }
+        },
+        "description": "An error."
+      }
+    },
+    "schemas": {
+      "AddConnector": {
+        "additionalProperties": false,
+        "properties": {
+          "auth": {
+            "additionalProperties": false,
+            "description": "How a person gives access. Left out, the server's own answer is taken.",
+            "properties": {
+              "client": {
+                "additionalProperties": false,
+                "description": "A sign-in client registered at the server, taken only from an organization's owner or admin. Its secret is kept sealed and never answered.",
+                "properties": {
+                  "id": {
+                    "type": "string"
+                  },
+                  "secret": {
+                    "minLength": 8,
+                    "type": "string",
+                    "writeOnly": true
+                  }
+                },
+                "required": [
+                  "id",
+                  "secret"
+                ],
+                "type": "object"
+              },
+              "hint": {
+                "maxLength": 200,
+                "type": "string"
+              },
+              "inject": {
+                "additionalProperties": false,
+                "description": "For a server that takes a key in a header of its own; without it, the key goes in `Authorization: Bearer`.",
+                "properties": {
+                  "format": {
+                    "type": "string"
+                  },
+                  "header": {
+                    "type": "string"
+                  }
+                },
+                "type": "object"
+              },
+              "scopes": {
+                "items": {
+                  "type": "string"
+                },
+                "type": "array"
+              },
+              "type": {
+                "enum": [
+                  "oauth",
+                  "token",
+                  "none"
+                ],
+                "type": "string"
+              }
+            },
+            "required": [
+              "type"
+            ],
+            "type": "object"
+          },
+          "description": {
+            "maxLength": 200,
+            "type": "string"
+          },
+          "icon": {
+            "format": "uri",
+            "type": "string"
+          },
+          "kind": {
+            "enum": [
+              "mcp"
+            ],
+            "type": "string"
+          },
+          "name": {
+            "description": "A DNS label of at most 40 characters, unique among the owner's servers.",
+            "type": "string"
+          },
+          "owner": {
+            "description": "Latere takes the owner from the token's context. Naming another is `403 forbidden` with `details.reason` `not_owner`.",
+            "type": "string"
+          },
+          "title": {
+            "maxLength": 60,
+            "type": "string"
+          },
+          "tools": {
+            "additionalProperties": false,
+            "properties": {
+              "hidden": {
+                "items": {
+                  "type": "string"
+                },
+                "type": "array"
+              },
+              "read_only": {
+                "items": {
+                  "type": "string"
+                },
+                "type": "array"
+              }
+            },
+            "type": "object"
+          },
+          "url": {
+            "description": "An https URL on port 443.",
+            "format": "uri",
+            "type": "string"
+          }
+        },
+        "required": [
+          "name",
+          "title",
+          "kind",
+          "url"
+        ],
+        "type": "object"
+      },
+      "Call": {
+        "additionalProperties": false,
+        "description": "That a request happened. No member holds an argument, a result, a header or a query string.",
+        "properties": {
+          "at": {
+            "format": "date-time",
+            "type": "string"
+          },
+          "bytes_in": {
+            "type": "integer"
+          },
+          "bytes_out": {
+            "type": "integer"
+          },
+          "connection": {
+            "type": "string"
+          },
+          "connector": {
+            "type": "string"
+          },
+          "duration_ms": {
+            "type": "integer"
+          },
+          "effect": {
+            "enum": [
+              "read",
+              "write"
+            ],
+            "type": "string"
+          },
+          "id": {
+            "type": "string"
+          },
+          "method": {
+            "type": "string"
+          },
+          "outcome": {
+            "description": "`denied` is a request the service's rule refused before it left.",
+            "enum": [
+              "ok",
+              "denied",
+              "not_connected",
+              "upstream_error",
+              "upstream_refused",
+              "timeout",
+              "canceled"
+            ],
+            "type": "string"
+          },
+          "owner": {
+            "type": "string"
+          },
+          "refs": {
+            "description": "How many branches and tags a push named.",
+            "type": "integer"
+          },
+          "session": {
+            "description": "The agent's session that made it.",
+            "type": "string"
+          },
+          "status": {
+            "description": "The service's status",
+            "type": "integer",
+            "when it answered.": null
+          },
+          "subject": {
+            "description": "Who made the request.",
+            "type": "string"
+          },
+          "tool": {
+            "description": "The path at the service, the git service (`git-upload-pack` for a clone or a fetch, `git-receive-pack` for a push), or the tool of an MCP server.",
+            "type": "string"
+          }
+        },
+        "required": [
+          "id",
+          "connection",
+          "owner",
+          "connector",
+          "subject",
+          "at",
+          "duration_ms",
+          "method",
+          "outcome",
+          "bytes_in",
+          "bytes_out"
+        ],
+        "type": "object"
+      },
+      "CallList": {
+        "additionalProperties": false,
+        "properties": {
+          "items": {
+            "items": {
+              "$ref": "#/components/schemas/Call"
+            },
+            "type": "array"
+          },
+          "next_cursor": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "items"
+        ],
+        "type": "object"
+      },
+      "Confirm": {
+        "additionalProperties": false,
+        "properties": {
+          "code": {
+            "description": "The one-time code the browser brought back to return_to.",
+            "type": "string"
+          }
+        },
+        "required": [
+          "code"
+        ],
+        "type": "object"
+      },
+      "Connect": {
+        "additionalProperties": false,
+        "properties": {
+          "connector": {
+            "description": "The name of one of Latere's services, such as `google-calendar`, or the id of an added server.",
+            "type": "string"
+          },
+          "credential": {
+            "$ref": "#/components/schemas/Credential"
+          },
+          "name": {
+            "description": "Unique among the owner's connections. The connector's name by default.",
+            "type": "string"
+          },
+          "owner": {
+            "description": "Latere takes the owner from the token's context. Naming another is `403 forbidden` with `details.reason` `not_owner`.",
+            "type": "string"
+          },
+          "return_to": {
+            "description": "Where the browser goes after a sign-in. One of Latere's own pages",
+            "for a service whose people sign in.": null,
+            "format": "uri",
+            "type": "string"
+          },
+          "scopes": {
+            "beside the connector's own.": null,
+            "description": "Scopes to ask for at a sign-in",
+            "items": {
+              "type": "string"
+            },
+            "type": "array"
+          }
+        },
+        "required": [
+          "connector"
+        ],
+        "type": "object"
+      },
+      "Connection": {
+        "additionalProperties": false,
+        "description": "One owner's link to one connector. It never carries the credential.",
+        "properties": {
+          "account": {
+            "description": "The account at the service this connection acts as, such as a Google address.",
+            "type": "string"
+          },
+          "address": {
+            "description": "Where an agent's session reaches the connection, on connect.latere.ai: the forwarding address of an HTTP API, or the address of an MCP server. A person's token is refused there.",
+            "format": "uri",
+            "type": "string"
+          },
+          "auth": {
+            "enum": [
+              "oauth",
+              "token",
+              "client_credentials",
+              "none"
+            ],
+            "type": "string"
+          },
+          "connector": {
+            "description": "The name of one of Latere's services, or the id of an added server.",
+            "type": "string"
+          },
+          "created_at": {
+            "format": "date-time",
+            "type": "string"
+          },
+          "created_by": {
+            "type": "string"
+          },
+          "expires_at": {
+            "description": "When its sign-in can no longer be renewed",
+            "format": "date-time",
+            "type": "string",
+            "where the service says.": null
+          },
+          "git_address": {
+            "description": "The git address, on connect.latere.ai, for a service with a git host. A person's token is refused there.",
+            "format": "uri",
+            "type": "string"
+          },
+          "id": {
+            "type": "string"
+          },
+          "kind": {
+            "enum": [
+              "mcp",
+              "http"
+            ],
+            "type": "string"
+          },
+          "last_used_at": {
+            "description": "When a session last made a request through it.",
+            "format": "date-time",
+            "type": "string"
+          },
+          "links": {
+            "additionalProperties": false,
+            "properties": {
+              "manage": {
+                "description": "Where the person changes what the service grants, such as which repositories on GitHub.",
+                "format": "uri",
+                "type": "string"
+              }
+            },
+            "type": "object"
+          },
+          "name": {
+            "description": "Unique among the owner's connections; the name an agent's session knows it by.",
+            "type": "string"
+          },
+          "owner": {
+            "description": "Whose it is: the person, as `https://auth.latere.ai|\u003csubject\u003e`, or, for a member's connection in an organization, that member in that organization.",
+            "type": "string"
+          },
+          "reason": {
+            "description": "Why the connection needs reconnecting.",
+            "enum": [
+              "refresh_refused",
+              "revoked",
+              "credential_refused"
+            ],
+            "type": "string"
+          },
+          "scopes": {
+            "description": "The scopes the service granted.",
+            "items": {
+              "type": "string"
+            },
+            "type": "array"
+          },
+          "state": {
+            "$ref": "#/components/schemas/State"
+          },
+          "tools": {
+            "$ref": "#/components/schemas/Marks"
+          },
+          "updated_at": {
+            "format": "date-time",
+            "type": "string"
+          }
+        },
+        "required": [
+          "id",
+          "name",
+          "owner",
+          "connector",
+          "kind",
+          "auth",
+          "state",
+          "address",
+          "tools",
+          "links",
+          "created_by",
+          "created_at",
+          "updated_at"
+        ],
+        "type": "object"
+      },
+      "ConnectionList": {
+        "additionalProperties": false,
+        "properties": {
+          "items": {
+            "items": {
+              "$ref": "#/components/schemas/Connection"
+            },
+            "type": "array"
+          },
+          "next_cursor": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "items"
+        ],
+        "type": "object"
+      },
+      "Connector": {
+        "additionalProperties": false,
+        "description": "A service a person may connect, and how a person gives access to it.",
+        "properties": {
+          "auth": {
+            "additionalProperties": false,
+            "properties": {
+              "client": {
+                "description": "How Latere identifies itself where an added server signs people in: `own`, a client its developer registered there and an organization's owner or admin gave; `document`, Latere's client metadata document; `registered`, a registration Latere made at the server itself.",
+                "enum": [
+                  "own",
+                  "document",
+                  "registered"
+                ],
+                "type": "string"
+              },
+              "hint": {
+                "description": "Where a person gets a key",
+                "for a server that takes one.": null,
+                "type": "string"
+              },
+              "inject": {
+                "$ref": "#/components/schemas/Inject"
+              },
+              "redirect_uri": {
+                "description": "The return address to register a server's own sign-in client with, present when `client` is `own`.",
+                "format": "uri",
+                "type": "string"
+              },
+              "scopes": {
+                "description": "What the sign-in asks the service for.",
+                "items": {
+                  "type": "string"
+                },
+                "type": "array"
+              },
+              "type": {
+                "description": "How a person gives access: `oauth`, by signing in; `token`, by giving a key; `none`, nothing. Every one of Latere's own services is `oauth`.",
+                "enum": [
+                  "oauth",
+                  "token",
+                  "client_credentials",
+                  "none"
+                ],
+                "type": "string"
+              }
+            },
+            "required": [
+              "type"
+            ],
+            "type": "object"
+          },
+          "connections": {
+            "description": "An added server's, answered to a caller who may change it. How many connections use it.",
+            "minimum": 0,
+            "type": "integer"
+          },
+          "description": {
+            "type": "string"
+          },
+          "disabled": {
+            "and its connections are kept.": null,
+            "description": "An added server's. Turned off",
+            "it is connected and called by nobody": null,
+            "type": "boolean"
+          },
+          "hosts": {
+            "description": "The only hosts the credential is ever sent to.",
+            "items": {
+              "type": "string"
+            },
+            "type": "array"
+          },
+          "icon": {
+            "format": "uri",
+            "type": "string"
+          },
+          "id": {
+            "description": "An added server's id",
+            "type": "string",
+            "which its connections and its changes name.": null
+          },
+          "kind": {
+            "description": "`http`: an HTTP API, reached through a forwarding address, and a git host when the service has one. `mcp`: an MCP server, whose tools an agent is offered.",
+            "enum": [
+              "mcp",
+              "http"
+            ],
+            "type": "string"
+          },
+          "name": {
+            "description": "The name of one of Latere's services, such as `google-calendar`, or an added server's name, unique among its owner's.",
+            "type": "string"
+          },
+          "owner": {
+            "description": "Whose an added server is: a person's, an organization's, or Latere's. Latere's own services have none.",
+            "type": "string"
+          },
+          "title": {
+            "description": "What a person reads.",
+            "type": "string"
+          },
+          "tools": {
+            "$ref": "#/components/schemas/Marks"
+          },
+          "url": {
+            "description": "Where the service answers.",
+            "format": "uri",
+            "type": "string"
+          },
+          "vouched": {
+            "description": "An added server's. True when an organization's owner or admin, or Latere, added it, which lets it carry its own sign-in client.",
+            "type": "boolean"
+          }
+        },
+        "required": [
+          "name",
+          "title",
+          "kind",
+          "url",
+          "hosts",
+          "auth",
+          "tools"
+        ],
+        "type": "object"
+      },
+      "ConnectorList": {
+        "additionalProperties": false,
+        "properties": {
+          "items": {
+            "items": {
+              "$ref": "#/components/schemas/Connector"
+            },
+            "type": "array"
+          },
+          "next_cursor": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "items"
+        ],
+        "type": "object"
+      },
+      "Credential": {
+        "additionalProperties": false,
+        "description": "Write-only. The key of a server that takes one.",
+        "properties": {
+          "value": {
+            "minLength": 8,
+            "type": "string",
+            "writeOnly": true
+          }
+        },
+        "type": "object"
+      },
+      "EditConnector": {
+        "additionalProperties": false,
+        "description": "The members a change sets; a member left out is unchanged.",
+        "properties": {
+          "auth": {
+            "additionalProperties": false,
+            "properties": {
+              "client": {
+                "additionalProperties": false,
+                "properties": {
+                  "id": {
+                    "description": "Fixed. Another value is 400 immutable_field.",
+                    "type": "string"
+                  },
+                  "secret": {
+                    "description": "The new secret of the server's own sign-in client",
+                    "minLength": 8,
+                    "type": "string",
+                    "used at the next token request.": null,
+                    "writeOnly": true
+                  }
+                },
+                "type": "object"
+              },
+              "scopes": {
+                "description": "The scopes the next sign-in asks for. A connection keeps what it was granted.",
+                "items": {
+                  "type": "string"
+                },
+                "type": "array"
+              },
+              "type": {
+                "description": "Fixed. Another value is 400 immutable_field.",
+                "type": "string"
+              }
+            },
+            "type": "object"
+          },
+          "description": {
+            "maxLength": 200,
+            "type": "string"
+          },
+          "disabled": {
+            "description": "Turns the server off",
+            "or on again.": null,
+            "type": "boolean"
+          },
+          "icon": {
+            "format": "uri",
+            "type": "string"
+          },
+          "kind": {
+            "description": "Fixed. Another value is 400 immutable_field.",
+            "type": "string"
+          },
+          "name": {
+            "description": "Fixed. Another value is 400 immutable_field.",
+            "type": "string"
+          },
+          "title": {
+            "maxLength": 60,
+            "type": "string"
+          },
+          "tools": {
+            "additionalProperties": false,
+            "properties": {
+              "hidden": {
+                "items": {
+                  "type": "string"
+                },
+                "type": "array"
+              },
+              "read_only": {
+                "items": {
+                  "type": "string"
+                },
+                "type": "array"
+              }
+            },
+            "type": "object"
+          },
+          "url": {
+            "description": "Fixed. Another value is 400 immutable_field.",
+            "type": "string"
+          }
+        },
+        "type": "object"
+      },
+      "Error": {
+        "additionalProperties": false,
+        "properties": {
+          "error": {
+            "additionalProperties": false,
+            "properties": {
+              "code": {
+                "enum": [
+                  "invalid_request",
+                  "unknown_field",
+                  "invalid_field",
+                  "missing_field",
+                  "immutable_field",
+                  "invalid_code",
+                  "missing_token",
+                  "invalid_token",
+                  "forbidden",
+                  "connector_not_found",
+                  "connection_not_found",
+                  "name_taken",
+                  "connector_in_use",
+                  "connector_limit",
+                  "connector_disabled",
+                  "connection_not_connected",
+                  "wrong_kind",
+                  "flow_expired",
+                  "request_too_large",
+                  "connector_unreachable",
+                  "server_unreachable",
+                  "sign_in_unsupported",
+                  "auth_mismatch",
+                  "credential_refused",
+                  "rate_limited",
+                  "internal",
+                  "connector_unavailable",
+                  "authorizer_unavailable",
+                  "sealing_unavailable",
+                  "connector_timeout"
+                ],
+                "type": "string"
+              },
+              "details": {
+                "description": "For a developer.",
+                "properties": {
+                  "field": {
+                    "description": "The member of the request the error is about.",
+                    "type": "string"
+                  },
+                  "reason": {
+                    "description": "What happened in this instance.",
+                    "type": "string"
+                  },
+                  "retryable": {
+                    "description": "Whether the same request may succeed later.",
+                    "type": "boolean"
+                  },
+                  "state": {
+                    "$ref": "#/components/schemas/State"
+                  }
+                },
+                "type": "object"
+              },
+              "message": {
+                "description": "One fixed sentence for a person.",
+                "type": "string"
+              }
+            },
+            "required": [
+              "code",
+              "message"
+            ],
+            "type": "object"
+          }
+        },
+        "required": [
+          "error"
+        ],
+        "type": "object"
+      },
+      "Inject": {
+        "additionalProperties": false,
+        "description": "Where a server that takes a key is sent it.",
+        "properties": {
+          "format": {
+            "description": "The header's value, with {value} where the key goes, such as `Bearer {value}`.",
+            "type": "string"
+          },
+          "header": {
+            "description": "The request header the key goes in, such as `X-API-Key`.",
+            "type": "string"
+          }
+        },
+        "required": [
+          "header",
+          "format"
+        ],
+        "type": "object"
+      },
+      "Marks": {
+        "additionalProperties": false,
+        "description": "Globs over the tool names of an MCP server. A tool no read_only glob matches can change things, and a tool a hidden glob matches is never offered to an agent. A service that is not an MCP server has none.",
+        "properties": {
+          "hidden": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array"
+          },
+          "read_only": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array"
+          }
+        },
+        "required": [
+          "read_only",
+          "hidden"
+        ],
+        "type": "object"
+      },
+      "Reconnect": {
+        "additionalProperties": false,
+        "properties": {
+          "return_to": {
+            "description": "Where the browser goes after the sign-in. One of Latere's own pages.",
+            "format": "uri",
+            "type": "string"
+          },
+          "scopes": {
+            "description": "Scopes to ask for beside the ones granted before.",
+            "items": {
+              "type": "string"
+            },
+            "type": "array"
+          }
+        },
+        "required": [
+          "return_to"
+        ],
+        "type": "object"
+      },
+      "Rename": {
+        "additionalProperties": false,
+        "properties": {
+          "name": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "name"
+        ],
+        "type": "object"
+      },
+      "ReplaceCredential": {
+        "additionalProperties": false,
+        "properties": {
+          "credential": {
+            "$ref": "#/components/schemas/Credential"
+          }
+        },
+        "required": [
+          "credential"
+        ],
+        "type": "object"
+      },
+      "Started": {
+        "additionalProperties": false,
+        "properties": {
+          "authorization_url": {
+            "description": "Where to send the person's browser to sign in.",
+            "format": "uri",
+            "type": "string"
+          },
+          "connection": {
+            "$ref": "#/components/schemas/Connection"
+          }
+        },
+        "required": [
+          "connection",
+          "authorization_url"
+        ],
+        "type": "object"
+      },
+      "State": {
+        "description": "`pending` until the sign-in is confirmed, `connected`, or `needs_reconnect` when the service stopped taking the credential.",
+        "enum": [
+          "pending",
+          "connected",
+          "needs_reconnect"
+        ],
+        "type": "string"
+      },
+      "ToolList": {
+        "additionalProperties": false,
+        "properties": {
+          "items": {
+            "items": {
+              "additionalProperties": false,
+              "properties": {
+                "description": {
+                  "type": "string"
+                },
+                "effect": {
+                  "description": "The effect the server's tool marks give the tool.",
+                  "enum": [
+                    "read",
+                    "write"
+                  ],
+                  "type": "string"
+                },
+                "hidden": {
+                  "description": "Whether a hidden mark names the tool.",
+                  "type": "boolean"
+                },
+                "name": {
+                  "type": "string"
+                }
+              },
+              "required": [
+                "name",
+                "effect"
+              ],
+              "type": "object"
+            },
+            "type": "array"
+          }
+        },
+        "required": [
+          "items"
+        ],
+        "type": "object"
+      }
+    },
+    "securitySchemes": {
+      "bearer": {
+        "description": "A person's signed-in token from auth.latere.ai, addressed to api.latere.ai. A token from a key is refused.",
+        "scheme": "bearer",
+        "type": "http"
+      }
+    }
+  },
+  "info": {
+    "description": "A person connects a service once, and Latere keeps the credential. These\nroutes list the services a person may connect, add an MCP server of\none's own, connect a service, finish and renew its sign-in or replace\nits key, and list, read, rename and disconnect a person's connections.\nA credential is never part of an answer: no route, list or error\ncarries one.\n\nEvery route takes a person's signed-in token addressed to\n`api.latere.ai`. In their personal context a person reaches their own\nconnections and servers; in an organization's context, what they\nconnected there and the services the organization offers. A\nconnection or a server somebody else holds answers as one that does\nnot exist.\n\nEvery error is one object: a `code` to branch on, a fixed `message` for\na person, and `details` for a developer.\n",
+    "license": {
+      "identifier": "Apache-2.0",
+      "name": "Apache-2.0"
+    },
+    "summary": "The services a person connects once, which Latere's agents use without holding the credential.",
+    "title": "Latere Connections",
+    "version": "1"
+  },
+  "openapi": "3.1.0",
+  "paths": {
+    "/v1/connections/connections": {
+      "get": {
+        "description": "The caller's connections in the token's context, newest first.",
+        "operationId": "listConnections",
+        "parameters": [
+          {
+            "$ref": "#/components/parameters/Limit"
+          },
+          {
+            "$ref": "#/components/parameters/Cursor"
+          },
+          {
+            "description": "Only this owner's connections. It narrows what the caller may see and never widens it.",
+            "in": "query",
+            "name": "owner",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "description": "Only the connections of this connector, by its name or its id.",
+            "in": "query",
+            "name": "connector",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "description": "Only the connections in this state.",
+            "in": "query",
+            "name": "state",
+            "schema": {
+              "$ref": "#/components/schemas/State"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ConnectionList"
+                }
+              }
+            },
+            "description": "A page of connections."
+          },
+          "400": {
+            "$ref": "#/components/responses/Error"
+          },
+          "401": {
+            "$ref": "#/components/responses/Error"
+          },
+          "403": {
+            "$ref": "#/components/responses/Error"
+          },
+          "503": {
+            "$ref": "#/components/responses/Error"
+          }
+        },
+        "summary": "List connections",
+        "tags": [
+          "connections"
+        ]
+      },
+      "post": {
+        "description": "Starts a connection for the caller in the token's context. A\nservice whose people sign in answers `201` with the connection,\n`pending`, and `authorization_url`, where the person's browser goes\nto sign in. The sign-in waits 10 minutes. The service sends the\nbrowser back to `return_to` with the connection's id and a one-time\ncode, and the confirm finishes the connection. Every one of\nLatere's own services signs people in.\n\nA server that takes a key, or needs nothing, is connected at once:\nthe answer is the connection, `connected`. A key is given as\n`credential.value`, tried against the server before it is kept, and\nnever answered. Such a connect names no `return_to`; one that does\nis `400 invalid_field` with `details.reason` `no_sign_in`.\n\n`return_to` is one of Latere's own pages, exactly: Latere Chat's\nConnectors, `https://chat.latere.ai/settings/connectors`, or the\nconsole's Connections, `https://platform.latere.ai/console/connections`.\nAny other is `400 invalid_field`. In an organization's context, a\nconnect to a service the organization does not offer its members is\nrefused, `403 forbidden` with `details.reason` `not_chosen`; one it\noffers is the member's own connection in that organization. A\nserver of an owner outside the token's context is\n`404 connector_not_found`, and a server that is turned off is\n`409 connector_disabled`.\n",
+        "operationId": "connect",
+        "parameters": [
+          {
+            "$ref": "#/components/parameters/IdempotencyKey"
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/Connect"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "201": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "oneOf": [
+                    {
+                      "$ref": "#/components/schemas/Connection"
+                    },
+                    {
+                      "$ref": "#/components/schemas/Started"
+                    }
+                  ]
+                }
+              }
+            },
+            "description": "The connection, or the connection pending with the address of its sign-in."
+          },
+          "400": {
+            "$ref": "#/components/responses/Error"
+          },
+          "401": {
+            "$ref": "#/components/responses/Error"
+          },
+          "403": {
+            "$ref": "#/components/responses/Error"
+          },
+          "404": {
+            "$ref": "#/components/responses/Error"
+          },
+          "409": {
+            "$ref": "#/components/responses/Error"
+          },
+          "413": {
+            "$ref": "#/components/responses/Error"
+          },
+          "422": {
+            "$ref": "#/components/responses/Error"
+          },
+          "429": {
+            "$ref": "#/components/responses/Error"
+          },
+          "503": {
+            "$ref": "#/components/responses/Error"
+          }
+        },
+        "summary": "Connect a service",
+        "tags": [
+          "connections"
+        ]
+      }
+    },
+    "/v1/connections/connections/{id}": {
+      "delete": {
+        "description": "Deletes the connection and its credential at Latere, together.\nSessions stop using the service from their next message. At Google,\nthe access the person granted is removed when this was the last\nconnection of that Google account; at GitHub it is not revoked, and\nthe person removes it in their GitHub settings. In an organization,\nits owners and admins may also delete a member's connection there.\n",
+        "operationId": "disconnect",
+        "parameters": [
+          {
+            "$ref": "#/components/parameters/ConnectionID"
+          }
+        ],
+        "responses": {
+          "204": {
+            "description": "Disconnected."
+          },
+          "401": {
+            "$ref": "#/components/responses/Error"
+          },
+          "404": {
+            "$ref": "#/components/responses/Error"
+          },
+          "503": {
+            "$ref": "#/components/responses/Error"
+          }
+        },
+        "summary": "Disconnect",
+        "tags": [
+          "connections"
+        ]
+      },
+      "get": {
+        "operationId": "readConnection",
+        "parameters": [
+          {
+            "$ref": "#/components/parameters/ConnectionID"
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Connection"
+                }
+              }
+            },
+            "description": "The connection."
+          },
+          "401": {
+            "$ref": "#/components/responses/Error"
+          },
+          "404": {
+            "$ref": "#/components/responses/Error"
+          },
+          "503": {
+            "$ref": "#/components/responses/Error"
+          }
+        },
+        "summary": "Read a connection",
+        "tags": [
+          "connections"
+        ]
+      },
+      "patch": {
+        "description": "Gives the connection a new name, unique among the owner's: a DNS\nlabel of lowercase letters, digits and hyphens, at most 40\ncharacters. An agent's session knows a connection by its name: it\nis the name the agent is told, and `\u003cNAME\u003e_API_URL` in the session's\nmachine. A session takes a name that starts with a letter and has at\nmost 32 characters, so a rename to any other name is refused with\n403 `forbidden` and `details.reason` `name_unusable`, and the\nconnection keeps its name.\n",
+        "operationId": "renameConnection",
+        "parameters": [
+          {
+            "$ref": "#/components/parameters/ConnectionID"
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/Rename"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Connection"
+                }
+              }
+            },
+            "description": "The connection, renamed."
+          },
+          "400": {
+            "$ref": "#/components/responses/Error"
+          },
+          "401": {
+            "$ref": "#/components/responses/Error"
+          },
+          "403": {
+            "$ref": "#/components/responses/Error"
+          },
+          "404": {
+            "$ref": "#/components/responses/Error"
+          },
+          "409": {
+            "$ref": "#/components/responses/Error"
+          },
+          "413": {
+            "$ref": "#/components/responses/Error"
+          },
+          "503": {
+            "$ref": "#/components/responses/Error"
+          }
+        },
+        "summary": "Rename a connection",
+        "tags": [
+          "connections"
+        ]
+      }
+    },
+    "/v1/connections/connections/{id}/calls": {
+      "get": {
+        "description": "The records of the requests an agent's sessions made through the connection, newest first, kept 30 days. A record says that a request happened, never what it said.",
+        "operationId": "listCalls",
+        "parameters": [
+          {
+            "$ref": "#/components/parameters/ConnectionID"
+          },
+          {
+            "$ref": "#/components/parameters/Limit"
+          },
+          {
+            "$ref": "#/components/parameters/Cursor"
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CallList"
+                }
+              }
+            },
+            "description": "A page of call records."
+          },
+          "400": {
+            "$ref": "#/components/responses/Error"
+          },
+          "401": {
+            "$ref": "#/components/responses/Error"
+          },
+          "404": {
+            "$ref": "#/components/responses/Error"
+          },
+          "503": {
+            "$ref": "#/components/responses/Error"
+          }
+        },
+        "summary": "List a connection's calls",
+        "tags": [
+          "connections"
+        ]
+      }
+    },
+    "/v1/connections/connections/{id}/confirm": {
+      "post": {
+        "description": "Finishes a sign-in with the one-time code the browser brought back to\n`return_to`, within 2 minutes of its return. Check first that the\n`connection` the browser brought is one the person's own session\nstarted. A wrong code is `400 invalid_code` and spends the sign-in; a\nsign-in whose time has passed is `410 flow_expired`. Either way,\nconnect again.\n",
+        "operationId": "confirm",
+        "parameters": [
+          {
+            "$ref": "#/components/parameters/ConnectionID"
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/Confirm"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Connection"
+                }
+              }
+            },
+            "description": "The connection, connected."
+          },
+          "400": {
+            "$ref": "#/components/responses/Error"
+          },
+          "401": {
+            "$ref": "#/components/responses/Error"
+          },
+          "404": {
+            "$ref": "#/components/responses/Error"
+          },
+          "409": {
+            "$ref": "#/components/responses/Error"
+          },
+          "410": {
+            "$ref": "#/components/responses/Error"
+          },
+          "413": {
+            "$ref": "#/components/responses/Error"
+          },
+          "503": {
+            "$ref": "#/components/responses/Error"
+          }
+        },
+        "summary": "Confirm a sign-in",
+        "tags": [
+          "connections"
+        ]
+      }
+    },
+    "/v1/connections/connections/{id}/credential": {
+      "put": {
+        "description": "A new key for a connection to a server that takes one. It replaces the old one in one write, and a connection that needed to be connected again is connected. The key is never answered.",
+        "operationId": "replaceCredential",
+        "parameters": [
+          {
+            "$ref": "#/components/parameters/ConnectionID"
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ReplaceCredential"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "204": {
+            "description": "Replaced."
+          },
+          "400": {
+            "$ref": "#/components/responses/Error"
+          },
+          "401": {
+            "$ref": "#/components/responses/Error"
+          },
+          "404": {
+            "$ref": "#/components/responses/Error"
+          },
+          "409": {
+            "$ref": "#/components/responses/Error"
+          },
+          "413": {
+            "$ref": "#/components/responses/Error"
+          },
+          "503": {
+            "$ref": "#/components/responses/Error"
+          }
+        },
+        "summary": "Replace a key",
+        "tags": [
+          "connections"
+        ]
+      }
+    },
+    "/v1/connections/connections/{id}/reconnect": {
+      "post": {
+        "description": "Starts a new sign-in for a connection to a service whose people sign\nin: to change its account or its scopes, or after the service\nstopped taking its credential. It is confirmed as a connect is. The\nconnection keeps its id and its name, and its old sign-in carries\nrequests until the confirm. Scopes named are asked for beside the\nones granted before. A connection that takes a key, or needs\nnothing, is `409 wrong_kind`.\n",
+        "operationId": "reconnect",
+        "parameters": [
+          {
+            "$ref": "#/components/parameters/ConnectionID"
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/Reconnect"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Started"
+                }
+              }
+            },
+            "description": "The connection, pending, with the address of its sign-in."
+          },
+          "400": {
+            "$ref": "#/components/responses/Error"
+          },
+          "401": {
+            "$ref": "#/components/responses/Error"
+          },
+          "404": {
+            "$ref": "#/components/responses/Error"
+          },
+          "409": {
+            "$ref": "#/components/responses/Error"
+          },
+          "413": {
+            "$ref": "#/components/responses/Error"
+          },
+          "422": {
+            "$ref": "#/components/responses/Error"
+          },
+          "429": {
+            "$ref": "#/components/responses/Error"
+          },
+          "503": {
+            "$ref": "#/components/responses/Error"
+          }
+        },
+        "summary": "Sign in again",
+        "tags": [
+          "connections"
+        ]
+      }
+    },
+    "/v1/connections/connections/{id}/tools": {
+      "get": {
+        "description": "The tools an MCP server lists through this connection, asked each\ntime, with the effect the server's tool marks give each and whether\nthey hide it. It is how a server's tools are read before choosing\ntheir marks, and it records no call. A connection to a service that\nis not an MCP server is `409 wrong_kind`; one that cannot be used\nnow is `409 connection_not_connected`, as a session's call is.\n",
+        "operationId": "listTools",
+        "parameters": [
+          {
+            "$ref": "#/components/parameters/ConnectionID"
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ToolList"
+                }
+              }
+            },
+            "description": "The server's tools."
+          },
+          "401": {
+            "$ref": "#/components/responses/Error"
+          },
+          "404": {
+            "$ref": "#/components/responses/Error"
+          },
+          "409": {
+            "$ref": "#/components/responses/Error"
+          },
+          "502": {
+            "$ref": "#/components/responses/Error"
+          },
+          "503": {
+            "$ref": "#/components/responses/Error"
+          },
+          "504": {
+            "$ref": "#/components/responses/Error"
+          }
+        },
+        "summary": "List a server's tools",
+        "tags": [
+          "connections"
+        ]
+      }
+    },
+    "/v1/connections/connectors": {
+      "get": {
+        "description": "The services the caller may connect: Latere's own, in the order of\nits catalog, then the MCP servers added by their address, newest\nfirst. In a personal context those are the caller's own servers and\nthe ones Latere added; in an organization's context, the\norganization's servers and the ones Latere added. A connector says\nwhat the service is and how a person gives access to it, never a\ncredential. A server the caller may change carries `connections`.\n",
+        "operationId": "listConnectors",
+        "parameters": [
+          {
+            "$ref": "#/components/parameters/Limit"
+          },
+          {
+            "$ref": "#/components/parameters/Cursor"
+          },
+          {
+            "description": "Only this owner's added servers; Latere's own services are listed whatever it says. It narrows what the caller may see and never widens it.",
+            "in": "query",
+            "name": "owner",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "description": "Only connectors of this kind.",
+            "in": "query",
+            "name": "kind",
+            "schema": {
+              "enum": [
+                "mcp",
+                "http"
+              ],
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ConnectorList"
+                }
+              }
+            },
+            "description": "A page of connectors."
+          },
+          "400": {
+            "$ref": "#/components/responses/Error"
+          },
+          "401": {
+            "$ref": "#/components/responses/Error"
+          },
+          "403": {
+            "$ref": "#/components/responses/Error"
+          },
+          "503": {
+            "$ref": "#/components/responses/Error"
+          }
+        },
+        "summary": "List connectors",
+        "tags": [
+          "connectors"
+        ]
+      },
+      "post": {
+        "description": "Adds an MCP server by its address. In a personal context the server\nis the caller's own, and only they see and connect it. In an\norganization's context only its owners and admins add one, for its\nmembers; a member is refused `403 forbidden` with `details.reason`\n`role_insufficient`. Its `url` is `https` on port 443, and a\ncredential for it goes to that host alone.\n\nBefore it answers, Latere asks the server how people sign in, with\nno credential: a server that answers needs nothing (`none`), one\nthat names its protected resource metadata signs people in\n(`oauth`), and one that refuses with no metadata takes a key\n(`token`). Leave `auth` out to take the server's answer. An `auth`\nthe answer does not admit is `422 auth_mismatch`, a server that\ndoes not answer as one that can be connected is\n`422 server_unreachable`, and a server that signs people in and\noffers Latere no way to identify itself is\n`422 sign_in_unsupported`. `auth.client`, a sign-in client\nregistered at the server, is taken only from an organization's\nowner or admin. One owner adds at most 50 servers; one more is\n`409 connector_limit`.\n",
+        "operationId": "addConnector",
+        "parameters": [
+          {
+            "$ref": "#/components/parameters/IdempotencyKey"
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/AddConnector"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "201": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Connector"
+                }
+              }
+            },
+            "description": "The server, with its id."
+          },
+          "400": {
+            "$ref": "#/components/responses/Error"
+          },
+          "401": {
+            "$ref": "#/components/responses/Error"
+          },
+          "403": {
+            "$ref": "#/components/responses/Error"
+          },
+          "409": {
+            "$ref": "#/components/responses/Error"
+          },
+          "413": {
+            "$ref": "#/components/responses/Error"
+          },
+          "422": {
+            "$ref": "#/components/responses/Error"
+          },
+          "429": {
+            "$ref": "#/components/responses/Error"
+          },
+          "503": {
+            "$ref": "#/components/responses/Error"
+          }
+        },
+        "summary": "Add a server",
+        "tags": [
+          "connectors"
+        ]
+      }
+    },
+    "/v1/connections/connectors/{ref}": {
+      "delete": {
+        "description": "Removes an added server when no connection uses it, by whoever may change it; one in use is `409 connector_in_use`, and can be turned off instead. Latere's own services are not removed here.",
+        "operationId": "removeConnector",
+        "parameters": [
+          {
+            "description": "The id of an added server.",
+            "in": "path",
+            "name": "ref",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "204": {
+            "description": "Removed."
+          },
+          "401": {
+            "$ref": "#/components/responses/Error"
+          },
+          "404": {
+            "$ref": "#/components/responses/Error"
+          },
+          "409": {
+            "$ref": "#/components/responses/Error"
+          },
+          "503": {
+            "$ref": "#/components/responses/Error"
+          }
+        },
+        "summary": "Remove a server",
+        "tags": [
+          "connectors"
+        ]
+      },
+      "get": {
+        "operationId": "readConnector",
+        "parameters": [
+          {
+            "description": "The name of one of Latere's services, `github`, `gmail`, `google-calendar` or `google-drive`, or the id of an added server.",
+            "in": "path",
+            "name": "ref",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Connector"
+                }
+              }
+            },
+            "description": "The connector."
+          },
+          "401": {
+            "$ref": "#/components/responses/Error"
+          },
+          "404": {
+            "$ref": "#/components/responses/Error"
+          },
+          "503": {
+            "$ref": "#/components/responses/Error"
+          }
+        },
+        "summary": "Read a connector",
+        "tags": [
+          "connectors"
+        ]
+      },
+      "patch": {
+        "description": "Changes an added server in place, from the next request on. A\nperson changes their own servers; an organization's owners and\nadmins change its servers. `title`, `description`, `icon`, `tools`,\n`auth.scopes`, `disabled` and the secret of the server's own\nsign-in client change; `name`, `kind`, `url`, `auth.type` and the\nclient's id do not, and naming another value is\n`400 immutable_field`. A server that is turned off stays listed: a\nconnect to it is `409 connector_disabled`, a session's call through\na connection to it is `409 connection_not_connected` with\n`details.reason` `connector_disabled`, and its connections and\ntheir credentials are kept until it is turned on. Latere's own\nservices are not changed here.\n",
+        "operationId": "editConnector",
+        "parameters": [
+          {
+            "description": "The id of an added server.",
+            "in": "path",
+            "name": "ref",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/EditConnector"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Connector"
+                }
+              }
+            },
+            "description": "The server as changed, with `connections`."
+          },
+          "400": {
+            "$ref": "#/components/responses/Error"
+          },
+          "401": {
+            "$ref": "#/components/responses/Error"
+          },
+          "404": {
+            "$ref": "#/components/responses/Error"
+          },
+          "413": {
+            "$ref": "#/components/responses/Error"
+          },
+          "503": {
+            "$ref": "#/components/responses/Error"
+          }
+        },
+        "summary": "Change a server",
+        "tags": [
+          "connectors"
+        ]
+      }
+    }
+  },
+  "security": [
+    {
+      "bearer": []
+    }
+  ],
+  "servers": [
+    {
+      "url": "https://api.latere.ai"
+    }
+  ],
+  "tags": [
+    {
+      "description": "A person's link to one service, made by signing in to it, by giving it a key, or at once.",
+      "name": "connections"
+    },
+    {
+      "description": "The services a person may connect, Latere's and the MCP servers a person, an organization or Latere added.",
+      "name": "connectors"
+    }
+  ]
+}

@@ -29,8 +29,9 @@ import (
 // documents are the capabilities whose documents are vendored, by the file
 // name each is written to.
 var documents = map[string]string{
-	"agents":  "https://platform.latere.ai/docs/agents/openapi.yaml",
-	"account": "https://platform.latere.ai/docs/account/openapi.yaml",
+	"agents":      "https://platform.latere.ai/docs/agents/openapi.yaml",
+	"account":     "https://platform.latere.ai/docs/account/openapi.yaml",
+	"connections": "https://platform.latere.ai/docs/connections/openapi.yaml",
 }
 
 // source is one entry of sources.json.

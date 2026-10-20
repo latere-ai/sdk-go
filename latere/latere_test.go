@@ -19,6 +19,7 @@ import (
 	"sync/atomic"
 	"testing"
 	"time"
+	"unicode/utf8"
 )
 
 // testConfig returns a Config for srv whose retries wait no time, and the
@@ -188,19 +189,50 @@ func TestDoReturnsTheAPIError(t *testing.T) {
 	}
 }
 
+// A body that is not the envelope yields the status text as the message
+// and is kept, unread, in Body.
 func TestErrorWithoutTheEnvelope(t *testing.T) {
-	for body, want := range map[string]string{
-		"":                            "Bad Gateway",
-		"<html>proxy down</html>":     "<html>proxy down</html>",
-		strings.Repeat("x", 300) + "": strings.Repeat("x", 200) + "…",
-	} {
+	for _, body := range []string{"", "<html>proxy down</html>", strings.Repeat("x", 300)} {
 		e := newError(&http.Response{StatusCode: http.StatusBadGateway, Header: http.Header{}}, []byte(body))
-		if e.Message != want || e.Code != "" {
-			t.Errorf("body %.20q: message %.30q code %q, want %.30q", body, e.Message, e.Code, want)
+		if e.Message != "Bad Gateway" || e.Code != "" {
+			t.Errorf("body %.20q: message %q code %q, want the status text and no code", body, e.Message, e.Code)
+		}
+		if string(e.Body) != body {
+			t.Errorf("body %.20q: Body = %.20q, want the body as sent", body, e.Body)
 		}
 	}
 	if s := (&Error{StatusCode: 500}).Error(); s != "latere: 500" {
 		t.Errorf("a bare error reads %q", s)
+	}
+}
+
+// A body cut at the read bound keeps the code and message its envelope
+// names before the cut, and ends on a rune boundary.
+func TestATruncatedErrorKeepsItsCode(t *testing.T) {
+	start := `{"error":{"code":"too_large","message":"The request is too large.","details":{"echo":"`
+	if (maxErrorBody-len(start))%2 == 0 {
+		start += "x" // so the cut lands inside a two-byte é
+	}
+	full := start + strings.Repeat("é", maxErrorBody) + `"}}}`
+	cut := []byte(full)[:maxErrorBody]
+	if utf8.Valid(cut) {
+		t.Fatal("the cut does not split a rune; the test needs one that does")
+	}
+	e := newError(&http.Response{StatusCode: http.StatusRequestEntityTooLarge, Header: http.Header{}}, cut)
+	if e.Code != "too_large" || e.Message != "The request is too large." {
+		t.Errorf("code %q message %q; want the envelope's, read before the cut", e.Code, e.Message)
+	}
+	if !utf8.Valid(e.Body) || len(e.Body) != len(cut)-1 {
+		t.Errorf("Body is %d bytes, valid UTF-8 %v; want the cut less its half rune", len(e.Body), utf8.Valid(e.Body))
+	}
+	if code, _ := envelopeStart([]byte(`{"error":{"details":{"a":1},"code":"x"`)); code != "" {
+		t.Errorf("details before the code yielded the code %q; the reader stops at details", code)
+	}
+	if code, _ := envelopeStart([]byte(`{"items":[]}`)); code != "" {
+		t.Errorf("a body that is not the envelope yielded the code %q", code)
+	}
+	if got := validUTF8Prefix([]byte("ab\xffcd")); string(got) != "ab\xffcd" {
+		t.Errorf("a body with an invalid byte inside was cut to %q", got)
 	}
 }
 

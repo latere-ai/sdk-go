@@ -4,6 +4,7 @@
 package latere
 
 import (
+	"bytes"
 	"encoding/json"
 	"errors"
 	"fmt"
@@ -11,6 +12,7 @@ import (
 	"strconv"
 	"strings"
 	"time"
+	"unicode/utf8"
 )
 
 // Errors to test an *Error against with errors.Is. Each matches by the
@@ -97,8 +99,10 @@ const maxErrorBody = 64 << 10
 // newError builds the Error for an error response from its body, which
 // holds the API's envelope {"error": {"code", "message", "details"}}. A body
 // that is not the envelope, from a proxy in front of the API for instance,
-// still yields an Error: its message is the start of the body, or the
-// status text when the body is empty.
+// still yields an Error: its message is the status text, and the body is
+// kept in Body alone, since it was not written for a person to read. A
+// body cut at maxErrorBody keeps the code and message the envelope names
+// before the cut.
 func newError(resp *http.Response, body []byte) *Error {
 	e := &Error{
 		StatusCode: resp.StatusCode,
@@ -106,7 +110,7 @@ func newError(resp *http.Response, body []byte) *Error {
 		RetryAfter: retryAfter(resp.Header.Get("Retry-After"), time.Now()),
 	}
 	if len(body) > 0 {
-		e.Body = append([]byte(nil), body...)
+		e.Body = append([]byte(nil), validUTF8Prefix(body)...)
 	}
 	var envelope struct {
 		Error struct {
@@ -126,15 +130,67 @@ func newError(resp *http.Response, body []byte) *Error {
 		}
 		return e
 	}
-	text := strings.TrimSpace(string(body))
-	if len(text) > 200 {
-		text = text[:200] + "…"
+	if code, message := envelopeStart(body); code != "" {
+		e.Code, e.Message = code, message
+		return e
 	}
-	if text == "" {
-		text = http.StatusText(resp.StatusCode)
-	}
-	e.Message = text
+	e.Message = http.StatusText(resp.StatusCode)
 	return e
+}
+
+// envelopeStart reads the code and message an error envelope names before
+// the point its body was cut, for a body too large to read whole. It reads
+// token by token, so it needs no closing brace, and it stops at the first
+// member it cannot read as a string; details that come before the code
+// leave the code unread. It returns an empty code for a body that does not
+// start as the envelope.
+func envelopeStart(body []byte) (code, message string) {
+	d := json.NewDecoder(bytes.NewReader(body))
+	for _, want := range []any{json.Delim('{'), "error", json.Delim('{')} {
+		if t, err := d.Token(); err != nil || t != want {
+			return "", ""
+		}
+	}
+	for {
+		key, err := d.Token()
+		if err != nil {
+			return code, message
+		}
+		value, err := d.Token()
+		if err != nil {
+			return code, message
+		}
+		text, ok := value.(string)
+		if !ok {
+			return code, message
+		}
+		switch key {
+		case "code":
+			code = text
+		case "message":
+			message = text
+		}
+		if code != "" && message != "" {
+			return code, message
+		}
+	}
+}
+
+// validUTF8Prefix returns b without a rune the read cut in half at its
+// end, so a body truncated at maxErrorBody ends on a rune boundary. Bytes
+// that are not UTF-8 elsewhere in b are kept as they came.
+func validUTF8Prefix(b []byte) []byte {
+	for back := 1; back <= utf8.UTFMax && back <= len(b); back++ {
+		start := len(b) - back
+		if !utf8.RuneStart(b[start]) {
+			continue
+		}
+		if !utf8.FullRune(b[start:]) {
+			return b[:start]
+		}
+		return b
+	}
+	return b
 }
 
 // retryAfter reads a Retry-After header, in seconds or as an HTTP date, as

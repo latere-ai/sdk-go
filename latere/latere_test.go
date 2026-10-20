@@ -283,6 +283,40 @@ func TestDoesNotRetryAPostWithoutAKey(t *testing.T) {
 	}
 }
 
+// The retry rule decides by method and key unless the request names one:
+// a key does not make a PATCH retryable, since the API reads it on POST
+// alone; RetryAlways retries a PATCH that sets values; RetryNever sends a
+// keyed POST once.
+func TestTheRetryRule(t *testing.T) {
+	var calls atomic.Int32
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		calls.Add(1)
+		writeError(w, http.StatusBadGateway, "bad_gateway", "Down.")
+	}))
+	defer srv.Close()
+	c, _ := testConfig(t, srv)
+	for name, tc := range map[string]struct {
+		r     *Request
+		sends int32
+	}{
+		"a PATCH":                {&Request{Method: http.MethodPatch, Path: "/v1/x"}, 1},
+		"a PATCH with a key":     {&Request{Method: http.MethodPatch, Path: "/v1/x", IdempotencyKey: "k"}, 1},
+		"a PATCH that sets":      {&Request{Method: http.MethodPatch, Path: "/v1/x", Retry: RetryAlways}, 1 + DefaultMaxRetries},
+		"a keyed POST sent once": {&Request{Method: http.MethodPost, Path: "/v1/x", IdempotencyKey: "k", Retry: RetryNever}, 1},
+		"a GET sent once":        {&Request{Method: http.MethodGet, Path: "/v1/x", Retry: RetryNever}, 1},
+		"a POST without a key":   {&Request{Method: http.MethodPost, Path: "/v1/x"}, 1},
+		"a POST that may repeat": {&Request{Method: http.MethodPost, Path: "/v1/x", Retry: RetryAlways}, 1 + DefaultMaxRetries},
+	} {
+		calls.Store(0)
+		if err := c.Do(t.Context(), tc.r, nil); err == nil {
+			t.Fatalf("%s: a 502 succeeded", name)
+		}
+		if calls.Load() != tc.sends {
+			t.Errorf("%s: sent %d times, want %d", name, calls.Load(), tc.sends)
+		}
+	}
+}
+
 func TestDoesNotRetryAClientError(t *testing.T) {
 	var calls atomic.Int32
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {

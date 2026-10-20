@@ -34,12 +34,15 @@ type Request struct {
 	// Accept, Content-Type and Idempotency-Key itself.
 	Header http.Header
 	// IdempotencyKey is sent as the Idempotency-Key header. The API answers
-	// a repeated request with the same key with its first answer, so a
-	// request that carries one is retried whatever its method. A repeat
-	// that arrives while the first request is still being answered is
-	// refused with 409 and ErrConflict, even though the first succeeds:
-	// read the resource to learn the outcome.
+	// a repeated POST with the same key with its first answer, so a POST
+	// that carries one is retried under RetryByMethod; the API reads the
+	// key on POST alone. A repeat that arrives while the first request is
+	// still being answered is refused with 409 and ErrConflict, even though
+	// the first succeeds: read the resource to learn the outcome.
 	IdempotencyKey string
+	// Retry says whether the request may be sent again after a failure;
+	// RetryByMethod, the zero value, decides by its method and key.
+	Retry RetryRule
 	// SendKey sends the platform key itself as the bearer credential,
 	// instead of the short-lived token it is exchanged for. The models
 	// capability authenticates this way. A Config whose credentials are not
@@ -151,14 +154,38 @@ func retryable(status int) bool {
 	return false
 }
 
+// A RetryRule says whether a request may be sent again after a failure
+// on the network or an answer of 408, 429, 500, 502, 503 or 504.
+type RetryRule int
+
+const (
+	// RetryByMethod, the zero value, retries a GET, HEAD, PUT, DELETE or
+	// OPTIONS request, and a POST that carries an IdempotencyKey.
+	RetryByMethod RetryRule = iota
+	// RetryAlways retries the request whatever its method: it has the same
+	// effect sent twice, as a PATCH that only sets values has.
+	RetryAlways
+	// RetryNever sends the request once: a second send could do the work
+	// twice, such as creating a second app or running a model again.
+	RetryNever
+)
+
 // safeToRepeat reports whether sending r twice has the effect of sending
-// it once.
+// it once, as r's Retry rule says.
 func safeToRepeat(r *Request) bool {
+	switch r.Retry {
+	case RetryAlways:
+		return true
+	case RetryNever:
+		return false
+	}
 	switch r.Method {
 	case http.MethodGet, http.MethodHead, http.MethodPut, http.MethodDelete, http.MethodOptions:
 		return true
+	case http.MethodPost:
+		return r.IdempotencyKey != ""
 	}
-	return r.IdempotencyKey != ""
+	return false
 }
 
 // send performs r with retries and returns a 2xx response.

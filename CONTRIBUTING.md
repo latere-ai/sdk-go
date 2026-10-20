@@ -36,7 +36,7 @@ vets the refresh tool under `tools/`.
 
 - `latere/` is the core every package shares: configuration, credentials,
   the error type, retries, pagination and streams.
-- `agents/`, `account/`, `apps/`, `connections/`, `llm/` and later
+- `agents/`, `account/`, `apps/`, `connections/`, `llm/`, `storage/` and later
   packages each cover one capability of the API, and call the API only
   through the core.
 - `llm/wire/` holds the Lux dialect's request, response and stream types,

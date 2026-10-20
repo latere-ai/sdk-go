@@ -5,7 +5,8 @@
 
 The official Go client for the [Latere API](https://platform.latere.ai/docs):
 start sessions with agents and follow them as they work, connect the
-services they use, publish apps, call models, and read your account. It
+services they use, store files, publish apps, call models, and read your
+account. It
 depends on the Go standard library alone.
 
 ```sh
@@ -20,6 +21,7 @@ they share. Import the ones you use:
 | [`latere`](https://pkg.go.dev/latere.ai/x/sdk-go/latere) | The core: configuration, credentials, errors, retries, pagination |
 | [`agents`](https://pkg.go.dev/latere.ai/x/sdk-go/agents) | Sessions with agents: create, list, follow, answer, approve, end; triggers that start them |
 | [`connections`](https://pkg.go.dev/latere.ai/x/sdk-go/connections) | The services a person connects once, such as a calendar or an MCP server, which agents then use |
+| [`storage`](https://pkg.go.dev/latere.ai/x/sdk-go/storage) | Files in Latere Storage: upload a file of any size, read, list, and link to it |
 | [`account`](https://pkg.go.dev/latere.ai/x/sdk-go/account) | Your Effort levels, wallet, preferences, pins and computers |
 | [`apps`](https://pkg.go.dev/latere.ai/x/sdk-go/apps) | Apps: create, list, change, delete; their deploys, build logs, releases and who may open them |
 | [`llm`](https://pkg.go.dev/latere.ai/x/sdk-go/llm) | Calling models in the Lux dialect: generate, stream, count tokens, list models |
@@ -222,6 +224,47 @@ and the code its page receives.
 `ListConnectors` lists the services a person may connect, and
 `CreateConnector` adds an MCP server of their own.
 
+## Files
+
+Package `storage` reads and writes the files of a person's or an
+organization's Storage, which agents and Latere's apps read and write too.
+`UploadFile` takes a file of any size up to 5 GiB: in one request up to
+16 MiB, and above that in parts put straight to object storage, four at a
+time, reporting its progress as it goes:
+
+```go
+f, err := os.Open("talk.mp4")
+if err != nil {
+	return err
+}
+defer f.Close()
+info, err := f.Stat()
+if err != nil {
+	return err
+}
+st := storage.New(cfg)
+file, err := st.UploadFile(ctx, storage.Me, "files/videos/talk.mp4", f, info.Size(), &storage.UploadOptions{
+	ContentType: "video/mp4",
+})
+```
+
+`ReadFile` streams a file back, `ListFiles` walks a folder, and
+`GetDownloadURL` answers a link that serves the file for five minutes
+without a credential.
+
+A message to a session carries pictures for the model to see and files for
+the agent to work on. A file of up to 5 MiB goes with the message; a larger
+one goes up to Storage first and the message names it there:
+
+```go
+_, err = ag.SendMessage(ctx, id, &agents.SendMessageParams{
+	Content: []agents.ContentBlock{agents.Text("Summarize the talk.")},
+	Attachments: []agents.NewAttachment{
+		{Name: "talk.mp4", Source: &agents.AttachmentSource{Owner: storage.Me, Path: file.Path}},
+	},
+})
+```
+
 ## Models
 
 Package `llm` calls models in the Lux dialect, one request, response and
@@ -253,8 +296,8 @@ the same key through the models capability's compatible endpoints; see
 
 ## The API's own answer
 
-Every resource the `agents`, `account`, `apps` and `connections` packages
-return keeps the JSON the API sent. `RawJSON` returns it with every field,
+Every resource the `agents`, `account`, `apps`, `connections` and `storage`
+packages return keeps the JSON the API sent. `RawJSON` returns it with every field,
 including fields the API added after your version of the SDK, for a program
 that shows or passes on the answer as it came, such as a command line's
 `--json` output:
@@ -361,6 +404,8 @@ two. These calls are sent once instead, never again after a failure:
 | `apps.CreateApp`, `apps.Invite` | the apps API takes no key yet |
 | `connections.ConfirmConnection` | a finished sign-in answers 410 to a repeat |
 | `connections.ReconnectConnection` | a repeat replaces the sign-in the first one started |
+| `storage.StartUpload` | the storage API takes no key; an upload left open lapses by itself |
+| `storage.CompleteUpload` | a completed upload is gone, so a repeat answers 404 though the first succeeded |
 | `llm.Generate`, `llm.Stream` | the model may have run and been billed |
 
 A repeat that reaches the API while the first request is still being

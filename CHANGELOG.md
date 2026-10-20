@@ -7,6 +7,23 @@ minor version may break code, and every such change is marked **Breaking**.
 
 ## [Unreleased]
 
+### Added
+
+- Package `storage`: write, read, inspect and list the files of Latere
+  Storage, answer a download link, and upload a file of any size up to
+  5 GiB, in one request or in parts put straight to object storage, with
+  its progress. The steps of an upload in parts are there on their own too.
+- Package `agents`: a message carries pictures, built with `ImageBlock`,
+  and files, `SendMessageParams.Attachments`, by their bytes or by their
+  path in Storage, and may hold files alone. A `UserMessage` records the
+  files it carried. The limits the platform holds a message to are
+  constants, such as `MaxAttachmentBytes`.
+- The core `latere`: `Request.Content` sends raw bytes of a declared
+  length, read again from the start for a retry; `Request.SignedURL` sends
+  a request to a signed link without the credential; `Request.KeepRedirect`
+  has `Config.Open` return a redirect rather than follow it; and
+  `ErrPreconditionFailed` matches a 412.
+
 ## [0.1.0] - 2026-10-20
 
 The first release.

@@ -26,6 +26,7 @@ flowchart TD
     account --> latere
     apps --> latere
     connections --> latere
+    storage --> latere
     llm --> latere
     llm --> wire[llm/wire]
     signin --> latere
@@ -34,6 +35,7 @@ flowchart TD
     app --> account
     app --> apps
     app --> connections
+    app --> storage
     app --> llm
     app -. a person's sign-in .-> signin
     gateway[the Lux gateway's codec] --> wire
@@ -41,7 +43,7 @@ flowchart TD
 
 `latere` is the core: configuration, credentials, the error type, the
 request loop, pagination and streams. A capability package (`agents`,
-`account`, `apps`, `connections`, `llm`, and those to come) holds typed
+`account`, `apps`, `connections`, `llm`, `storage`, and those to come) holds typed
 models and one method per endpoint, and calls the API only through
 `Config.Do`, `Config.Open`, `Config.Stream` and `latere.Items`. `signin` is separate
 because most programs, those that run with a key, never sign a person in;
@@ -139,12 +141,30 @@ session or send a message twice. The calls a key cannot make safe carry
   a repeat replaces the sign-in the first call started.
 - `llm.Generate` and `llm.Stream`: see [the models
   capability](#the-models-capability).
+- `storage.StartUpload` and `storage.CompleteUpload`: the storage part
+  takes no key, so a repeat could open a second upload, and a completed
+  upload is gone, so the repeat of a completion whose answer was lost is
+  refused with 404 though it succeeded. `StatFile` on the path tells. An
+  upload left open lapses by itself after a day, and `UploadFile` gives up
+  one that failed.
 
 In each case the caller is better placed to decide. A repeat that arrives
 while the first request is still being answered is refused with 409, which
 the SDK does not retry, since it cannot tell it from a real conflict; the
 first request still succeeds, and the docs tell the caller to read the
 resource.
+
+Most requests carry JSON. A file's bytes go as `Request.Content`, an
+`io.ReaderAt` with its length, which the core reads again from the start
+for each attempt, so a retried write sends the same bytes rather than a
+drained stream, and the length goes ahead of the body, as the storage API
+requires. A part of a large upload goes to the link object storage signed
+for it, `Request.SignedURL`, which carries its own authority: the request
+carries no credential there, and a 401 there is not answered by renewing
+the token. A call whose answer is the link itself, such as
+`storage.GetDownloadURL`, keeps the redirect with `Request.KeepRedirect`;
+any other redirect is followed, and Go's client leaves the credential
+behind when the redirect leaves the API's host.
 
 The wait between attempts doubles from 500ms up to 30s, and is drawn at
 random from the upper half of that range so that many clients failing
@@ -170,8 +190,8 @@ message and details. The SDK returns all of it in one type,
 `*latere.Error`, together with the request id from `X-Request-Id`, which is
 what support needs to find the request. `Error.Is` maps statuses to
 sentinels (`ErrNotFound`, `ErrUnauthorized`, `ErrForbidden`, `ErrConflict`,
-`ErrRateLimited`), so the common checks need `errors.Is` and no type
-assertion. An answer that is not the envelope, such as a proxy's error page, still
+`ErrPreconditionFailed`, `ErrRateLimited`), so the common checks need
+`errors.Is` and no type assertion. An answer that is not the envelope, such as a proxy's error page, still
 produces an `Error`, with the HTTP status text as its message: the page
 was not written for the program's user, and a message is what a program
 shows them. `Error.Body` keeps the whole response, up to the 64 KiB the
@@ -270,10 +290,13 @@ marks as a date-time must be a `time.Time`. The program that fetches
 and converts the documents lives in its own module under `tools/`, so the
 YAML parser it needs never reaches the SDK's `go.mod`. A weekly workflow
 fetches the documents and fails when they changed, which is the signal to
-update the models.
+update the models. The storage document names every route but gives the
+answers of its file and upload routes no schema, so `storage`'s types
+follow the API's reference pages, and its tests hold the routes it calls,
+and the one list shape the document does define, to the document.
 
 Every resource a package returns, a session, an event, a trigger, a wallet,
-a pin, a device, an app, a connection or a finished sign-in, keeps the bytes it was decoded from, returned by
+a pin, a device, an app, a connection, a file, an upload or a finished sign-in, keeps the bytes it was decoded from, returned by
 `RawJSON`, as Stainless-generated SDKs and stripe-go do. A program that
 shows or stores the API's answer, a command line's `--json` output or a
 server that passes answers on, gets every field, including those added

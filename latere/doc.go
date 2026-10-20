@@ -12,6 +12,7 @@
 //	latere.ai/x/sdk-go/account      your Effort levels, wallet, preferences and computers
 //	latere.ai/x/sdk-go/apps         apps, their deploys, build logs and releases
 //	latere.ai/x/sdk-go/connections  the services a person connects for agents to use
+//	latere.ai/x/sdk-go/storage      files in Storage: upload, read, list, link
 //	latere.ai/x/sdk-go/llm          calling models in the Lux dialect
 //	latere.ai/x/sdk-go/llm/wire     the Lux dialect's types alone, sending nothing
 //	latere.ai/x/sdk-go/signin       signing a person in, for apps Latere registers
@@ -73,6 +74,8 @@
 //	apps.CreateApp, apps.Invite      the apps API takes no key yet
 //	connections.ConfirmConnection    a finished sign-in answers 410 to a repeat
 //	connections.ReconnectConnection  a repeat replaces the sign-in it started
+//	storage.StartUpload              the storage API takes no key; an open upload lapses
+//	storage.CompleteUpload           a completed upload is gone, so a repeat answers 404
 //	llm.Generate, llm.Stream         the model may have run and been billed
 //
 // [WithMaxRetries] sets how many times; zero turns retries off. A 401 is

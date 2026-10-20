@@ -70,7 +70,8 @@ type StartUploadParams struct {
 
 // StartUpload opens an upload in parts and returns it. It is sent once,
 // since this part of the API takes no idempotency key; an upload a failure
-// left open lapses by itself at its ExpiresAt.
+// left open lapses by itself at its ExpiresAt. An answer this package
+// cannot use is given up, and its error is an *UploadError naming it.
 func (c *Client) StartUpload(ctx context.Context, params *StartUploadParams) (*Upload, error) {
 	if params == nil || params.Owner == "" || params.Path == "" {
 		return nil, errors.New("storage: StartUploadParams.Owner and Path are required")
@@ -83,9 +84,40 @@ func (c *Client) StartUpload(ctx context.Context, params *StartUploadParams) (*U
 		return nil, err
 	}
 	if out.PartCount != len(out.PartURLs) || out.PartCount == 0 {
-		return nil, fmt.Errorf("storage: the upload names %d parts and %d links", out.PartCount, len(out.PartURLs))
+		err := fmt.Errorf("storage: the upload names %d parts and %d links", out.PartCount, len(out.PartURLs))
+		return nil, c.giveUp(ctx, out.ID, err)
 	}
 	return &out, nil
+}
+
+// An UploadError is an upload in parts that failed once it was open: the
+// upload's id, and why. UploadFile gives such an upload up; one it could
+// not give up lapses by itself at its ExpiresAt.
+type UploadError struct {
+	// ID names the upload, for AbortUpload.
+	ID string
+	// Err is why it failed.
+	Err error
+}
+
+func (e *UploadError) Error() string { return "storage: upload " + e.ID + ": " + e.Err.Error() }
+
+// Unwrap returns why the upload failed.
+func (e *UploadError) Unwrap() error { return e.Err }
+
+// giveUp aborts the upload named id after err and returns err as an
+// *UploadError. The abort runs on a context of its own, since ctx may be
+// what ended the upload; a give-up that fails costs nothing more, since
+// the upload lapses at its ExpiresAt in any case, and the caller hears the
+// failure that called for it.
+func (c *Client) giveUp(ctx context.Context, id string, err error) error {
+	if id == "" {
+		return err
+	}
+	abort, cancel := context.WithTimeout(context.WithoutCancel(ctx), 30*time.Second)
+	defer cancel()
+	_ = c.AbortUpload(abort, id)
+	return &UploadError{ID: id, Err: err}
 }
 
 // A Part is one part of an upload once it is put: its number and the
@@ -101,7 +133,9 @@ type Part struct {
 // must be u.PartSize for every part but the last. It goes straight to
 // object storage by the part's signed link, without your credential, and
 // is retried after a failure on the network, since putting a part again
-// replaces it.
+// replaces it. Each attempt has the Config's timeout and
+// latere.TransferTime for the part's size, and an attempt cut off by that
+// bound is sent again too.
 func (c *Client) PutPart(ctx context.Context, u *Upload, n int, content io.ReaderAt, size int64) (Part, error) {
 	if u == nil || n < 1 || n > len(u.PartURLs) {
 		return Part{}, fmt.Errorf("storage: the upload has no part %d", n)
@@ -123,23 +157,41 @@ func (c *Client) PutPart(ctx context.Context, u *Upload, n int, content io.Reade
 	return Part{N: n, ETag: etag}, nil
 }
 
+// CompleteUploadParams are the parts of an upload to make into its file,
+// and the conditions of the write, as WriteOptions has them.
+type CompleteUploadParams struct {
+	// Parts names every part, in any order. Required.
+	Parts []Part
+	// IfMatch completes only if the file at the path still holds the
+	// bytes of this checksum; otherwise latere.ErrPreconditionFailed.
+	IfMatch string
+	// IfNoneMatch completes only if nothing is at the path yet; otherwise
+	// latere.ErrPreconditionFailed.
+	IfNoneMatch bool
+}
+
 // CompleteUpload makes the parts of the upload named id into its file and
-// returns the file. parts names every part, in any order. It is sent once:
-// the upload is gone once it completes, so a repeat of a completion whose
-// answer was lost is refused with ErrNotFound. StatFile on the upload's
-// path says whether it completed.
-func (c *Client) CompleteUpload(ctx context.Context, id string, parts []Part) (*File, error) {
+// returns the file. The storage API keeps an upload until it completes, so
+// a completion it answered with a server error is sent again, but one that
+// failed on the network is not: if that one completed, the upload is
+// gone, and a repeat would be refused with ErrNotFound though the file is
+// there. StatFile on the upload's path says whether it completed.
+func (c *Client) CompleteUpload(ctx context.Context, id string, params *CompleteUploadParams) (*File, error) {
 	if id == "" {
 		return nil, errors.New("storage: the upload's id is empty")
 	}
-	if len(parts) == 0 {
-		return nil, errors.New("storage: CompleteUpload names no part")
+	if params == nil || len(params.Parts) == 0 {
+		return nil, errors.New("storage: CompleteUploadParams names no part")
 	}
-	sorted := slices.Clone(parts)
+	sorted := slices.Clone(params.Parts)
 	slices.SortFunc(sorted, func(a, b Part) int { return a.N - b.N })
 	var out File
-	body := map[string]any{"parts": sorted}
-	if err := c.cfg.Do(ctx, &latere.Request{Method: http.MethodPost, Path: basePath + "/uploads/" + url.PathEscape(id) + "/complete", Body: body, Retry: latere.RetryNever}, &out); err != nil {
+	r := &latere.Request{
+		Method: http.MethodPost, Path: basePath + "/uploads/" + url.PathEscape(id) + "/complete",
+		Body: map[string]any{"parts": sorted}, Header: http.Header{}, Retry: latere.RetryAnswers,
+	}
+	conditions(r.Header, params.IfMatch, params.IfNoneMatch)
+	if err := c.cfg.Do(ctx, r, &out); err != nil {
 		return nil, err
 	}
 	return &out, nil
@@ -154,18 +206,23 @@ func (c *Client) AbortUpload(ctx context.Context, id string) error {
 }
 
 // UploadOptions are the choices of UploadFile. A nil *UploadOptions
-// uploads with the type "application/octet-stream" and four parts at a
-// time.
+// uploads with the type "application/octet-stream", four parts at a time,
+// and no condition.
 type UploadOptions struct {
 	// ContentType is the file's media type, stored and served back.
 	ContentType string
 	// Progress, when set, is called as the bytes go up, with the bytes
-	// sent so far and the file's size. It is called from the goroutines
-	// that put the parts, one call at a time. A part sent again after a
-	// failure counts from its start again, so the count may go back.
+	// sent so far and the file's size. It is called from the HTTP
+	// transport's goroutines that write the request bodies, one call at a
+	// time, so it must return quickly. A part sent again after a failure
+	// counts from its start again, so the count may go back.
 	Progress func(sent, total int64)
 	// Parallel is how many parts are put at once: 4 when zero.
 	Parallel int
+	// IfMatch and IfNoneMatch are the write's conditions, as WriteOptions
+	// has them; a file in parts is held to them when it completes.
+	IfMatch     string
+	IfNoneMatch bool
 }
 
 // defaultParallel is how many parts UploadFile puts at once by default.
@@ -175,7 +232,8 @@ const defaultParallel = 4
 // returns the file: in one request when it is at most MaxWriteBytes, and
 // in parts otherwise, put straight to object storage several at a time.
 // When a part fails after its retries, the parts on their way are
-// stopped, the upload is given up, and the part's error is returned.
+// stopped; when a part or the completion fails, the upload is given up,
+// and the error is an *UploadError naming it.
 func (c *Client) UploadFile(ctx context.Context, owner, path string, content io.ReaderAt, size int64, opts *UploadOptions) (*File, error) {
 	if content == nil {
 		return nil, errors.New("storage: UploadFile has no content")
@@ -189,7 +247,8 @@ func (c *Client) UploadFile(ctx context.Context, owner, path string, content io.
 	progress := newTally(size, opts.Progress)
 	if size <= MaxWriteBytes {
 		progress.report(0, 0)
-		f, err := c.WriteFile(ctx, owner, path, progress.reader(0, content), size, &WriteOptions{ContentType: opts.ContentType})
+		f, err := c.WriteFile(ctx, owner, path, progress.reader(0, content), size,
+			&WriteOptions{ContentType: opts.ContentType, IfMatch: opts.IfMatch, IfNoneMatch: opts.IfNoneMatch})
 		if err != nil {
 			return nil, err
 		}
@@ -202,16 +261,13 @@ func (c *Client) UploadFile(ctx context.Context, owner, path string, content io.
 	}
 	parts, err := c.putParts(ctx, u, content, size, opts.Parallel, progress)
 	if err != nil {
-		// The upload is given up on a context of its own, since ctx may
-		// be what ended it. A give-up that fails costs nothing more: the
-		// upload lapses at its ExpiresAt in any case, and the caller hears
-		// the failure that called for it.
-		giveUp, cancel := context.WithTimeout(context.WithoutCancel(ctx), 30*time.Second)
-		_ = c.AbortUpload(giveUp, u.ID)
-		cancel()
-		return nil, err
+		return nil, c.giveUp(ctx, u.ID, err)
 	}
-	return c.CompleteUpload(ctx, u.ID, parts)
+	f, err := c.CompleteUpload(ctx, u.ID, &CompleteUploadParams{Parts: parts, IfMatch: opts.IfMatch, IfNoneMatch: opts.IfNoneMatch})
+	if err != nil {
+		return nil, c.giveUp(ctx, u.ID, err)
+	}
+	return f, nil
 }
 
 // putParts puts every part of u, parallel at a time, and returns them in

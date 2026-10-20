@@ -16,6 +16,7 @@ import (
 	"sync"
 	"sync/atomic"
 	"testing"
+	"time"
 
 	"latere.ai/x/sdk-go/latere"
 	"latere.ai/x/sdk-go/storage"
@@ -39,16 +40,25 @@ type fakeStorage struct {
 	writes   int
 	inFlight atomic.Int32
 	most     atomic.Int32
+	// headers holds each API request's headers, by method and path.
+	headers map[string]http.Header
+	// completeFails refuses every completion.
+	completeFails bool
 }
 
 func newFakeStorage(t *testing.T) *fakeStorage {
-	s := &fakeStorage{t: t, parts: map[int][]byte{}}
+	s := &fakeStorage{t: t, parts: map[int][]byte{}, headers: map[string]http.Header{}}
 	s.srv = httptest.NewServer(http.HandlerFunc(s.serve))
 	t.Cleanup(s.srv.Close)
 	return s
 }
 
 func (s *fakeStorage) serve(w http.ResponseWriter, r *http.Request) {
+	if strings.HasPrefix(r.URL.Path, "/v1/") {
+		s.mu.Lock()
+		s.headers[r.Method+" "+r.URL.Path] = r.Header.Clone()
+		s.mu.Unlock()
+	}
 	switch {
 	case r.Method == http.MethodPost && r.URL.Path == "/v1/storage/uploads":
 		var body map[string]any
@@ -99,6 +109,10 @@ func (s *fakeStorage) serve(w http.ResponseWriter, r *http.Request) {
 		s.parts[n] = b
 		s.mu.Unlock()
 		w.Header().Set("ETag", fmt.Sprintf(`"etag-%d"`, n))
+	case r.Method == http.MethodPost && r.URL.Path == "/v1/storage/uploads/up_1/complete" && s.completeFails:
+		w.Header().Set("Content-Type", "application/json")
+		w.WriteHeader(http.StatusForbidden)
+		fmt.Fprint(w, `{"error":{"code":"forbidden","message":"No."}}`)
 	case r.Method == http.MethodPost && r.URL.Path == "/v1/storage/uploads/up_1/complete":
 		var body map[string]any
 		if err := json.NewDecoder(r.Body).Decode(&body); err != nil {
@@ -242,18 +256,24 @@ func TestUploadFileGivesUpWhenItsContextEnds(t *testing.T) {
 	}
 }
 
-// StartUpload and CompleteUpload are sent once even when retries are on,
-// since the API takes no idempotency key for them.
-func TestStartAndCompleteAreSentOnce(t *testing.T) {
-	var calls atomic.Int32
+// StartUpload is sent once even when retries are on, since the API takes
+// no idempotency key for it. CompleteUpload is sent again after a server
+// error, since the API keeps the upload until it completes.
+func TestStartIsSentOnceAndCompleteAgainAfterAServerError(t *testing.T) {
+	var starts, completes atomic.Int32
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		calls.Add(1)
+		if strings.HasSuffix(r.URL.Path, "/complete") {
+			completes.Add(1)
+		} else {
+			starts.Add(1)
+		}
 		w.Header().Set("Content-Type", "application/json")
 		w.WriteHeader(http.StatusServiceUnavailable)
 		fmt.Fprint(w, `{"error":{"code":"unavailable","message":"Try again."}}`)
 	}))
 	defer srv.Close()
-	cfg, err := latere.NewConfig(latere.WithBaseURL(srv.URL), latere.WithTokenSource(latere.StaticToken("key_test")), latere.WithMaxRetries(3))
+	cfg, err := latere.NewConfig(latere.WithBaseURL(srv.URL), latere.WithTokenSource(latere.StaticToken("key_test")),
+		latere.WithMaxRetries(3), latere.WithBackoff(time.Millisecond, 2*time.Millisecond))
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -261,11 +281,47 @@ func TestStartAndCompleteAreSentOnce(t *testing.T) {
 	if _, err := c.StartUpload(context.Background(), &storage.StartUploadParams{Owner: storage.Me, Path: "files/a", Size: 1}); err == nil {
 		t.Fatal("StartUpload: nil error")
 	}
-	if _, err := c.CompleteUpload(context.Background(), "up_1", []storage.Part{{N: 1, ETag: `"e"`}}); err == nil {
+	if _, err := c.CompleteUpload(context.Background(), "up_1", &storage.CompleteUploadParams{Parts: []storage.Part{{N: 1, ETag: `"e"`}}}); err == nil {
 		t.Fatal("CompleteUpload: nil error")
 	}
-	if calls.Load() != 2 {
-		t.Fatalf("sent %d requests, want 2", calls.Load())
+	if starts.Load() != 1 || completes.Load() != 4 {
+		t.Fatalf("sent %d starts and %d completions, want 1 and 4", starts.Load(), completes.Load())
+	}
+}
+
+// A completion that fails for good gives the upload up, and the error
+// names it.
+func TestUploadFileGivesUpWhenTheCompletionFails(t *testing.T) {
+	s := newFakeStorage(t)
+	s.completeFails = true
+	data := bigFile()
+	_, err := newClient(t, s.srv).UploadFile(context.Background(), storage.Me, "files/videos/talk.mp4", bytes.NewReader(data), int64(len(data)), nil)
+	var up *storage.UploadError
+	if !errors.As(err, &up) || up.ID != "up_1" || !errors.Is(err, latere.ErrForbidden) {
+		t.Fatalf("err = %v, want an *UploadError naming up_1 with the completion's refusal", err)
+	}
+	if len(s.aborted) != 1 {
+		t.Fatalf("aborted %v, want the upload given up", s.aborted)
+	}
+}
+
+// A write's conditions reach the API whichever way the file goes up: on
+// the write, or on the completion of its parts.
+func TestUploadFileHoldsTheWriteToItsConditions(t *testing.T) {
+	s := newFakeStorage(t)
+	c := newClient(t, s.srv)
+	if _, err := c.UploadFile(context.Background(), storage.Me, "files/a.txt", strings.NewReader("hello"), 5, &storage.UploadOptions{IfMatch: "9f86d0"}); err != nil {
+		t.Fatal(err)
+	}
+	data := bigFile()
+	if _, err := c.UploadFile(context.Background(), storage.Me, "files/videos/talk.mp4", bytes.NewReader(data), int64(len(data)), &storage.UploadOptions{IfNoneMatch: true}); err != nil {
+		t.Fatal(err)
+	}
+	if got := s.headers["PUT /v1/storage/files/me/files/a.txt"].Get("If-Match"); got != `"9f86d0"` {
+		t.Errorf("the write's If-Match = %q", got)
+	}
+	if got := s.headers["POST /v1/storage/uploads/up_1/complete"].Get("If-None-Match"); got != "*" {
+		t.Errorf("the completion's If-None-Match = %q", got)
 	}
 }
 
@@ -296,15 +352,25 @@ func TestUploadFileRefusesPartsThatDoNotFitTheFile(t *testing.T) {
 	}
 }
 
+// An answer StartUpload cannot use is given up, and the error names the
+// upload.
 func TestStartUploadRefusesAnAnswerWithoutLinks(t *testing.T) {
+	var aborted atomic.Int32
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.Method == http.MethodDelete {
+			aborted.Add(1)
+			w.WriteHeader(http.StatusNoContent)
+			return
+		}
 		w.WriteHeader(http.StatusCreated)
 		fmt.Fprint(w, `{"id":"up_1","part_size":8,"part_count":2,"part_urls":["https://x/1"]}`)
 	}))
 	defer srv.Close()
 	c := newClient(t, srv)
-	if _, err := c.StartUpload(context.Background(), &storage.StartUploadParams{Owner: storage.Me, Path: "files/a", Size: 16}); err == nil {
-		t.Fatal("two parts and one link: nil error")
+	_, err := c.StartUpload(context.Background(), &storage.StartUploadParams{Owner: storage.Me, Path: "files/a", Size: 16})
+	var up *storage.UploadError
+	if !errors.As(err, &up) || up.ID != "up_1" || aborted.Load() != 1 {
+		t.Fatalf("two parts and one link: err = %v after %d give-ups; want the upload named and given up", err, aborted.Load())
 	}
 	if _, err := c.StartUpload(context.Background(), &storage.StartUploadParams{Owner: storage.Me, Path: "files/a"}); err == nil {
 		t.Fatal("no size: nil error")
@@ -346,7 +412,7 @@ func TestCompleteAndAbortNeedAnID(t *testing.T) {
 	}))
 	defer srv.Close()
 	c := newClient(t, srv)
-	if _, err := c.CompleteUpload(context.Background(), "", []storage.Part{{N: 1}}); err == nil {
+	if _, err := c.CompleteUpload(context.Background(), "", &storage.CompleteUploadParams{Parts: []storage.Part{{N: 1}}}); err == nil {
 		t.Error("CompleteUpload with no id: nil error")
 	}
 	if _, err := c.CompleteUpload(context.Background(), "up_1", nil); err == nil {

@@ -126,6 +126,11 @@ type WriteOptions struct {
 	// checksum, as a File's Checksum names them; otherwise the write is
 	// refused with latere.ErrPreconditionFailed. Use it when two writers
 	// share a path.
+	//
+	// A write retried after a failure on the network may find its own
+	// first attempt landed, and be refused for it. To tell that from
+	// another writer's change, compare StatFile's Checksum with the
+	// SHA-256 of the bytes sent, in hex: equal, the write is done.
 	IfMatch string
 	// IfNoneMatch writes only if nothing is at the path yet, so a write
 	// never replaces a file; otherwise it is refused with
@@ -150,18 +155,25 @@ func (c *Client) WriteFile(ctx context.Context, owner, path string, content io.R
 	if opts != nil {
 		r.ContentType = opts.ContentType
 		r.Header = http.Header{}
-		if opts.IfMatch != "" {
-			r.Header.Set("If-Match", strconv.Quote(opts.IfMatch))
-		}
-		if opts.IfNoneMatch {
-			r.Header.Set("If-None-Match", "*")
-		}
+		conditions(r.Header, opts.IfMatch, opts.IfNoneMatch)
 	}
 	var out File
 	if err := c.cfg.Do(ctx, r, &out); err != nil {
 		return nil, err
 	}
 	return &out, nil
+}
+
+// conditions sets the headers of a write's conditions: If-Match with the
+// checksum as an entity tag, and If-None-Match: * for a write that must
+// find nothing.
+func conditions(h http.Header, ifMatch string, ifNoneMatch bool) {
+	if ifMatch != "" {
+		h.Set("If-Match", `"`+strings.Trim(ifMatch, `"`)+`"`)
+	}
+	if ifNoneMatch {
+		h.Set("If-None-Match", "*")
+	}
 }
 
 // A FileInfo is what a file's headers say about it, without its bytes.
@@ -226,20 +238,62 @@ func (r *FileReader) Size() int64 { return r.info.Size }
 func (r *FileReader) ContentType() string { return r.info.ContentType }
 
 // ReadFile opens the bytes of the file at path in owner's space. A file
-// larger than MaxWriteBytes, or one a public link marked, is served by
-// object storage, which ReadFile follows to; your credential is not sent
-// there. A path that holds nothing returns ErrNotFound. The caller closes
-// the reader.
+// larger than MaxWriteBytes, or a public one, is served by object storage
+// at a short-lived link the API answers, which ReadFile follows once,
+// without your credential. A path that holds nothing returns ErrNotFound.
+// The caller closes the reader.
 func (c *Client) ReadFile(ctx context.Context, owner, path string) (*FileReader, error) {
 	p, err := filePath(owner, path)
 	if err != nil {
 		return nil, err
 	}
-	resp, err := c.cfg.Open(ctx, &latere.Request{Method: http.MethodGet, Path: p, Header: http.Header{"Accept": {"*/*"}}})
+	accept := http.Header{"Accept": {"*/*"}}
+	resp, err := c.cfg.Open(ctx, &latere.Request{Method: http.MethodGet, Path: p, Header: accept, KeepRedirect: true})
 	if err != nil {
 		return nil, err
 	}
+	if resp.StatusCode/100 != 3 {
+		return &FileReader{body: resp.Body, info: infoOf(resp)}, nil
+	}
+	// The link is in the headers; the body of a redirect says nothing more.
+	_ = resp.Body.Close()
+	link, err := c.link(resp, path, true)
+	if err != nil {
+		return nil, err
+	}
+	resp, err = c.cfg.Open(ctx, &latere.Request{Method: http.MethodGet, SignedURL: link, Header: accept, KeepRedirect: true})
+	if err != nil {
+		return nil, err
+	}
+	if resp.StatusCode/100 == 3 {
+		_ = resp.Body.Close()
+		return nil, fmt.Errorf("storage: object storage answered the link to %s with another redirect", path)
+	}
 	return &FileReader{body: resp.Body, info: infoOf(resp)}, nil
+}
+
+// link reads the address a redirect of the API's leads to, resolved
+// against the base URL. Followed, it must be https, or http when the API
+// itself is reached over http, as on a machine of one's own; it is never
+// quoted in an error, since its query is a credential.
+func (c *Client) link(resp *http.Response, path string, followed bool) (string, error) {
+	loc := resp.Header.Get("Location")
+	if loc == "" {
+		return "", fmt.Errorf("storage: the API answered %d with no link to %s", resp.StatusCode, path)
+	}
+	base, err := url.Parse(c.cfg.BaseURL())
+	if err != nil {
+		return "", fmt.Errorf("storage: the base URL is not an address: %w", err)
+	}
+	u, err := url.Parse(loc)
+	if err != nil {
+		return "", fmt.Errorf("storage: the link the API answered for %s is not an address", path)
+	}
+	u = base.ResolveReference(u)
+	if followed && u.Scheme != "https" && !(u.Scheme == "http" && base.Scheme == "http") {
+		return "", fmt.Errorf("storage: the link the API answered for %s is not an https address", path)
+	}
+	return u.String(), nil
 }
 
 // DownloadURLOptions are the choices of a download link. A nil
@@ -250,10 +304,11 @@ type DownloadURLOptions struct {
 	Attachment bool
 }
 
-// GetDownloadURL returns a short-lived link that serves the bytes of the
-// file at path in owner's space without a credential, for a browser or
-// another program to read. A link to a file lasts five minutes; a public
-// file's does not expire. A path that holds nothing returns ErrNotFound.
+// GetDownloadURL returns a link that serves the bytes of the file at path
+// in owner's space without a credential, for a browser or another program
+// to read. The link lasts five minutes, except a public file's without
+// Attachment, which does not expire. A path that holds nothing returns
+// ErrNotFound. The link is a credential while it lasts.
 func (c *Client) GetDownloadURL(ctx context.Context, owner, path string, opts *DownloadURLOptions) (string, error) {
 	p, err := filePath(owner, path)
 	if err != nil {
@@ -269,22 +324,10 @@ func (c *Client) GetDownloadURL(ctx context.Context, owner, path string, opts *D
 	}
 	// The link is in the headers; the body of a redirect says nothing more.
 	_ = resp.Body.Close()
-	loc := resp.Header.Get("Location")
-	if resp.StatusCode/100 != 3 || loc == "" {
+	if resp.StatusCode/100 != 3 {
 		return "", fmt.Errorf("storage: the API answered %d with no link to %s", resp.StatusCode, path)
 	}
-	u, err := url.Parse(loc)
-	if err != nil {
-		return "", fmt.Errorf("storage: the link the API answered is not an address: %w", err)
-	}
-	if !u.IsAbs() {
-		base, err := url.Parse(c.cfg.BaseURL())
-		if err != nil {
-			return "", fmt.Errorf("storage: the base URL is not an address: %w", err)
-		}
-		u = base.ResolveReference(u)
-	}
-	return u.String(), nil
+	return c.link(resp, path, false)
 }
 
 // ListFilesParams narrow a listing. A nil *ListFilesParams lists every
@@ -328,7 +371,8 @@ type FilesPage struct {
 	// Folders are the folders the page's files imply, as paths.
 	Folders []string `json:"prefixes"`
 	// Usage is what the whole space holds, answered for a listing of
-	// "files", the top of the space; nil otherwise.
+	// "files", the top of the space; nil for any other folder, and for a
+	// listing narrowed by Query or Recent.
 	Usage *Usage `json:"space,omitempty"`
 	// NextCursor asks for the next page; empty on the last.
 	NextCursor string `json:"next_cursor,omitempty"`

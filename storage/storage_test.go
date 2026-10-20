@@ -150,6 +150,11 @@ func TestStatFileOfNothingIsNotFound(t *testing.T) {
 // object storage.
 func TestReadFileFollowsALargeFileToObjectStorage(t *testing.T) {
 	store := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		// The API and the store share a host here, which Go's own
+		// redirects would forward the credential to.
+		if got := r.Header.Get("Authorization"); got != "" {
+			t.Errorf("the store got Authorization %q", got)
+		}
 		w.Header().Set("Content-Type", "video/mp4")
 		fmt.Fprint(w, "large bytes")
 	}))
@@ -311,5 +316,45 @@ func TestRefusalsAndBrokenAnswersAreErrors(t *testing.T) {
 	big := make([]byte, storage.MaxWriteBytes+1)
 	if _, err := c.UploadFile(ctx, storage.Me, "files/big", bytes.NewReader(big), int64(len(big)), nil); err == nil {
 		t.Error("UploadFile whose upload answered broken JSON: nil error")
+	}
+}
+
+// ReadFile follows the API's link once, and no further: a second
+// redirect, and a link that is not https, are refused.
+func TestReadFileFollowsOneLinkAndNoMore(t *testing.T) {
+	var store *httptest.Server
+	store = httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		http.Redirect(w, r, store.URL+"/again", http.StatusFound)
+	}))
+	defer store.Close()
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if strings.HasSuffix(r.URL.Path, "/ftp.bin") {
+			http.Redirect(w, r, "ftp://objects.example.com/k?sig=FTPSIG", http.StatusFound)
+			return
+		}
+		http.Redirect(w, r, store.URL+"/obj?sig=1", http.StatusFound)
+	}))
+	defer srv.Close()
+	c := newClient(t, srv)
+	if _, err := c.ReadFile(context.Background(), storage.Me, "files/twice.bin"); err == nil {
+		t.Error("a second redirect was followed")
+	}
+	_, err := c.ReadFile(context.Background(), storage.Me, "files/ftp.bin")
+	if err == nil || strings.Contains(err.Error(), "FTPSIG") {
+		t.Errorf("a link that is not https: %v", err)
+	}
+}
+
+// A link the API answers that is not an address is never quoted, since
+// its query is a credential.
+func TestALinkThatIsNotAnAddressIsNotQuoted(t *testing.T) {
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Location", "http://[::1/obj?X-Amz-Signature=BADSIG")
+		w.WriteHeader(http.StatusFound)
+	}))
+	defer srv.Close()
+	_, err := newClient(t, srv).GetDownloadURL(context.Background(), storage.Me, "files/a.pdf", nil)
+	if err == nil || strings.Contains(err.Error(), "BADSIG") {
+		t.Fatalf("err = %v, want one without the link", err)
 	}
 }

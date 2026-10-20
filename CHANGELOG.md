@@ -56,3 +56,72 @@ minor version may break code, and every such change is marked **Breaking**.
 - Every resource the `agents`, `account`, `apps` and `connections`
   packages return keeps the JSON the API sent, returned by `RawJSON`, with
   the fields the package does not model.
+
+### Changed
+
+For programs built on a commit before this release, such as
+`v0.0.0-20261020132337-a96fb9a47778`. The JSON each type reads and writes
+is unchanged unless an entry says otherwise.
+
+- **Breaking:** Names say their unit and their kind.
+  `agents.ResumeSessionParams.MaxCostUSDMicro` is `MaxCostMicroUSD`, and
+  `wire.Usage.CostUSDMicro` is `CostMicroUSD`. `agents.Allow` and
+  `agents.Deny` are `DecisionAllow` and `DecisionDeny`. `agents.PolicyNew`
+  and `agents.PolicyContinue` are `SessionPolicyNew` and
+  `SessionPolicyContinue`.
+- **Breaking:** Effort names only the tier a model name chooses; a model's
+  depth of thought is its reasoning level. In `llm` and `llm/wire`,
+  `Effort` is `ReasoningLevel`, `EffortMinimal` to `EffortHigh` are
+  `ReasoningMinimal` to `ReasoningHigh`, and `Reasoning.Effort` is
+  `Reasoning.Level`. `agents.Model.Reasoning` is an
+  `agents.ReasoningLevel`, with the same constants.
+- **Breaking:** `agents.UpdateSessionParams.Model` is an
+  `*agents.ModelChange`, which changes the model, its reasoning level or
+  both; `AgentReasoning` returns to the level the agent sets. Before, the
+  reasoning level could not change alone or go back to the agent's.
+  `Metadata` sets the labels it names and keeps the others, as the API
+  always did, and `DeleteMetadata` removes labels.
+- **Breaking:** Values a program branches on have named string types with
+  constants: `agents.ToolResult.Outcome` (`ToolOutcome`),
+  `agents.ApprovalRequested.Source` (`ApprovalSource`),
+  `agents.SessionResource.Access` (`Access`), `apps.Release.Via`
+  (`ReleaseVia`), `apps.Deploy.Client` (`DeployClient`), `apps.LogLine.Step`
+  (`BuildStep`), `apps.SkippedInvite.Reason` (`SkipReason`) and
+  `connections.Connection.Reason` (`Reason`). A comparison with a quoted
+  string still compiles; a string variable needs a conversion.
+- **Breaking:** `latere.Request.Retry` takes a `latere.RetryRule`. By
+  default an idempotency key makes only a `POST` safe to repeat, since the
+  API reads the key on `POST` alone; before, a key made a request of any
+  method retried. `RetryAlways` and `RetryNever` set the rule whatever the
+  method.
+- A `PATCH` that only sets values is retried: `agents.UpdateSession`,
+  `apps.UpdateApp`, `connections.RenameConnection` and
+  `connections.UpdateConnector`. `agents.UpdateSession` and
+  `llm.CountTokens`, also retried, no longer send a key the API does not
+  read.
+- `agents.FireTrigger` is sent once, never again after a failure: the API
+  forgets a firing's key when it answers with a server error, so a repeat
+  would fire the trigger again. Pass the same `IdempotencyKey` to fire
+  again yourself. `apps.CreateApp`, `apps.Invite`,
+  `connections.ConfirmConnection`, `connections.ReconnectConnection`,
+  `llm.Generate` and `llm.Stream` were already sent once, and their docs
+  now say why.
+- **Breaking:** An error answer without the API's envelope, such as a
+  proxy's page, has the HTTP status text as `Error.Message`; before, its
+  first 200 bytes. `Error.Body` holds the bytes, cut at a character
+  boundary. An envelope cut at 64 KiB still gives its code and message.
+- **Breaking:** `connections.UpdateConnector` refuses a change that
+  changes nothing before sending it.
+- `llm.WithLabels` leaves out a pair the service would drop: past the
+  eighth, or a key or value with a character outside the service's rule,
+  such as `,` or `=`, which could otherwise change another pair.
+- `agents.TriggerEvent.Subject` names the person an event is about.
+- `account.Pins`, `account.Devices` and `connections.Connected` keep the
+  JSON the API sent behind `RawJSON`, as every other resource does.
+- The `connections` examples return to a page Latere accepts, the
+  console's Connections page, and say that `ReturnTo` must be one.
+
+### Fixed
+
+- `agents.SessionResource.Access` is `readWrite` or `readOnly`, as the API
+  sends it; the doc named `read_only`.

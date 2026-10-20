@@ -1,0 +1,29 @@
+name: Bug report
+description: Something in the SDK does not work as documented.
+labels: [bug]
+body:
+  - type: textarea
+    id: what
+    attributes:
+      label: What happened
+      description: What you ran, what you expected, and what happened instead. Include the error, with its request id if it has one.
+    validations:
+      required: true
+  - type: textarea
+    id: reproduce
+    attributes:
+      label: How to reproduce
+      description: The smallest program that shows it. Leave out keys and tokens.
+      render: go
+  - type: input
+    id: version
+    attributes:
+      label: SDK version
+      placeholder: v0.1.0
+    validations:
+      required: true
+  - type: input
+    id: go
+    attributes:
+      label: Go version and platform
+      placeholder: go1.27.3 darwin/arm64

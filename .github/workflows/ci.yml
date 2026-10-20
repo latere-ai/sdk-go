@@ -1,0 +1,62 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  test:
+    name: test (${{ matrix.os }}, Go ${{ matrix.go }})
+    runs-on: ${{ matrix.os }}
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, macos-latest, windows-latest]
+        go: ["1.26.x", "1.27.x"]
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-go@v5
+        with:
+          go-version: ${{ matrix.go }}
+      - name: Test
+        run: go test -race -count=1 -covermode=atomic -coverprofile=coverage.out ./...
+      - name: Coverage
+        if: matrix.os == 'ubuntu-latest' && matrix.go == '1.27.x'
+        shell: bash
+        run: |
+          go tool cover -func=coverage.out | tail -1
+          echo "### Coverage" >> "$GITHUB_STEP_SUMMARY"
+          go tool cover -func=coverage.out | tail -1 >> "$GITHUB_STEP_SUMMARY"
+
+  lint:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-go@v5
+        with:
+          go-version: "1.27.x"
+      - name: gofmt
+        run: make fmt-check
+      - name: go vet
+        run: make vet
+      - name: staticcheck
+        run: make staticcheck
+      - name: govulncheck
+        run: make vulncheck
+      - name: The module has no dependencies
+        run: |
+          if grep -q '^require' go.mod; then
+            echo "go.mod requires a module; the SDK depends on the standard library alone" >&2
+            exit 1
+          fi
+      - name: The refresh tool builds
+        working-directory: tools
+        run: go vet ./...

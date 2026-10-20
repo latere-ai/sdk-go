@@ -1,0 +1,16 @@
+name: Feature request
+description: Something the SDK should do that it does not.
+labels: [enhancement]
+body:
+  - type: textarea
+    id: need
+    attributes:
+      label: What you are trying to do
+      description: The task, and where the SDK gets in the way. An API endpoint the SDK does not cover yet is a good request.
+    validations:
+      required: true
+  - type: textarea
+    id: idea
+    attributes:
+      label: What you would like the code to look like
+      render: go

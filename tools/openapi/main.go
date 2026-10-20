@@ -31,6 +31,7 @@ import (
 var documents = map[string]string{
 	"agents":  "https://platform.latere.ai/docs/agents/openapi.yaml",
 	"account": "https://platform.latere.ai/docs/account/openapi.yaml",
+	"apps":    "https://platform.latere.ai/docs/apps/openapi.yaml",
 }
 
 // source is one entry of sources.json.

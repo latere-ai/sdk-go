@@ -172,6 +172,17 @@ const (
 	SessionPolicyContinue SessionPolicy = "continue"
 )
 
+// Access is how a session may use a memory store.
+type Access string
+
+// The ways a session may use a memory store.
+const (
+	// AccessReadWrite reads and writes the store.
+	AccessReadWrite Access = "readWrite"
+	// AccessReadOnly reads it alone.
+	AccessReadOnly Access = "readOnly"
+)
+
 // A SessionResource is one thing a triggered session attaches.
 type SessionResource struct {
 	// Type is what is attached.
@@ -179,9 +190,9 @@ type SessionResource struct {
 	// MemoryStore names a memory store, by name or id, for
 	// ResourceMemoryStore.
 	MemoryStore string `json:"memoryStore,omitempty"`
-	// Access is how the session may use a memory store, such as
-	// "read_only".
-	Access string `json:"access,omitempty"`
+	// Access is how the session may use a memory store; the store's own
+	// setting when empty.
+	Access Access `json:"access,omitempty"`
 	// URL is a git repository's address, for ResourceRepository.
 	URL string `json:"url,omitempty"`
 	// Ref is the branch, tag or commit of the repository to check out.
@@ -330,15 +341,28 @@ type FiringOutcome string
 
 // The outcomes of a firing.
 const (
-	FiringStarted       FiringOutcome = "started"
-	FiringContinued     FiringOutcome = "continued"
-	FiringHeld          FiringOutcome = "held"
-	FiringFiltered      FiringOutcome = "filtered"
+	// FiringStarted started a session.
+	FiringStarted FiringOutcome = "started"
+	// FiringContinued sent its message to an open session.
+	FiringContinued FiringOutcome = "continued"
+	// FiringHeld waits for a session to become free.
+	FiringHeld FiringOutcome = "held"
+	// FiringFiltered is an event the trigger's filter left out; it is
+	// counted, and a list of firings does not hold it.
+	FiringFiltered FiringOutcome = "filtered"
+	// FiringSkippedActive came while the trigger's session was still
+	// working.
 	FiringSkippedActive FiringOutcome = "skipped_active"
-	FiringSkippedBusy   FiringOutcome = "skipped_busy"
-	FiringSkippedLate   FiringOutcome = "skipped_late"
-	FiringRefused       FiringOutcome = "refused"
-	FiringFailed        FiringOutcome = "failed"
+	// FiringSkippedBusy came while the trigger had MaxActive sessions.
+	FiringSkippedBusy FiringOutcome = "skipped_busy"
+	// FiringSkippedLate came later than MaxAge allows.
+	FiringSkippedLate FiringOutcome = "skipped_late"
+	// FiringRefused was refused, such as by the agent's owner's policy;
+	// Firing.Reason says why.
+	FiringRefused FiringOutcome = "refused"
+	// FiringFailed failed to start or continue a session; Firing.Reason
+	// says why.
+	FiringFailed FiringOutcome = "failed"
 )
 
 // ListTriggersParams narrows and pages a list of triggers. The zero value
@@ -420,6 +444,11 @@ func (c *Client) GetTrigger(ctx context.Context, ref string) (*Trigger, error) {
 // metadata of the trigger of the same name, and returns it as stored. An
 // empty APIVersion or Kind is filled in, and t.Status is not sent. Applying
 // the same manifest twice changes nothing, so the call is safe to retry.
+//
+// Applying replaces the whole spec. A program that reads a trigger with
+// GetTrigger, changes it and applies it drops any field this version of
+// the SDK does not model, such as one the API added later; send the JSON
+// Trigger.RawJSON holds, changed, through latere.Config.Do to keep them.
 func (c *Client) ApplyTrigger(ctx context.Context, t *Trigger) (*Trigger, error) {
 	if t == nil || t.Metadata.Name == "" {
 		return nil, errors.New("agents: the trigger's Metadata.Name is required")
@@ -473,6 +502,10 @@ type TriggerEvent struct {
 	Resource string `json:"resource"`
 	// Actor is who caused it at the product.
 	Actor string `json:"actor,omitempty"`
+	// Subject names the person the event is about, as an issuer-qualified
+	// subject, when the product gives one; the trigger's filter and
+	// templates read it as event.subject.
+	Subject string `json:"subject,omitempty"`
 	// Time is when it happened.
 	Time time.Time `json:"time,omitzero"`
 	// Payload is the event's own data, which the trigger's filter and

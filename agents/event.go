@@ -181,10 +181,9 @@ type ToolResult struct {
 	Content []ContentBlock `json:"content"`
 	// IsError reports that the call failed.
 	IsError bool `json:"is_error,omitempty"`
-	// Outcome sums the result up for some tools, such as "ok", "error",
-	// "timeout", or, for a question, "unanswered" or "canceled"; empty
-	// when the tool says nothing more than IsError.
-	Outcome string `json:"outcome,omitempty"`
+	// Outcome sums the result up; empty when the tool says nothing more
+	// than IsError.
+	Outcome ToolOutcome `json:"outcome,omitempty"`
 	// Sender is who sent an EventUserToolResult; nil for a result the
 	// platform recorded.
 	Sender *Sender `json:"sender,omitempty"`
@@ -286,9 +285,8 @@ type ApprovalRequested struct {
 	ApprovalID string `json:"approval_id"`
 	// ToolUseID names the call that made the connection.
 	ToolUseID string `json:"tool_use_id"`
-	// Source is what raised the request, such as "egress" for the
-	// session's network.
-	Source string `json:"source"`
+	// Source is what raised the request.
+	Source ApprovalSource `json:"source"`
 	// Destination is the host the session tried to reach.
 	Destination Destination `json:"destination"`
 	// Reason explains the request, when there is more to say.
@@ -336,3 +334,42 @@ func (t *ToolUse) Questions() ([]Question, error) {
 	}
 	return in.Questions, nil
 }
+
+// ToolOutcome sums up how a tool call ended.
+type ToolOutcome string
+
+// The outcomes of a tool call.
+const (
+	// ToolOK ran and succeeded.
+	ToolOK ToolOutcome = "ok"
+	// ToolError ran and failed.
+	ToolError ToolOutcome = "error"
+	// ToolTimeout ran out of time.
+	ToolTimeout ToolOutcome = "timeout"
+	// ToolUnknown named a tool the agent does not have.
+	ToolUnknown ToolOutcome = "unknown_tool"
+	// ToolInvalidInput was called with input the tool refused.
+	ToolInvalidInput ToolOutcome = "invalid_input"
+	// ToolDenied was denied: by a person, or because nobody attended the
+	// session to approve it.
+	ToolDenied ToolOutcome = "denied"
+	// ToolBlocked was refused by the approval policy.
+	ToolBlocked ToolOutcome = "blocked"
+	// ToolCanceled was canceled, such as by an interrupt.
+	ToolCanceled ToolOutcome = "canceled"
+	// ToolUnknownEffect stopped where it cannot be known whether it took
+	// effect, such as a command cut off mid-run.
+	ToolUnknownEffect ToolOutcome = "unknown_effect"
+	// ToolUnanswered is a question nobody chose an option of; it is not an
+	// error, since the call did what it was for.
+	ToolUnanswered ToolOutcome = "unanswered"
+)
+
+// ApprovalSource is what raised an approval request.
+type ApprovalSource string
+
+// The sources of an approval request.
+const (
+	// ApprovalFromEgress is a connection the session's network refused.
+	ApprovalFromEgress ApprovalSource = "egress"
+)

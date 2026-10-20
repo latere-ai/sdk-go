@@ -80,7 +80,10 @@ func TestTheFireExampleIsATriggerEvent(t *testing.T) {
 		_, hasPayload := m["payload"]
 		return hasVerb && hasPayload
 	})
-	checkExamples(t, "TriggerEvent", found, TriggerEvent{})
+	// The vendored document's example names no subject; the field is the
+	// event envelope's own, which the trigger's filter reads as
+	// event.subject. The schemas topos v0.50.0 publishes list it.
+	checkExamples(t, "TriggerEvent", found, TriggerEvent{}, "subject")
 }
 
 func TestTriggerEndpointsAreInTheDocument(t *testing.T) {

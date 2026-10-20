@@ -13,7 +13,8 @@ instance, can go straight to a pull request.
 
 ## Build and test
 
-You need Go 1.26 or newer. Everything runs from the repository root:
+You need Go 1.26 or newer. On Linux and macOS, everything runs from the
+repository root with `make`:
 
 ```sh
 make test      # go test -race over every package
@@ -21,9 +22,15 @@ make check     # gofmt, go vet, staticcheck, govulncheck and the tests
 make cover     # the tests with a coverage report in coverage.html
 ```
 
-`make check` is what CI runs on Linux, macOS and Windows, on both supported
-Go versions. It needs nothing but Go: the linters run at pinned versions
-through `go run`, and the module has no dependencies to install.
+`make check` needs nothing but Go: the linters run at pinned versions
+through `go run`, and the module has no dependencies to install. On
+Windows, run `go test -race ./...` directly.
+
+CI runs two jobs on every pull request. The test job runs
+`go test -race` with coverage on Linux, macOS and Windows, each on Go 1.26
+and 1.27. The lint job runs, on Linux, the formatting check, `go vet`,
+staticcheck and govulncheck, checks that `go.mod` requires no module, and
+vets the refresh tool under `tools/`.
 
 ## How the code is laid out
 
@@ -72,11 +79,40 @@ its reason, in that package's `spec_test.go`.
 - Add a line to the `Unreleased` section of [CHANGELOG.md](CHANGELOG.md)
   saying what changes for someone who upgrades.
 
+## Design rules
+
+[docs/design.md](docs/design.md) holds the reasons; these are the rules a
+review checks:
+
+- A type has exported fields only when it is plain data, such as a model
+  or a request's parameters, or configuration filled in once before use.
+  A type with state, invariants or concurrent use, such as a client or a
+  token source, keeps its fields unexported behind a constructor and
+  methods.
+- A capability's client has one method per endpoint, named verb first
+  after the API's resource: `GetSession`, `ListSessions`, `CreateSession`.
+- A status, a state or a kind, a value a program branches on, has a
+  named string type with constants. A timestamp is a `time.Time`.
+
 ## Pull requests
 
 Keep a pull request to one change, with a title that says what it does.
 CI must pass. A maintainer reviews it and may ask for changes; once it is
 approved, a maintainer merges it.
+
+## Releasing
+
+A maintainer releases from `main`:
+
+1. Move the entries under `Unreleased` in [CHANGELOG.md](CHANGELOG.md) to a
+   new `## [X.Y.Z] - YYYY-MM-DD` section, leaving an empty `Unreleased`
+   above it.
+2. Set `latere.Version` to `X.Y.Z`. A test fails while the two disagree;
+   before the first release, `Version` is the coming version followed by
+   `-dev`.
+3. Run `make check`, commit, and tag that commit `vX.Y.Z`.
+
+## License
 
 By contributing, you agree that your contribution is licensed under the
 [Apache License 2.0](LICENSE).

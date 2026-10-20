@@ -38,17 +38,28 @@ endpoint, and calls the API only through `Config.Do`, `Config.Stream` and
 `latere.Items`. `signin` is separate because most programs, those that run
 with a key, never sign a person in; the core does not import it.
 
-A capability package's client is `New(cfg)`. Sharing one `Config` between
+A capability package's client is `New(cfg)`, with one method per endpoint
+named verb first after the API's resource, as the AWS SDK names its
+operations: `GetSession`, `ListSessions`, `CreateSession`, `GetWallet`. A
+client exposes no service fields: a type has exported fields only when it
+is plain data, such as a model or a request's parameters, or configuration
+filled in once before use. A type with state, invariants or concurrent
+use, such as a client, a configuration or a token source, keeps its fields
+unexported behind a constructor and methods. Sharing one `Config` between
 packages shares its HTTP client, credentials and retry policy.
+
+A call on a `Config` that `NewConfig` did not build, a nil one included,
+fails with an error saying so rather than panicking.
 
 ## Configuration
 
 `latere.NewConfig` takes functional options, and an option can fail (a
 malformed base URL, a negative retry count), so `NewConfig` returns an
-error instead of panicking later. When neither `WithKey` nor
-`WithTokenSource` is given it reads `LATERE_KEY`, and when `WithBaseURL` is
-absent it reads `LATERE_BASE_URL`; an explicit option always wins over the
-environment.
+error instead of panicking later. The token sources' constructors,
+`NewKeyTokens` and `NewActorTokens`, do the same with their options. When
+neither `WithKey` nor `WithTokenSource` is given, `NewConfig` reads
+`LATERE_KEY`, and when `WithBaseURL` is absent it reads `LATERE_BASE_URL`;
+an explicit option always wins over the environment.
 
 Per-call options are not offered. A call that needs a shorter deadline
 uses its context; a part of a program that needs another retry policy
@@ -59,21 +70,30 @@ builds a second `Config`.
 Every request carries a bearer token from a `latere.TokenSource`, an
 interface of one method, `Token(ctx)`. Three sources ship with the SDK:
 
-- `KeyTokens` exchanges a key from the console for a short-lived token
+- `NewKeyTokens` exchanges a key from the console for a short-lived token
   with the OAuth client credentials grant, which is what the API's
   authentication docs describe. `WithKey` builds one.
-- `ActorTokens` turns a person's sign-in into short-lived API tokens.
+- `NewActorTokens` turns a person's sign-in into short-lived API tokens.
 - `StaticToken` sends a token the caller already holds.
+
+The two exchanging sources send their exchanges through the HTTP client,
+User-Agent and hooks of the `Config` they are given to, so a proxy, a
+trace or a log sees them as it sees the requests they sign.
 
 `ReuseToken` wraps a source so that a token is reused until shortly before
 it expires, and so that concurrent requests needing a new token cause one
 fetch, not one each. The fetch runs detached from the first caller's
-context: if that caller gives up, the others still get the token.
+context, so that if that caller gives up, the others still get the token,
+and is bounded by `TokenTimeout` instead: a source that hangs fails the
+callers waiting on it, and the next call asks again, rather than holding
+every later request.
 
 A source that also implements `Resetter` lets the core recover from a 401:
 it drops its token, and the request is sent once more with a new one. A
 401 means the API did not act on the request, so this retry is safe for
-any method.
+any method. A source's own failure is retried only when it may pass, on
+the network or at an issuer that is down; a credential the issuer refuses
+fails the call at once.
 
 `golang.org/x/oauth2` would cover part of this, but it is a dependency,
 and the API's token exchanges are small enough to write and test here.
@@ -88,7 +108,11 @@ A request is retried when the network failed or the API answered 408, 429,
 `HEAD`, `PUT`, `DELETE` or `OPTIONS`, or a request carrying an idempotency
 key. Every method that creates or sends something sends an
 `Idempotency-Key`, generated when the caller gives none, so retries never
-create a second session or send a message twice.
+create a second session or send a message twice. A repeat that arrives
+while the first request is still being answered is refused with 409, which
+the SDK does not retry, since it cannot tell it from a real conflict; the
+first request still succeeds, and the docs tell the caller to read the
+resource.
 
 The wait between attempts doubles from 500ms up to 30s, and is drawn at
 random from the upper half of that range so that many clients failing
@@ -97,9 +121,15 @@ computed wait. A `Retry-After` longer than the longest backoff ends the
 retries and returns the error with `RetryAfter` set, so the caller decides
 whether to wait that long.
 
-`WithTimeout` bounds a call and all of its retries, and only applies when
-the call's context has no deadline of its own: the caller's deadline is
-the more specific choice.
+A call whose context has no deadline is bounded by `DefaultTimeout`, 80
+seconds as in Stripe's SDK, or by `WithTimeout`, for the call and all of
+its retries, including reading the answer: a server that stops answering
+cannot hold a program forever. The caller's own deadline is the more
+specific choice and replaces the bound. A stream is bounded only until the
+API's first answer, by a timer rather than a deadline, since the stream
+then lasts as long as the session. A call cut off by its context, during
+an attempt or a wait between attempts, returns an error matching the
+context's, joined with the last answer when there was one.
 
 ## Errors
 
@@ -130,11 +160,19 @@ when the connection drops it reconnects with `Last-Event-ID` set to the
 last frame it delivered, so the caller sees every event once, in order,
 without writing reconnect code. A reconnect that reads no frame counts
 against the retry limit; one that reads frames resets the count, so a long
-stream survives many drops spread over hours.
+stream survives many drops spread over hours. When the caller stops the
+loop, the stream's body is closed without reading what is left, since a
+live stream never ends on its own: draining it would wait for the next
+keepalive, or forever, and hold one of the streams the API allows a
+caller.
+
+A frame is read whole, up to `sse.MaxLine`, 16 MiB, twice the largest body
+the API takes. A larger one ends the stream with an error instead of a
+reconnect, which would only read it again.
 
 Whether a frame ends the stream is the capability's knowledge, not the
-core's, so `Stream` takes a `done` predicate: `agents` ends a session's
-stream after the status event that says the session ended. Frames without
+core's, so `Stream` takes a `done` predicate: `agents.StreamEvents` ends a
+session's stream after the status event that says the session ended. Frames without
 an id, such as the deltas of a response being written, are delivered but
 do not move the resume point, because the server does not replay them.
 
@@ -149,7 +187,8 @@ The tests hold the types to the API's documents, vendored as JSON in
 `openapi/`: a field a model reads must appear in the document's examples or
 schema, a field the schema requires must be in the model, and every
 endpoint a package calls must exist. A field left out on purpose is listed,
-with its reason, in the package's `spec_test.go`. The program that fetches
+with its reason, in the package's `spec_test.go`, and a field the schema
+marks as a date-time must be a `time.Time`. The program that fetches
 and converts the documents lives in its own module under `tools/`, so the
 YAML parser it needs never reaches the SDK's `go.mod`. A weekly workflow
 fetches the documents and fails when they changed, which is the signal to
@@ -176,16 +215,21 @@ device and polls until they do, slowing down when the service asks.
 new token to a callback, so a program can store it where it keeps
 secrets. Programs that only use keys never import the package.
 
+Both flows need a client that Latere registers, with the API among its
+audiences, until registration is self-service; the package documentation
+says how to ask for one and what to register.
+
 ## What came from other SDKs
 
 The design borrows from three widely used Go SDKs:
 
 - **AWS SDK for Go v2:** one shared configuration handed to a client per
-  service, and exponential backoff with jitter. Not taken: the middleware
+  service, operations as methods named verb first on that client, and
+  exponential backoff with jitter. Not taken: the middleware
   stack, which is more machinery than an API of this size needs.
 - **Stripe's Go SDK:** lists as `iter.Seq2`, an idempotency key generated
-  for every `POST`, the request id on every error, and two retries by
-  default. Not taken: the package-level key and backends,
+  for every `POST`, the request id on every error, two retries by default,
+  and an 80-second default timeout. Not taken: the package-level key and backends,
   which are global state.
 - **Anthropic's Go SDK:** retrying only requests that can be replayed,
   retrying on 408, 429 and 5xx answers, honoring `Retry-After`, and a

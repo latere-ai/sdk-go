@@ -32,6 +32,10 @@ same targets.
 - Every Go file starts with the Apache-2.0 header the existing files carry.
 - Every exported name has a doc comment for a reader who sees that one
   name: what it does, what it returns, when it errors.
+- Follow the design rules in [CONTRIBUTING.md](CONTRIBUTING.md): exported
+  fields only on plain data and configuration filled in once; one method
+  per endpoint on a capability's client, named verb first; named types for
+  statuses, states and kinds; `time.Time` for timestamps.
 - Comments in code say what the code does and why, never the history of a
   change.
 - Handle every error; a dropped one carries a comment saying why that is

@@ -1,0 +1,463 @@
+// Copyright 2026 Latere AI
+// SPDX-License-Identifier: Apache-2.0
+
+// Package account reads what the Latere API knows about the person a
+// request acts for, and that no single capability owns: the Effort levels a
+// session can run at, the wallet turns are paid from, preferences, pins,
+// and the person's computers.
+//
+//	cfg, err := latere.NewConfig(latere.WithKey(os.Getenv("LATERE_KEY")))
+//	if err != nil {
+//		return err
+//	}
+//	w, err := account.New(cfg).Wallet(ctx)
+//	if err != nil {
+//		return err
+//	}
+//	fmt.Printf("%.2f USD left\n", float64(w.SpendableMicroUSD)/1e6)
+//
+// Each request reads the context its token names: the person's own, or an
+// organization's.
+package account
+
+import (
+	"context"
+	"errors"
+	"net/http"
+	"net/url"
+
+	"latere.ai/x/sdk-go/latere"
+)
+
+// Client reaches the account part of the Latere API.
+type Client struct {
+	cfg *latere.Config
+}
+
+// New returns a Client that sends its requests as cfg says.
+func New(cfg *latere.Config) *Client { return &Client{cfg: cfg} }
+
+// get reads path into out.
+func (c *Client) get(ctx context.Context, path string, out any) error {
+	return c.cfg.Do(ctx, &latere.Request{Method: http.MethodGet, Path: path}, out)
+}
+
+// ApplyManagedAgent makes sure the caller has their own copy of a managed
+// agent Latere publishes, such as "latere-chat", at its live version, and
+// returns the copy. Sessions with the agent are then created with
+// agents.CreateSessionParams{Agent: id}. Calling it again changes nothing
+// unless a newer version went live.
+func (c *Client) ApplyManagedAgent(ctx context.Context, id string) (*AppliedAgent, error) {
+	if id == "" {
+		return nil, errors.New("account: the managed agent's id is empty")
+	}
+	var out AppliedAgent
+	req := &latere.Request{Method: http.MethodPut, Path: "/v1/account/agents/" + url.PathEscape(id)}
+	if err := c.cfg.Do(ctx, req, &out); err != nil {
+		return nil, err
+	}
+	return &out, nil
+}
+
+// AppliedAgent is the caller's copy of a managed agent.
+type AppliedAgent struct {
+	// ID is the managed agent's id, which is also the copy's name.
+	ID string `json:"id"`
+	// Version is the managed agent's version the copy carries.
+	Version int `json:"version"`
+	// Model is the routed name of the Effort level a new session starts at.
+	Model string `json:"model"`
+	// Agent is the copy among the caller's agents.
+	Agent struct {
+		// ID is the copy's agent id.
+		ID string `json:"id"`
+		// Version is the copy's version, which a new session runs.
+		Version int `json:"version"`
+	} `json:"agent"`
+}
+
+// EffortLevels returns the Effort levels a session can run at for the
+// caller, what the next turn on each costs, and how Auto picks among them.
+func (c *Client) EffortLevels(ctx context.Context) (*EffortLevels, error) {
+	var out EffortLevels
+	if err := c.get(ctx, "/v1/account/effort", &out); err != nil {
+		return nil, err
+	}
+	return &out, nil
+}
+
+// EffortLevels are the levels of effort a session's model runs at.
+type EffortLevels struct {
+	// Levels are the levels, least effort first.
+	Levels []EffortLevel `json:"levels"`
+	// Auto picks a level for each message.
+	Auto *EffortAuto `json:"auto,omitempty"`
+	// ZeroRetention reports whether model requests go only to endpoints
+	// that keep nothing of them, for the caller in this context.
+	ZeroRetention bool `json:"zero_retention,omitempty"`
+	// ZeroRetentionBy says who keeps ZeroRetention on: "organization" or
+	// "person".
+	ZeroRetentionBy string `json:"zero_retention_by,omitempty"`
+}
+
+// An EffortLevel is one level of effort.
+type EffortLevel struct {
+	// ID is "quick", "thorough" or "sustained".
+	ID string `json:"id"`
+	// Name is the routed model name for the level, "tier/<id>"; give it as
+	// a session's model to run on the level.
+	Name string `json:"name"`
+	// Order is the level's place, least effort first, from 0.
+	Order int `json:"order"`
+	// Available reports whether a message on the level would run now.
+	Available bool `json:"available"`
+	// Reason is the refusal a message would get when the level is not
+	// available, such as "budget_exhausted" or "rate_limited".
+	Reason string `json:"reason,omitempty"`
+	// ResetsAt is when a "rate_limited" level opens again.
+	ResetsAt string `json:"resets_at,omitempty"`
+	// Retention is "none" when no request on the level can be kept by a
+	// provider, and "provider" when one may be.
+	Retention string `json:"retention,omitempty"`
+	// Next is what the next turn on the level costs.
+	Next *NextTurn `json:"next,omitempty"`
+	// FreeTurns counts the caller's free turns on the level today.
+	FreeTurns *FreeTurns `json:"free_turns,omitempty"`
+	// Models are the models the level may run for the caller, in the
+	// level's order of preference.
+	Models []EffortModel `json:"models,omitempty"`
+}
+
+// EffortAuto describes Auto, which picks a level for each message.
+type EffortAuto struct {
+	// Name is the routed model name for Auto.
+	Name string `json:"name"`
+	// Available reports whether a message on Auto would run now.
+	Available bool `json:"available"`
+	// Reason is why Auto is not available, when it is not.
+	Reason string `json:"reason,omitempty"`
+	// Levels are the ids of the levels Auto picks among.
+	Levels []string `json:"levels"`
+	// Reads is "message" when Auto reads what a message asks, or "shape"
+	// when it judges by length and attachments.
+	Reads string `json:"reads"`
+	// Asks lists the levels Auto asks the person about before running.
+	Asks []string `json:"asks,omitempty"`
+	// Retention is "none" or "provider", as for a level.
+	Retention string `json:"retention"`
+}
+
+// An EffortModel is a model a level may run.
+type EffortModel struct {
+	// Name is the model's name in the catalog.
+	Name string `json:"name"`
+	// Charge is "none" for a free model or "credit" for a priced one.
+	Charge string `json:"charge"`
+	// Available reports whether a message with this model would run now.
+	Available bool `json:"available"`
+	// Reason is why it is not available, when it is not.
+	Reason string `json:"reason,omitempty"`
+	// FreeAgainAt is when a rate-limited free model opens again.
+	FreeAgainAt string `json:"free_again_at,omitempty"`
+	// Retention is "none" or "provider".
+	Retention string `json:"retention,omitempty"`
+}
+
+// NextTurn is what the next turn on a level costs.
+type NextTurn struct {
+	// Charge is "none" for a free turn or "credit" for one paid from the
+	// wallet.
+	Charge string `json:"charge"`
+	// Price is the price of the model a "credit" turn runs.
+	Price *Price `json:"price,omitempty"`
+	// FreeAgainAt is when free turns open again, when they are what kept a
+	// free model from running.
+	FreeAgainAt string `json:"free_again_at,omitempty"`
+	// SponsoredOnly reports that the turn draws on credit Latere gave alone.
+	SponsoredOnly bool `json:"sponsored_only,omitempty"`
+}
+
+// Price is a model's price per a number of tokens. Amounts are decimal
+// strings, to keep their precision.
+type Price struct {
+	// Currency is the prices' currency, such as "USD".
+	Currency string `json:"currency"`
+	// Per is the number of tokens each price is for.
+	Per int `json:"per"`
+	// Input is the price of Per input tokens.
+	Input string `json:"input"`
+	// Output is the price of Per output tokens.
+	Output string `json:"output"`
+	// CachedInput is the price of Per cached input tokens, when stated.
+	CachedInput string `json:"cachedInput,omitempty"`
+	// CacheWrite is the price of writing Per tokens to the cache, when
+	// stated.
+	CacheWrite string `json:"cacheWrite,omitempty"`
+}
+
+// FreeTurns counts free turns on a level.
+type FreeTurns struct {
+	// Bound is how many free turns one person may start in a day.
+	Bound int `json:"bound"`
+	// Used is how many the caller started today.
+	Used int `json:"used"`
+	// ResetsAt is when the count resets.
+	ResetsAt string `json:"resets_at"`
+}
+
+// Wallet returns the wallet the caller's turns are paid from in the
+// token's context.
+func (c *Client) Wallet(ctx context.Context) (*Wallet, error) {
+	var out Wallet
+	if err := c.get(ctx, "/v1/account/wallet", &out); err != nil {
+		return nil, err
+	}
+	return &out, nil
+}
+
+// The states of a wallet.
+const (
+	// WalletOpen is a wallet with credit.
+	WalletOpen = "Open"
+	// WalletExhausted is a wallet that spent its credit.
+	WalletExhausted = "Exhausted"
+)
+
+// Wallet is the credit turns are paid from.
+type Wallet struct {
+	// State is WalletOpen or WalletExhausted; empty when the wallet cannot
+	// be read now.
+	State string `json:"state"`
+	// SpendableMicroUSD is the credit left, in millionths of a US dollar.
+	// Zero for a member of an organization, who sees no amount.
+	SpendableMicroUSD int64 `json:"spendable_micro,omitempty"`
+	// Bought reports whether the wallet ever held bought credit.
+	Bought bool `json:"bought,omitempty"`
+	// NextGrant is the next free credit, when one is coming.
+	NextGrant *NextGrant `json:"next_grant,omitempty"`
+	// TopUp says what a payment adds, when the wallet can be topped up.
+	TopUp *TopUp `json:"top_up,omitempty"`
+	// LimitResetsAt is when an organization's monthly limit opens again.
+	LimitResetsAt string `json:"limit_resets_at,omitempty"`
+}
+
+// NextGrant is free credit on its way.
+type NextGrant struct {
+	// AmountMicroUSD is the credit, in millionths of a US dollar.
+	AmountMicroUSD int64 `json:"amount_micro"`
+	// At is when it lands; what is left of the current grant expires then.
+	At string `json:"at"`
+}
+
+// TopUp says what a payment adds to a wallet.
+type TopUp struct {
+	// MinMicroUSD is the smallest payment.
+	MinMicroUSD int64 `json:"min_micro"`
+	// SpreadBasisPoints is the share of a payment kept back.
+	SpreadBasisPoints int `json:"spread_bps"`
+	// SpreadFixedMicroUSD is the amount kept back from each payment.
+	SpreadFixedMicroUSD int64 `json:"spread_fixed_micro"`
+}
+
+// Preferences returns the caller's preferences in the token's context.
+func (c *Client) Preferences(ctx context.Context) (*Preferences, error) {
+	var out Preferences
+	if err := c.get(ctx, "/v1/account/preferences", &out); err != nil {
+		return nil, err
+	}
+	return &out, nil
+}
+
+// Preferences are a person's settings in one context.
+type Preferences struct {
+	// Network is which sites a session may reach.
+	Network Network `json:"network"`
+	// Sharing is whether conversations may be shared by link.
+	Sharing Sharing `json:"sharing"`
+	// Profile is what sessions are told about the person.
+	Profile Profile `json:"profile"`
+	// Instructions are the person's standing instructions to every session.
+	Instructions Instructions `json:"instructions"`
+	// Pins are the sessions, apps and projects the person pinned.
+	Pins *Pins `json:"pins,omitempty"`
+	// Bookmarks are the turns the person bookmarked.
+	Bookmarks *Bookmarks `json:"bookmarks,omitempty"`
+	// Data holds the person's own data retention setting.
+	Data *DataPreferences `json:"data,omitempty"`
+}
+
+// Network is which sites a session may reach.
+type Network struct {
+	// Mode is "listed", "package_managers", "ask" or "open".
+	Mode string `json:"mode"`
+	// Domains are the sites added, lower-cased and sorted.
+	Domains []string `json:"domains"`
+	// ManagedBy is "you" or "organization".
+	ManagedBy string `json:"managed_by"`
+	// Editable reports whether the caller may change it.
+	Editable bool `json:"editable"`
+	// Modes are the modes the context allows, narrowest first.
+	Modes []string `json:"modes"`
+	// PackageManagers are the registries "package_managers" and "ask" reach.
+	PackageManagers []string `json:"package_managers"`
+	// MaxDomains is the most sites the context holds.
+	MaxDomains int `json:"max_domains"`
+}
+
+// Sharing is whether conversations may be shared by link.
+type Sharing struct {
+	// Mode is "off", "members" or "anyone".
+	Mode string `json:"mode"`
+	// ManagedBy is "you" or "organization".
+	ManagedBy string `json:"managed_by"`
+	// Editable reports whether the caller may change it.
+	Editable bool `json:"editable"`
+	// Modes are the modes the context offers, narrowest first.
+	Modes []string `json:"modes"`
+}
+
+// Profile is what sessions are told about the person.
+type Profile struct {
+	// CallMe is what the person asks to be called; empty when not set.
+	CallMe string `json:"call_me"`
+	// Work is one of Works; empty when not set.
+	Work string `json:"work"`
+	// Works are the kinds of work a person chooses from.
+	Works []string `json:"works"`
+	// MaxCallMe is the most characters CallMe holds.
+	MaxCallMe int `json:"max_call_me"`
+}
+
+// Instructions are standing instructions to every session.
+type Instructions struct {
+	// Text is the instructions; empty when not set.
+	Text string `json:"text"`
+	// MaxChars is the most characters Text holds.
+	MaxChars int `json:"max_chars"`
+}
+
+// Pins are the sessions, apps and projects a person pinned in one context.
+type Pins struct {
+	// Sessions are the pinned sessions' ids, in the order they were pinned.
+	Sessions []string `json:"sessions"`
+	// Apps are the pinned apps' ids.
+	Apps []string `json:"apps"`
+	// Projects are the pinned projects' ids.
+	Projects []string `json:"projects"`
+	// MaxSessions is the most sessions a context holds pinned.
+	MaxSessions int `json:"max_sessions"`
+	// MaxApps is the most apps a context holds pinned.
+	MaxApps int `json:"max_apps"`
+	// MaxProjects is the most projects a context holds pinned.
+	MaxProjects int `json:"max_projects"`
+}
+
+// Bookmarks are the turns a person bookmarked.
+type Bookmarks struct {
+	// Sessions maps a session's id to the sequences of its bookmarked
+	// turns, ascending.
+	Sessions map[string][]int64 `json:"sessions"`
+	// MaxPerSession is the most turns one session holds bookmarked.
+	MaxPerSession int `json:"max_per_session"`
+	// MaxSessions is the most sessions a context holds bookmarks in.
+	MaxSessions int `json:"max_sessions"`
+}
+
+// DataPreferences hold a person's data retention setting.
+type DataPreferences struct {
+	// ZeroRetention reports whether the person's model requests go only to
+	// endpoints that keep nothing of them.
+	ZeroRetention bool `json:"zero_retention"`
+	// ZeroRetentionBy is "organization" or "person" while it is on.
+	ZeroRetentionBy string `json:"zero_retention_by,omitempty"`
+	// ZeroRetentionRoutes reports whether models no such endpoint serves
+	// stay closed rather than open.
+	ZeroRetentionRoutes bool `json:"zero_retention_routes,omitempty"`
+}
+
+// PinSession pins a session in the token's context and returns the pins.
+// Pinning a pinned session changes nothing.
+func (c *Client) PinSession(ctx context.Context, sessionID string) (*Pins, error) {
+	if sessionID == "" {
+		return nil, errors.New("account: the session id is empty")
+	}
+	var out Pins
+	req := &latere.Request{Method: http.MethodPut, Path: "/v1/account/preferences/pins/" + url.PathEscape(sessionID)}
+	if err := c.cfg.Do(ctx, req, &out); err != nil {
+		return nil, err
+	}
+	return &out, nil
+}
+
+// UnpinSession unpins a session in the token's context. Unpinning a session
+// that is not pinned succeeds.
+func (c *Client) UnpinSession(ctx context.Context, sessionID string) error {
+	if sessionID == "" {
+		return errors.New("account: the session id is empty")
+	}
+	req := &latere.Request{Method: http.MethodDelete, Path: "/v1/account/preferences/pins/" + url.PathEscape(sessionID)}
+	return c.cfg.Do(ctx, req, nil)
+}
+
+// Devices returns the person's computers connected to Latere, and how many
+// they may hold. Only a person's own token may list them.
+func (c *Client) Devices(ctx context.Context) (*Devices, error) {
+	var out Devices
+	if err := c.get(ctx, "/v1/account/devices", &out); err != nil {
+		return nil, err
+	}
+	return &out, nil
+}
+
+// Devices are a person's computers.
+type Devices struct {
+	// Items are the computers.
+	Items []Device `json:"items"`
+	// Limit is how many computers the person may hold.
+	Limit int `json:"limit"`
+}
+
+// A Device is one of a person's computers, which sessions can work on.
+type Device struct {
+	// ID identifies the computer; a session names it as its machine's
+	// environment.
+	ID string `json:"id"`
+	// Name is what the person calls it.
+	Name string `json:"name"`
+	// Status is "online", "offline" or "unknown".
+	Status string `json:"status"`
+	// Online reports whether the computer serves sessions now.
+	Online bool `json:"online"`
+	// OS is the operating system it reports, such as "darwin"; empty until
+	// it has connected.
+	OS string `json:"os,omitempty"`
+	// Arch is its architecture, such as "arm64".
+	Arch string `json:"arch,omitempty"`
+	// Isolation is how a session's commands are confined on it: "process",
+	// the operating system's sandbox.
+	Isolation string `json:"isolation"`
+	// LastSeen is when it was last heard from.
+	LastSeen string `json:"last_seen,omitempty"`
+	// Folders are the folders a session may work in.
+	Folders []DeviceFolder `json:"folders"`
+	// Network is the network it allows a session.
+	Network *DeviceNetwork `json:"network,omitempty"`
+	// CreatedAt is when it was connected.
+	CreatedAt string `json:"created_at"`
+}
+
+// A DeviceFolder is a folder a computer lets sessions work in.
+type DeviceFolder struct {
+	// Path is the folder's path on the computer.
+	Path string `json:"path"`
+	// Write reports whether sessions may change files in it.
+	Write bool `json:"write"`
+}
+
+// DeviceNetwork is the network a computer allows a session.
+type DeviceNetwork struct {
+	// Mode is "none" or "allowlist".
+	Mode string `json:"mode"`
+	// Hosts are the hosts an "allowlist" names.
+	Hosts []string `json:"hosts"`
+}

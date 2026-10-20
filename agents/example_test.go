@@ -7,9 +7,11 @@ import (
 	"context"
 	"fmt"
 	"log"
+	"os"
 
 	"latere.ai/x/sdk-go/agents"
 	"latere.ai/x/sdk-go/latere"
+	"latere.ai/x/sdk-go/storage"
 )
 
 func client() *agents.Client {
@@ -224,6 +226,40 @@ func ExampleModelChange() {
 	if _, err := client().UpdateSession(ctx, id, &agents.UpdateSessionParams{
 		Model: &agents.ModelChange{AgentReasoning: true},
 	}); err != nil {
+		log.Fatal(err)
+	}
+}
+
+// Sending a file with a message: a file of up to MaxAttachmentBytes goes
+// with it, and a larger one goes up to Storage first, for the message to
+// name by its path there.
+func ExampleClient_SendMessage_files() {
+	ctx := context.Background()
+	cfg, err := latere.NewConfig()
+	if err != nil {
+		log.Fatal(err)
+	}
+	f, err := os.Open("talk.mp4")
+	if err != nil {
+		log.Fatal(err)
+	}
+	defer f.Close()
+	info, err := f.Stat()
+	if err != nil {
+		log.Fatal(err)
+	}
+	file, err := storage.New(cfg).UploadFile(ctx, storage.Me, "files/Uploads/talk.mp4", f, info.Size(), &storage.UploadOptions{ContentType: "video/mp4"})
+	if err != nil {
+		log.Fatal(err)
+	}
+	_, err = agents.New(cfg).SendMessage(ctx, "ses_01M34G2JF01B91B8399CD1G6YP", &agents.SendMessageParams{
+		Content: []agents.ContentBlock{agents.Text("Write up the talk's three points.")},
+		Attachments: []agents.NewAttachment{
+			{Name: "notes.md", MediaType: "text/markdown", Data: []byte("Keep it short.")},
+			{Name: "talk.mp4", Source: &agents.AttachmentSource{Owner: storage.Me, Path: file.Path}},
+		},
+	})
+	if err != nil {
 		log.Fatal(err)
 	}
 }

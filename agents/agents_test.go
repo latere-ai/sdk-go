@@ -570,3 +570,68 @@ func TestVerdictsAndApprovals(t *testing.T) {
 		t.Errorf("approval decided %+v", d)
 	}
 }
+
+// A message may carry pictures and files beside its text, or files alone.
+func TestSendingAMessageWithPicturesAndFiles(t *testing.T) {
+	s, calls := fakeAPI(t, map[string]string{"POST /v1/agents/sessions/ses_1/events": event})
+	png := []byte("\x89PNG\r\n\x1a\n")
+	if _, err := s.SendMessage(t.Context(), "ses_1", &agents.SendMessageParams{
+		Content: []agents.ContentBlock{agents.Text("What is in these?"), agents.ImageBlock("image/png", png)},
+		Attachments: []agents.NewAttachment{
+			{Name: "notes.txt", MediaType: "text/plain", Data: []byte("hello")},
+			{Name: "talk.mp4", Source: &agents.AttachmentSource{Owner: "me", Path: "files/Uploads/talk.mp4"}},
+		},
+	}); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := s.SendMessage(t.Context(), "ses_1", &agents.SendMessageParams{
+		Attachments: []agents.NewAttachment{{Name: "old.pdf", Source: &agents.AttachmentSource{Owner: "me", Path: "files/old.pdf", Version: 2}}},
+	}); err != nil {
+		t.Fatal(err)
+	}
+	want := []string{
+		`{"payload":{"attachments":[{"data":"aGVsbG8=","media_type":"text/plain","name":"notes.txt"},{"name":"talk.mp4","source":{"owner":"me","path":"files/Uploads/talk.mp4"}}],` +
+			`"content":[{"text":"What is in these?","type":"text"},{"image":{"data":"iVBORw0KGgo=","media_type":"image/png"},"type":"image"}]},"type":"user.message"}`,
+		`{"payload":{"attachments":[{"name":"old.pdf","source":{"owner":"me","path":"files/old.pdf","version":2}}],"content":[]},"type":"user.message"}`,
+	}
+	for i, w := range want {
+		got, err := json.Marshal((*calls)[i].Body)
+		if err != nil {
+			t.Fatal(err)
+		}
+		if string(got) != w {
+			t.Errorf("message %d sent %s, want %s", i, got, w)
+		}
+	}
+	for name, a := range map[string]agents.NewAttachment{
+		"no name":         {Data: []byte("x")},
+		"neither":         {Name: "a"},
+		"data and source": {Name: "a", Data: []byte("x"), Source: &agents.AttachmentSource{Owner: "me", Path: "files/a"}},
+	} {
+		if _, err := s.SendMessage(t.Context(), "ses_1", &agents.SendMessageParams{Attachments: []agents.NewAttachment{a}}); err == nil {
+			t.Errorf("%s: no error", name)
+		}
+	}
+	if len(*calls) != 2 {
+		t.Errorf("%d messages sent, want the 2 that hold", len(*calls))
+	}
+}
+
+// The log records each file a message carried, and its pictures.
+func TestAMessageRecordsItsFiles(t *testing.T) {
+	var msg agents.UserMessage
+	payload := `{"sender":{"kind":"person","subject":"https://auth.latere.ai|alice"},
+"content":[{"type":"image","image":{"media_type":"image/png","data":"iVBORw0KGgo="}}],
+"attachments":[{"name":"talk.mp4","media_type":"video/mp4","size":2048,"blob":"sha256:ab","path":"attachments/evt_1/talk.mp4",
+"source":{"owner":"me","path":"files/Uploads/talk.mp4"}},{"name":"a.md","media_type":"text/markdown","size":3,"blob":"sha256:cd","path":"attachments/evt_1/a.md","inline":true}]}`
+	if err := json.Unmarshal([]byte(payload), &msg); err != nil {
+		t.Fatal(err)
+	}
+	if msg.Content[0].Type != agents.BlockImage || msg.Content[0].Image.MediaType != "image/png" {
+		t.Errorf("content %+v", msg.Content)
+	}
+	if len(msg.Attachments) != 2 || msg.Attachments[0].Source == nil || msg.Attachments[0].Source.Path != "files/Uploads/talk.mp4" || msg.Attachments[0].Size != 2048 ||
+		msg.Attachments[1].Source != nil || !msg.Attachments[1].Inline {
+		t.Errorf("attachments %+v", msg.Attachments)
+	}
+}

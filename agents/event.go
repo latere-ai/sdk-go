@@ -4,6 +4,7 @@
 package agents
 
 import (
+	"encoding/base64"
 	"encoding/json"
 	"fmt"
 	"strings"
@@ -120,6 +121,20 @@ type ContentBlock struct {
 	Type BlockType `json:"type"`
 	// Text is the text of a BlockText or BlockThinking block.
 	Text string `json:"text,omitempty"`
+	// Image is the picture of a BlockImage block.
+	Image *Image `json:"image,omitempty"`
+}
+
+// An Image is the picture of a BlockImage block. A message sends it as
+// Data, PNG, JPEG, GIF or WebP, with the MediaType its bytes are; the API
+// refuses a picture by URL in a message. ImageBlock builds one.
+type Image struct {
+	// MediaType is the picture's format, such as "image/png".
+	MediaType string `json:"media_type,omitempty"`
+	// Data is the picture, base64-encoded.
+	Data string `json:"data,omitempty"`
+	// URL is where a picture the API did not keep is, in place of Data.
+	URL string `json:"url,omitempty"`
 }
 
 // BlockType is the kind of a ContentBlock.
@@ -132,10 +147,20 @@ const (
 	// BlockThinking is the model's reasoning before it answers, when the
 	// model shows it.
 	BlockThinking BlockType = "thinking"
+	// BlockImage is a picture, which a message sends for the model to see.
+	BlockImage BlockType = "image"
 )
 
 // Text returns a text block holding s.
 func Text(s string) ContentBlock { return ContentBlock{Type: BlockText, Text: s} }
+
+// ImageBlock returns an image block holding data, a picture of the
+// mediaType it is: "image/png", "image/jpeg", "image/gif" or
+// "image/webp". A message holds at most MaxImages of them, each at most
+// MaxImageBytes.
+func ImageBlock(mediaType string, data []byte) ContentBlock {
+	return ContentBlock{Type: BlockImage, Image: &Image{MediaType: mediaType, Data: base64.StdEncoding.EncodeToString(data)}}
+}
 
 // textOf joins the text of the BlockText blocks of blocks.
 func textOf(blocks []ContentBlock) string {
@@ -212,6 +237,49 @@ type UserMessage struct {
 	Sender Sender `json:"sender"`
 	// Content is the message, in order.
 	Content []ContentBlock `json:"content"`
+	// Attachments are the files the message carries, as the session keeps
+	// them.
+	Attachments []Attachment `json:"attachments,omitempty"`
+}
+
+// An Attachment is a file a message carries, as the session keeps it:
+// the agent finds it in the session's working directory at Path.
+type Attachment struct {
+	// Name is the file's name, as the message sent it.
+	Name string `json:"name"`
+	// MediaType is the file's media type.
+	MediaType string `json:"media_type"`
+	// Size is the file's length in bytes.
+	Size int64 `json:"size"`
+	// Blob is the digest the session keeps the bytes by, "sha256:" and
+	// the hex of their hash.
+	Blob string `json:"blob"`
+	// Path is where the agent finds the file, relative to the session's
+	// working directory.
+	Path string `json:"path"`
+	// Ref is where the file is in the session's folder of files, for a
+	// session that keeps one; empty otherwise.
+	Ref string `json:"ref,omitempty"`
+	// Source is the file of the sender's Storage the bytes were read
+	// from, for a file the message named by its source; nil otherwise.
+	Source *AttachmentSource `json:"source,omitempty"`
+	// Inline reports a short text file the model reads in its request,
+	// beside the line that names it.
+	Inline bool `json:"inline,omitempty"`
+}
+
+// An AttachmentSource names a file of a person's Storage, which a message
+// carries by reference: the platform reads its bytes when the message is
+// sent and keeps a copy with the session.
+type AttachmentSource struct {
+	// Owner is the space the file is in: "me" for the sender's own, as
+	// storage.Me names it, or the owner of a space shared with them.
+	Owner string `json:"owner"`
+	// Path is the file's path in the space, starting with "files/".
+	Path string `json:"path"`
+	// Version is the version of the file to read, counting from 1; zero
+	// reads the file as it stands.
+	Version int `json:"version,omitempty"`
 }
 
 // Question is a question an agent asked, the input of an EventAgentToolUse

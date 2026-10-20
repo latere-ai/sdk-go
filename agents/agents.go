@@ -505,20 +505,81 @@ func (c *Client) eventsPage(ctx context.Context, id string, params *ListEventsPa
 
 // SendMessageParams is a message to a session.
 type SendMessageParams struct {
-	// Content is the message. Required.
+	// Content is the message: text, and pictures for the model to see.
+	// A message holds content, attachments or both.
 	Content []ContentBlock
+	// Attachments are the files the message carries, which the agent
+	// finds in its working directory.
+	Attachments []NewAttachment
 	// IdempotencyKey makes a repeated send deliver the message once; one is
 	// generated when it is empty.
 	IdempotencyKey string
 }
 
+// A NewAttachment is a file a message carries: its bytes in Data, or a
+// file of the sender's Storage by its Source, which the platform reads
+// when the message is sent. Set one of the two.
+type NewAttachment struct {
+	// Name is the file's name: one path segment, at most 255 bytes, and
+	// no other file of the message's. Required.
+	Name string `json:"name"`
+	// MediaType is the type of Data; the platform reads it from the bytes
+	// when it is empty. A Source's type is the one Storage keeps, so it
+	// names none.
+	MediaType string `json:"media_type,omitempty"`
+	// Data is the file's bytes, at most MaxAttachmentBytes.
+	Data []byte `json:"data,omitempty"`
+	// Source names a file of the sender's Storage, at most MaxSourceBytes:
+	// how a file too large for Data goes, once it is uploaded.
+	Source *AttachmentSource `json:"source,omitempty"`
+}
+
+// The limits the hosted platform holds a message to. The images and the
+// data of the files count in their base64 form toward MaxMessageBytes,
+// beside the text; a file sent by its Source counts toward
+// MaxMessageSourceBytes instead.
+const (
+	// MaxImages is how many image blocks a message holds.
+	MaxImages = 8
+	// MaxImageBytes is the largest picture, decoded.
+	MaxImageBytes = 5 << 20
+	// MaxAttachments is how many files a message carries, by data and by
+	// source together.
+	MaxAttachments = 8
+	// MaxAttachmentBytes is the largest file a message carries as Data.
+	MaxAttachmentBytes = 5 << 20
+	// MaxSourceBytes is the largest file a message carries by its Source.
+	MaxSourceBytes = 256 << 20
+	// MaxMessageSourceBytes is the most the files a message carries by
+	// their Source come to together.
+	MaxMessageSourceBytes = 512 << 20
+	// MaxMessageBytes is the largest message as the API reads it, as JSON.
+	MaxMessageBytes = 8 << 20
+)
+
 // SendMessage sends a message to an idle session, which starts its next
 // turn, and returns the event the message became.
 func (c *Client) SendMessage(ctx context.Context, id string, params *SendMessageParams) (*Event, error) {
-	if params == nil || len(params.Content) == 0 {
-		return nil, errors.New("agents: SendMessageParams.Content is required")
+	if params == nil || len(params.Content) == 0 && len(params.Attachments) == 0 {
+		return nil, errors.New("agents: SendMessageParams holds no Content and no Attachments")
 	}
-	return c.send(ctx, id, EventUserMessage, map[string]any{"content": params.Content}, params.IdempotencyKey)
+	for i, a := range params.Attachments {
+		if a.Name == "" {
+			return nil, fmt.Errorf("agents: SendMessageParams.Attachments[%d] has no Name", i)
+		}
+		if (a.Source == nil) == (a.Data == nil) {
+			return nil, fmt.Errorf("agents: SendMessageParams.Attachments[%d] (%s) sets one of Data and Source", i, a.Name)
+		}
+	}
+	content := params.Content
+	if content == nil {
+		content = []ContentBlock{}
+	}
+	payload := map[string]any{"content": content}
+	if len(params.Attachments) > 0 {
+		payload["attachments"] = params.Attachments
+	}
+	return c.send(ctx, id, EventUserMessage, payload, params.IdempotencyKey)
 }
 
 // Interrupt stops a session's running turn and returns the event the

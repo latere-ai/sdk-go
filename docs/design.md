@@ -25,6 +25,7 @@ flowchart TD
     agents --> latere
     account --> latere
     apps --> latere
+    connections --> latere
     signin --> latere
     latere --> sse[internal/sse]
     app[your program] --> agents

@@ -10,5 +10,9 @@
   "apps": {
     "url": "https://platform.latere.ai/docs/apps/openapi.yaml",
     "sha256": "29fdb7b58314ce1cca4d42271bbb70c6321d0143b08f309072720a97665e7f5c"
+  },
+  "connections": {
+    "url": "https://platform.latere.ai/docs/connections/openapi.yaml",
+    "sha256": "24769cfc18d7b3cc178e25f9344eb7becbda667c69ae6c920d25bcacc78a2208"
   }
 }

@@ -39,8 +39,10 @@
 // The package covers sessions and their events: listing, reading,
 // creating, changing, forking, archiving, resuming, ending and deleting
 // sessions, reading and following their logs, and sending messages,
-// interrupts, answers, approvals and tool results. It does not cover yet
-// defining agents and their versions, triggers, searching and counting
-// sessions, a session's files, or redacting an event. Call those with
-// latere.Config.Do until it does.
+// interrupts, answers, approvals and tool results. It also covers triggers,
+// which start sessions on a schedule or when an event arrives: applying,
+// listing, reading, firing and deleting them, and listing their firings. It
+// does not cover yet defining agents and their versions, searching and
+// counting sessions, a session's files, or redacting an event. Call those
+// with latere.Config.Do until it does.
 package agents

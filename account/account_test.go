@@ -9,6 +9,7 @@ import (
 	"net/http"
 	"net/http/httptest"
 	"testing"
+	"time"
 
 	"latere.ai/x/sdk-go/account"
 	"latere.ai/x/sdk-go/latere"
@@ -62,15 +63,17 @@ func TestReads(t *testing.T) {
 	if err != nil || applied.Agent.ID != "agent_1" || applied.Model != "tier/quick" {
 		t.Errorf("ApplyManagedAgent: %+v, %v", applied, err)
 	}
-	levels, err := c.EffortLevels(t.Context())
-	if err != nil || levels.Levels[0].Next.Price.Output != "1.25" || levels.Levels[0].FreeTurns.Used != 3 || levels.Auto.Reads != "message" || !levels.ZeroRetention {
+	levels, err := c.GetEffortLevels(t.Context())
+	if err != nil || levels.Levels[0].Next.Price.Output != "1.25" || levels.Levels[0].FreeTurns.Used != 3 || levels.Auto.Reads != "message" || !levels.ZeroRetention ||
+		levels.Levels[0].FreeTurns.ResetsAt.IsZero() || !levels.Levels[0].ResetsAt.IsZero() {
 		t.Errorf("EffortLevels: %+v, %v", levels, err)
 	}
-	w, err := c.Wallet(t.Context())
-	if err != nil || w.State != account.WalletOpen || w.SpendableMicroUSD != 4200000 || w.NextGrant.AmountMicroUSD != 1000000 || w.TopUp.SpreadBasisPoints != 290 {
+	w, err := c.GetWallet(t.Context())
+	if err != nil || w.State != account.WalletOpen || w.SpendableMicroUSD == nil || *w.SpendableMicroUSD != 4200000 || w.NextGrant.AmountMicroUSD != 1000000 ||
+		w.TopUp.SpreadBasisPoints != 290 || !w.NextGrant.At.Equal(time.Date(2026, 11, 1, 0, 0, 0, 0, time.UTC)) {
 		t.Errorf("Wallet: %+v, %v", w, err)
 	}
-	p, err := c.Preferences(t.Context())
+	p, err := c.GetPreferences(t.Context())
 	if err != nil || p.Network.Domains[0] != "example.com" || p.Profile.CallMe != "Al" || p.Pins.Sessions[0] != "ses_1" || p.Bookmarks.Sessions["ses_1"][1] != 9 {
 		t.Errorf("Preferences: %+v, %v", p, err)
 	}
@@ -81,8 +84,9 @@ func TestReads(t *testing.T) {
 	if err := c.UnpinSession(t.Context(), "ses_1"); err != nil {
 		t.Errorf("UnpinSession: %v", err)
 	}
-	d, err := c.Devices(t.Context())
-	if err != nil || d.Limit != 5 || d.Items[0].Folders[0].Path != "/Users/al/code" || d.Items[0].Network.Hosts[0] != "github.com" {
+	d, err := c.ListDevices(t.Context())
+	if err != nil || d.Limit != 5 || d.Items[0].Folders[0].Path != "/Users/al/code" || d.Items[0].Network.Hosts[0] != "github.com" ||
+		d.Items[0].Status != account.DeviceOnline || d.Items[0].CreatedAt.IsZero() || !d.Items[0].LastSeen.IsZero() {
 		t.Errorf("Devices: %+v, %v", d, err)
 	}
 	if len(*calls) != 7 {
@@ -90,18 +94,34 @@ func TestReads(t *testing.T) {
 	}
 }
 
+func TestAnOrganizationMembersWallet(t *testing.T) {
+	c, _ := fakeAPI(t, map[string]string{
+		"GET /v1/account/wallet": `{"state":"Exhausted","limit_resets_at":"2026-11-01T00:00:00Z"}`,
+	})
+	w, err := c.GetWallet(t.Context())
+	if err != nil || w.SpendableMicroUSD != nil || w.State != account.WalletExhausted || w.LimitResetsAt.IsZero() {
+		t.Errorf("a member's wallet: %+v, %v; want no amount and the limit's reset", w, err)
+	}
+}
+
+func TestAClientWithoutAConfig(t *testing.T) {
+	if _, err := account.New(nil).GetWallet(t.Context()); err == nil {
+		t.Error("a call without a Config succeeded")
+	}
+}
+
 func TestErrors(t *testing.T) {
 	c, _ := fakeAPI(t, map[string]string{})
 	var apiErr *latere.Error
-	if _, err := c.Devices(t.Context()); !errors.As(err, &apiErr) || apiErr.Code != "device_person_required" || !errors.Is(err, latere.ErrForbidden) {
+	if _, err := c.ListDevices(t.Context()); !errors.As(err, &apiErr) || apiErr.Code != "device_person_required" || !errors.Is(err, latere.ErrForbidden) {
 		t.Errorf("Devices with a key: %v", err)
 	}
 	for name, err := range map[string]error{
 		"ApplyManagedAgent empty": second(c.ApplyManagedAgent(t.Context(), "")),
 		"ApplyManagedAgent":       second(c.ApplyManagedAgent(t.Context(), "x")),
-		"EffortLevels":            second(c.EffortLevels(t.Context())),
-		"Wallet":                  second(c.Wallet(t.Context())),
-		"Preferences":             second(c.Preferences(t.Context())),
+		"EffortLevels":            second(c.GetEffortLevels(t.Context())),
+		"Wallet":                  second(c.GetWallet(t.Context())),
+		"Preferences":             second(c.GetPreferences(t.Context())),
 		"PinSession empty":        second(c.PinSession(t.Context(), "")),
 		"PinSession":              second(c.PinSession(t.Context(), "ses_1")),
 		"UnpinSession empty":      c.UnpinSession(t.Context(), ""),

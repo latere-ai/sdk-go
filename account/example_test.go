@@ -20,22 +20,28 @@ func client() *account.Client {
 	return account.New(cfg)
 }
 
-// Showing the credit left.
-func ExampleClient_Wallet() {
-	w, err := client().Wallet(context.Background())
+// Showing the credit left. A member of an organization sees no amount,
+// and the organization's monthly limit may say when turns open again.
+func ExampleClient_GetWallet() {
+	w, err := client().GetWallet(context.Background())
 	if err != nil {
 		log.Fatal(err)
 	}
-	if w.State == account.WalletExhausted {
+	switch {
+	case w.State == account.WalletExhausted && !w.LimitResetsAt.IsZero():
+		fmt.Println("the organization's limit opens again on", w.LimitResetsAt.Format("January 2"))
+	case w.State == account.WalletExhausted:
 		fmt.Println("the wallet is empty")
-		return
+	case w.SpendableMicroUSD != nil:
+		fmt.Printf("%.2f USD left\n", float64(*w.SpendableMicroUSD)/1e6)
+	default:
+		fmt.Println("the organization pays")
 	}
-	fmt.Printf("%.2f USD left\n", float64(w.SpendableMicroUSD)/1e6)
 }
 
 // Listing the Effort levels a session can run at now.
-func ExampleClient_EffortLevels() {
-	levels, err := client().EffortLevels(context.Background())
+func ExampleClient_GetEffortLevels() {
+	levels, err := client().GetEffortLevels(context.Background())
 	if err != nil {
 		log.Fatal(err)
 	}
@@ -49,13 +55,13 @@ func ExampleClient_EffortLevels() {
 }
 
 // Finding the person's computers that sessions can work on now.
-func ExampleClient_Devices() {
-	devices, err := client().Devices(context.Background())
+func ExampleClient_ListDevices() {
+	devices, err := client().ListDevices(context.Background())
 	if err != nil {
 		log.Fatal(err)
 	}
 	for _, d := range devices.Items {
-		if d.Online {
+		if d.Status == account.DeviceOnline {
 			fmt.Println(d.Name, d.ID)
 		}
 	}

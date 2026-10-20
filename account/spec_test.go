@@ -10,6 +10,7 @@ import (
 	"slices"
 	"strings"
 	"testing"
+	"time"
 
 	"latere.ai/x/sdk-go/account"
 )
@@ -21,6 +22,7 @@ import (
 // endpoint the client calls is in the document.
 
 type schema struct {
+	Format     string             `json:"format"`
 	Properties map[string]*schema `json:"properties"`
 	Required   []string           `json:"required"`
 	Items      *schema            `json:"items"`
@@ -45,6 +47,19 @@ func loadDocument(t *testing.T) *document {
 		t.Fatal(err)
 	}
 	return &d
+}
+
+// timeType is the type a date-time property decodes into.
+var timeType = reflect.TypeFor[time.Time]()
+
+// fieldType returns the type of the field of t named name in JSON.
+func fieldType(t reflect.Type, name string) reflect.Type {
+	for i := range t.NumField() {
+		if n, _, _ := strings.Cut(t.Field(i).Tag.Get("json"), ","); n == name {
+			return t.Field(i).Type
+		}
+	}
+	return nil
 }
 
 // jsonFields returns the JSON names of a struct type's fields.
@@ -97,8 +112,13 @@ func TestModelsMatchTheSchemas(t *testing.T) {
 		}
 		fields := jsonFields(reflect.TypeOf(c.model))
 		for _, f := range fields {
-			if _, ok := c.schema.Properties[f]; !ok {
+			prop, ok := c.schema.Properties[f]
+			if !ok {
 				t.Errorf("%s.%s is not in the schema", name, f)
+				continue
+			}
+			if prop.Format == "date-time" && fieldType(reflect.TypeOf(c.model), f) != timeType {
+				t.Errorf("%s.%s is a date-time, read as %v", name, f, fieldType(reflect.TypeOf(c.model), f))
 			}
 		}
 		for _, r := range c.schema.Required {

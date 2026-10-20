@@ -6,15 +6,17 @@
 // session can run at, the wallet turns are paid from, preferences, pins,
 // and the person's computers.
 //
-//	cfg, err := latere.NewConfig(latere.WithKey(os.Getenv("LATERE_KEY")))
+//	cfg, err := latere.NewConfig() // the key in LATERE_KEY
 //	if err != nil {
 //		return err
 //	}
-//	w, err := account.New(cfg).Wallet(ctx)
+//	w, err := account.New(cfg).GetWallet(ctx)
 //	if err != nil {
 //		return err
 //	}
-//	fmt.Printf("%.2f USD left\n", float64(w.SpendableMicroUSD)/1e6)
+//	if w.SpendableMicroUSD != nil {
+//		fmt.Printf("%.2f USD left\n", float64(*w.SpendableMicroUSD)/1e6)
+//	}
 //
 // Each request reads the context its token names: the person's own, or an
 // organization's.
@@ -25,16 +27,20 @@ import (
 	"errors"
 	"net/http"
 	"net/url"
+	"time"
 
 	"latere.ai/x/sdk-go/latere"
 )
 
-// Client reaches the account part of the Latere API.
+// Client reaches the account part of the Latere API. It is safe for
+// concurrent use.
 type Client struct {
 	cfg *latere.Config
 }
 
-// New returns a Client that sends its requests as cfg says.
+// New returns a Client that sends its requests as cfg says. A cfg not
+// built with latere.NewConfig makes every call fail with an error saying
+// so.
 func New(cfg *latere.Config) *Client { return &Client{cfg: cfg} }
 
 // get reads path into out.
@@ -68,17 +74,21 @@ type AppliedAgent struct {
 	// Model is the routed name of the Effort level a new session starts at.
 	Model string `json:"model"`
 	// Agent is the copy among the caller's agents.
-	Agent struct {
-		// ID is the copy's agent id.
-		ID string `json:"id"`
-		// Version is the copy's version, which a new session runs.
-		Version int `json:"version"`
-	} `json:"agent"`
+	Agent AgentCopy `json:"agent"`
 }
 
-// EffortLevels returns the Effort levels a session can run at for the
+// AgentCopy is the caller's copy of a managed agent, as an agent of the
+// agents capability.
+type AgentCopy struct {
+	// ID is the copy's agent id.
+	ID string `json:"id"`
+	// Version is the copy's version, which a new session runs.
+	Version int `json:"version"`
+}
+
+// GetEffortLevels returns the Effort levels a session can run at for the
 // caller, what the next turn on each costs, and how Auto picks among them.
-func (c *Client) EffortLevels(ctx context.Context) (*EffortLevels, error) {
+func (c *Client) GetEffortLevels(ctx context.Context) (*EffortLevels, error) {
 	var out EffortLevels
 	if err := c.get(ctx, "/v1/account/effort", &out); err != nil {
 		return nil, err
@@ -115,7 +125,7 @@ type EffortLevel struct {
 	// available, such as "budget_exhausted" or "rate_limited".
 	Reason string `json:"reason,omitempty"`
 	// ResetsAt is when a "rate_limited" level opens again.
-	ResetsAt string `json:"resets_at,omitempty"`
+	ResetsAt time.Time `json:"resets_at,omitzero"`
 	// Retention is "none" when no request on the level can be kept by a
 	// provider, and "provider" when one may be.
 	Retention string `json:"retention,omitempty"`
@@ -158,7 +168,7 @@ type EffortModel struct {
 	// Reason is why it is not available, when it is not.
 	Reason string `json:"reason,omitempty"`
 	// FreeAgainAt is when a rate-limited free model opens again.
-	FreeAgainAt string `json:"free_again_at,omitempty"`
+	FreeAgainAt time.Time `json:"free_again_at,omitzero"`
 	// Retention is "none" or "provider".
 	Retention string `json:"retention,omitempty"`
 }
@@ -172,7 +182,7 @@ type NextTurn struct {
 	Price *Price `json:"price,omitempty"`
 	// FreeAgainAt is when free turns open again, when they are what kept a
 	// free model from running.
-	FreeAgainAt string `json:"free_again_at,omitempty"`
+	FreeAgainAt time.Time `json:"free_again_at,omitzero"`
 	// SponsoredOnly reports that the turn draws on credit Latere gave alone.
 	SponsoredOnly bool `json:"sponsored_only,omitempty"`
 }
@@ -202,12 +212,12 @@ type FreeTurns struct {
 	// Used is how many the caller started today.
 	Used int `json:"used"`
 	// ResetsAt is when the count resets.
-	ResetsAt string `json:"resets_at"`
+	ResetsAt time.Time `json:"resets_at"`
 }
 
-// Wallet returns the wallet the caller's turns are paid from in the
+// GetWallet returns the wallet the caller's turns are paid from in the
 // token's context.
-func (c *Client) Wallet(ctx context.Context) (*Wallet, error) {
+func (c *Client) GetWallet(ctx context.Context) (*Wallet, error) {
 	var out Wallet
 	if err := c.get(ctx, "/v1/account/wallet", &out); err != nil {
 		return nil, err
@@ -215,30 +225,36 @@ func (c *Client) Wallet(ctx context.Context) (*Wallet, error) {
 	return &out, nil
 }
 
+// WalletState is whether a wallet has credit.
+type WalletState string
+
 // The states of a wallet.
 const (
 	// WalletOpen is a wallet with credit.
-	WalletOpen = "Open"
-	// WalletExhausted is a wallet that spent its credit.
-	WalletExhausted = "Exhausted"
+	WalletOpen WalletState = "Open"
+	// WalletExhausted is a wallet that spent its credit, or an
+	// organization's that reached its monthly limit.
+	WalletExhausted WalletState = "Exhausted"
 )
 
 // Wallet is the credit turns are paid from.
 type Wallet struct {
 	// State is WalletOpen or WalletExhausted; empty when the wallet cannot
 	// be read now.
-	State string `json:"state"`
-	// SpendableMicroUSD is the credit left, in millionths of a US dollar.
-	// Zero for a member of an organization, who sees no amount.
-	SpendableMicroUSD int64 `json:"spendable_micro,omitempty"`
-	// Bought reports whether the wallet ever held bought credit.
+	State WalletState `json:"state"`
+	// SpendableMicroUSD is the credit left, in millionths of a US dollar;
+	// nil for a member of an organization, who sees no amount.
+	SpendableMicroUSD *int64 `json:"spendable_micro,omitempty"`
+	// Bought reports whether the wallet ever held bought credit; false for
+	// a member of an organization.
 	Bought bool `json:"bought,omitempty"`
 	// NextGrant is the next free credit, when one is coming.
 	NextGrant *NextGrant `json:"next_grant,omitempty"`
 	// TopUp says what a payment adds, when the wallet can be topped up.
 	TopUp *TopUp `json:"top_up,omitempty"`
-	// LimitResetsAt is when an organization's monthly limit opens again.
-	LimitResetsAt string `json:"limit_resets_at,omitempty"`
+	// LimitResetsAt is when an organization's monthly limit opens again,
+	// for an organization that pays after it spends; zero otherwise.
+	LimitResetsAt time.Time `json:"limit_resets_at,omitzero"`
 }
 
 // NextGrant is free credit on its way.
@@ -246,7 +262,7 @@ type NextGrant struct {
 	// AmountMicroUSD is the credit, in millionths of a US dollar.
 	AmountMicroUSD int64 `json:"amount_micro"`
 	// At is when it lands; what is left of the current grant expires then.
-	At string `json:"at"`
+	At time.Time `json:"at"`
 }
 
 // TopUp says what a payment adds to a wallet.
@@ -259,8 +275,8 @@ type TopUp struct {
 	SpreadFixedMicroUSD int64 `json:"spread_fixed_micro"`
 }
 
-// Preferences returns the caller's preferences in the token's context.
-func (c *Client) Preferences(ctx context.Context) (*Preferences, error) {
+// GetPreferences returns the caller's preferences in the token's context.
+func (c *Client) GetPreferences(ctx context.Context) (*Preferences, error) {
 	var out Preferences
 	if err := c.get(ctx, "/v1/account/preferences", &out); err != nil {
 		return nil, err
@@ -399,9 +415,9 @@ func (c *Client) UnpinSession(ctx context.Context, sessionID string) error {
 	return c.cfg.Do(ctx, req, nil)
 }
 
-// Devices returns the person's computers connected to Latere, and how many
-// they may hold. Only a person's own token may list them.
-func (c *Client) Devices(ctx context.Context) (*Devices, error) {
+// ListDevices returns the person's computers connected to Latere, and how
+// many they may hold. Only a person's own token may list them.
+func (c *Client) ListDevices(ctx context.Context) (*Devices, error) {
 	var out Devices
 	if err := c.get(ctx, "/v1/account/devices", &out); err != nil {
 		return nil, err
@@ -424,8 +440,8 @@ type Device struct {
 	ID string `json:"id"`
 	// Name is what the person calls it.
 	Name string `json:"name"`
-	// Status is "online", "offline" or "unknown".
-	Status string `json:"status"`
+	// Status is whether the computer serves sessions now.
+	Status DeviceStatus `json:"status"`
 	// Online reports whether the computer serves sessions now.
 	Online bool `json:"online"`
 	// OS is the operating system it reports, such as "darwin"; empty until
@@ -436,15 +452,28 @@ type Device struct {
 	// Isolation is how a session's commands are confined on it: "process",
 	// the operating system's sandbox.
 	Isolation string `json:"isolation"`
-	// LastSeen is when it was last heard from.
-	LastSeen string `json:"last_seen,omitempty"`
+	// LastSeen is when it was last heard from; zero when it never was.
+	LastSeen time.Time `json:"last_seen,omitzero"`
 	// Folders are the folders a session may work in.
 	Folders []DeviceFolder `json:"folders"`
 	// Network is the network it allows a session.
 	Network *DeviceNetwork `json:"network,omitempty"`
 	// CreatedAt is when it was connected.
-	CreatedAt string `json:"created_at"`
+	CreatedAt time.Time `json:"created_at"`
 }
+
+// DeviceStatus is whether a computer serves sessions.
+type DeviceStatus string
+
+// The statuses of a Device.
+const (
+	// DeviceOnline is a computer that serves sessions now.
+	DeviceOnline DeviceStatus = "online"
+	// DeviceOffline is a computer that does not.
+	DeviceOffline DeviceStatus = "offline"
+	// DeviceUnknown is a computer whose state could not be read.
+	DeviceUnknown DeviceStatus = "unknown"
+)
 
 // A DeviceFolder is a folder a computer lets sessions work in.
 type DeviceFolder struct {

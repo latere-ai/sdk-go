@@ -520,12 +520,13 @@ type SendMessageParams struct {
 // file of the sender's Storage by its Source, which the platform reads
 // when the message is sent. Set one of the two.
 type NewAttachment struct {
-	// Name is the file's name: one path segment, at most 255 bytes, and
-	// no other file of the message's. Required.
+	// Name is the file's name: one path segment, at most
+	// MaxAttachmentName bytes, and no other file of the message's.
+	// Required.
 	Name string `json:"name"`
 	// MediaType is the type of Data; the platform reads it from the bytes
-	// when it is empty. A Source's type is the one Storage keeps, so it
-	// names none.
+	// when it is empty. A Source's type is the one Storage keeps, so a
+	// file with a Source names none.
 	MediaType string `json:"media_type,omitempty"`
 	// Data is the file's bytes, at most MaxAttachmentBytes.
 	Data []byte `json:"data,omitempty"`
@@ -555,6 +556,11 @@ const (
 	MaxMessageSourceBytes = 512 << 20
 	// MaxMessageBytes is the largest message as the API reads it, as JSON.
 	MaxMessageBytes = 8 << 20
+	// MaxAttachmentName is the longest name of a file, in bytes; a
+	// Source's Owner is held to it too.
+	MaxAttachmentName = 255
+	// MaxSourcePath is the longest Path of a Source, in bytes.
+	MaxSourcePath = 1024
 )
 
 // SendMessage sends a message to an idle session, which starts its next
@@ -569,6 +575,15 @@ func (c *Client) SendMessage(ctx context.Context, id string, params *SendMessage
 		}
 		if (a.Source == nil) == (a.Data == nil) {
 			return nil, fmt.Errorf("agents: SendMessageParams.Attachments[%d] (%s) sets one of Data and Source", i, a.Name)
+		}
+		if len(a.Name) > MaxAttachmentName {
+			return nil, fmt.Errorf("agents: SendMessageParams.Attachments[%d]'s Name is %d bytes, at most %d", i, len(a.Name), MaxAttachmentName)
+		}
+		if a.Source != nil && a.MediaType != "" {
+			return nil, fmt.Errorf("agents: SendMessageParams.Attachments[%d] (%s) names a MediaType beside its Source, whose type is the one Storage keeps", i, a.Name)
+		}
+		if a.Source != nil && len(a.Source.Path) > MaxSourcePath {
+			return nil, fmt.Errorf("agents: SendMessageParams.Attachments[%d]'s Source.Path is %d bytes, at most %d", i, len(a.Source.Path), MaxSourcePath)
 		}
 	}
 	content := params.Content

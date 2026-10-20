@@ -607,6 +607,9 @@ func TestSendingAMessageWithPicturesAndFiles(t *testing.T) {
 		"no name":         {Data: []byte("x")},
 		"neither":         {Name: "a"},
 		"data and source": {Name: "a", Data: []byte("x"), Source: &agents.AttachmentSource{Owner: "me", Path: "files/a"}},
+		"source and type": {Name: "a", MediaType: "text/plain", Source: &agents.AttachmentSource{Owner: "me", Path: "files/a"}},
+		"long name":       {Name: strings.Repeat("n", agents.MaxAttachmentName+1), Data: []byte("x")},
+		"long path":       {Name: "a", Source: &agents.AttachmentSource{Owner: "me", Path: "files/" + strings.Repeat("p", agents.MaxSourcePath)}},
 	} {
 		if _, err := s.SendMessage(t.Context(), "ses_1", &agents.SendMessageParams{Attachments: []agents.NewAttachment{a}}); err == nil {
 			t.Errorf("%s: no error", name)

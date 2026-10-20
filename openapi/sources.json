@@ -14,5 +14,9 @@
   "connections": {
     "url": "https://platform.latere.ai/docs/connections/openapi.yaml",
     "sha256": "24769cfc18d7b3cc178e25f9344eb7becbda667c69ae6c920d25bcacc78a2208"
+  },
+  "storage": {
+    "url": "https://platform.latere.ai/docs/storage/openapi.yaml",
+    "sha256": "e56869ec159c5ea46477ca54a2c7e00e6d2c331acb7ed81c989252685495afb9"
   }
 }

@@ -449,7 +449,8 @@ type TriggerEvent struct {
 // FireTrigger fires the trigger ref names, by its id or its name, and
 // returns the firing. An event trigger needs params.Event; a schedule
 // trigger fires now without one. A firing whose session failed to start
-// returns an error with status 503, and firing again runs it again.
+// returns both the firing, whose Outcome and Reason say what went wrong,
+// and an *latere.Error with status 503; firing again runs it again.
 func (c *Client) FireTrigger(ctx context.Context, ref string, params *FireTriggerParams) (*Firing, error) {
 	if ref == "" {
 		return nil, errNoTrigger
@@ -466,6 +467,15 @@ func (c *Client) FireTrigger(ctx context.Context, ref string, params *FireTrigge
 	}
 	var out Firing
 	if err := c.cfg.Do(ctx, req, &out); err != nil {
+		var apiErr *latere.Error
+		if errors.As(err, &apiErr) && apiErr.StatusCode == http.StatusServiceUnavailable {
+			// The API answers a firing that failed to start its session with
+			// the firing itself, so the caller sees why.
+			var failed Firing
+			if json.Unmarshal(apiErr.Body, &failed) == nil && failed.TriggerID != "" {
+				return &failed, err
+			}
+		}
 		return nil, err
 	}
 	return &out, nil

@@ -6,7 +6,9 @@ package agents_test
 import (
 	"encoding/json"
 	"errors"
+	"fmt"
 	"net/http"
+	"net/http/httptest"
 	"strings"
 	"testing"
 	"time"
@@ -172,6 +174,46 @@ func TestFireTriggerWithoutAnEventSendsNoBody(t *testing.T) {
 	}
 	if _, err := c.FireTrigger(t.Context(), "", nil); err == nil {
 		t.Error("an empty ref was sent")
+	}
+}
+
+// A firing whose session failed to start is answered 503 with the firing
+// itself; the call returns both, so the caller reads why.
+func TestFireTriggerReturnsTheFailedFiringWithItsError(t *testing.T) {
+	failed := strings.Replace(strings.Replace(firing, `"outcome":"started"`, `"outcome":"failed","reason":"The agent's model is not available."`, 1), `"session_id":"ses_9",`, ``, 1)
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Content-Type", "application/json")
+		w.WriteHeader(http.StatusServiceUnavailable)
+		fmt.Fprint(w, failed)
+	}))
+	t.Cleanup(srv.Close)
+	cfg, err := latere.NewConfig(latere.WithBaseURL(srv.URL), latere.WithTokenSource(latere.StaticToken("key_test")), latere.WithMaxRetries(0))
+	if err != nil {
+		t.Fatal(err)
+	}
+	got, err := agents.New(cfg).FireTrigger(t.Context(), "trg_1", nil)
+	var apiErr *latere.Error
+	if !errors.As(err, &apiErr) || apiErr.StatusCode != http.StatusServiceUnavailable {
+		t.Fatalf("err = %v, want a 503", err)
+	}
+	if got == nil || got.Outcome != agents.FiringFailed || got.Reason == "" || got.TriggerID == "" {
+		t.Errorf("firing = %+v, want the failed firing with its reason", got)
+	}
+}
+
+// A 503 that is not a firing, from a proxy for instance, returns no firing.
+func TestFireTriggerReturnsNoFiringForAnotherRefusal(t *testing.T) {
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.WriteHeader(http.StatusServiceUnavailable)
+		fmt.Fprint(w, "upstream down")
+	}))
+	t.Cleanup(srv.Close)
+	cfg, err := latere.NewConfig(latere.WithBaseURL(srv.URL), latere.WithTokenSource(latere.StaticToken("key_test")), latere.WithMaxRetries(0))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if got, err := agents.New(cfg).FireTrigger(t.Context(), "trg_1", nil); got != nil || err == nil {
+		t.Errorf("answered %+v, %v; want no firing and the error", got, err)
 	}
 }
 

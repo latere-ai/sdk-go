@@ -25,7 +25,7 @@ type call struct {
 
 // fakeAPI answers each request with the body routes holds for its method
 // and path, and records the requests.
-func fakeAPI(t *testing.T, routes map[string]string) (*agents.SessionsService, *[]call) {
+func fakeAPI(t *testing.T, routes map[string]string) (*agents.Client, *[]call) {
 	t.Helper()
 	var calls []call
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
@@ -44,6 +44,10 @@ func fakeAPI(t *testing.T, routes map[string]string) (*agents.SessionsService, *
 			fmt.Fprint(w, `{"error":{"code":"not_found","message":"No such session."}}`)
 			return
 		}
+		if body == "" {
+			w.WriteHeader(http.StatusNoContent)
+			return
+		}
 		w.Header().Set("Content-Type", "application/json")
 		fmt.Fprint(w, body)
 	}))
@@ -52,7 +56,7 @@ func fakeAPI(t *testing.T, routes map[string]string) (*agents.SessionsService, *
 	if err != nil {
 		t.Fatal(err)
 	}
-	return agents.New(cfg).Sessions, &calls
+	return agents.New(cfg), &calls
 }
 
 const session = `{"id":"ses_1","agent":{"id":"agent_1","name":"release-notes","version":3},"title":"Notes","initiator":{"subject":"alice","kind":"person"},
@@ -64,7 +68,7 @@ const event = `{"id":"evt_8","seq":8,"session_id":"ses_1","type":"user.message",
 
 func TestGet(t *testing.T) {
 	s, calls := fakeAPI(t, map[string]string{"GET /v1/agents/sessions/ses_1": session})
-	got, err := s.Get(t.Context(), "ses_1")
+	got, err := s.GetSession(t.Context(), "ses_1")
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -75,10 +79,10 @@ func TestGet(t *testing.T) {
 	if (*calls)[0].Method != http.MethodGet {
 		t.Errorf("sent %+v", (*calls)[0])
 	}
-	if _, err := s.Get(t.Context(), "ses_missing"); !errors.Is(err, latere.ErrNotFound) {
+	if _, err := s.GetSession(t.Context(), "ses_missing"); !errors.Is(err, latere.ErrNotFound) {
 		t.Errorf("a missing session: %v", err)
 	}
-	if _, err := s.Get(t.Context(), ""); err == nil {
+	if _, err := s.GetSession(t.Context(), ""); err == nil {
 		t.Error("an empty id was sent")
 	}
 }
@@ -86,8 +90,8 @@ func TestGet(t *testing.T) {
 func TestListPagesThroughSessions(t *testing.T) {
 	s, calls := fakeAPI(t, map[string]string{"GET /v1/agents/sessions": `{"items":[` + session + `],"next_cursor":""}`})
 	var n int
-	for got, err := range s.List(t.Context(), &agents.ListSessionsParams{
-		Agent: "latere-chat", Status: agents.StatusIdle, Runner: "hosted", Archived: agents.ArchivedIncluded,
+	for got, err := range s.ListSessions(t.Context(), &agents.ListSessionsParams{
+		Agent: "latere-chat", Status: agents.StatusIdle, Runner: agents.RunnerHosted, Archived: agents.ArchivedIncluded,
 		Root: "ses_0", Parent: "ses_0", Trigger: "trg_1", GroupByTree: true, Limit: 20,
 		MetadataKey: "project", MetadataValue: "p1", Cursor: "ignored",
 	}) {
@@ -111,11 +115,11 @@ func TestListPagesThroughSessions(t *testing.T) {
 	if strings.Contains(q, "cursor") {
 		t.Errorf("List sent the cursor: %q", q)
 	}
-	page, err := s.ListPage(t.Context(), &agents.ListSessionsParams{Cursor: "c2"})
+	page, err := s.ListSessionsPage(t.Context(), &agents.ListSessionsParams{Cursor: "c2"})
 	if err != nil || len(page.Items) != 1 || !strings.Contains((*calls)[1].Query, "cursor=c2") {
 		t.Errorf("ListPage: %+v, %v, query %q", page, err, (*calls)[1].Query)
 	}
-	if _, err := s.ListPage(t.Context(), nil); err != nil {
+	if _, err := s.ListSessionsPage(t.Context(), nil); err != nil {
 		t.Errorf("ListPage(nil): %v", err)
 	}
 	if (*calls)[2].Query != "" {
@@ -125,19 +129,19 @@ func TestListPagesThroughSessions(t *testing.T) {
 
 func TestListYieldsAnError(t *testing.T) {
 	s, _ := fakeAPI(t, map[string]string{})
-	for _, err := range s.List(t.Context(), nil) {
+	for _, err := range s.ListSessions(t.Context(), nil) {
 		if !errors.Is(err, latere.ErrNotFound) {
 			t.Errorf("yielded %v", err)
 		}
 	}
-	if _, err := s.ListPage(t.Context(), nil); err == nil {
+	if _, err := s.ListSessionsPage(t.Context(), nil); err == nil {
 		t.Error("ListPage succeeded against nothing")
 	}
 }
 
 func TestCreate(t *testing.T) {
 	s, calls := fakeAPI(t, map[string]string{"POST /v1/agents/sessions": session})
-	got, err := s.Create(t.Context(), &agents.CreateSessionParams{
+	got, err := s.CreateSession(t.Context(), &agents.CreateSessionParams{
 		Agent: "release-notes", Message: "Write the notes.", Title: "Notes", Attended: true,
 		Metadata: map[string]string{"project": "p1"}, Machine: &agents.Machine{Kind: agents.MachineDevice, Environment: "dev_1", Workdir: "/work"},
 		IdempotencyKey: "create_1",
@@ -152,13 +156,13 @@ func TestCreate(t *testing.T) {
 	if m, ok := c.Body["machine"].(map[string]any); !ok || m["kind"] != "device" || m["environment"] != "dev_1" {
 		t.Errorf("machine %v", c.Body["machine"])
 	}
-	if _, err := s.Create(t.Context(), &agents.CreateSessionParams{Agent: "a"}); err != nil {
+	if _, err := s.CreateSession(t.Context(), &agents.CreateSessionParams{Agent: "a"}); err != nil {
 		t.Fatal(err)
 	}
 	if c := (*calls)[1]; c.Key == "" || len(c.Body) != 1 {
 		t.Errorf("a bare create sent key %q body %v, want a generated key and the agent alone", c.Key, c.Body)
 	}
-	if _, err := s.Create(t.Context(), nil); err == nil {
+	if _, err := s.CreateSession(t.Context(), nil); err == nil {
 		t.Error("a create without an agent was sent")
 	}
 }
@@ -168,13 +172,13 @@ func TestArchiveAndFork(t *testing.T) {
 		"POST /v1/agents/sessions/ses_1/archive": session,
 		"POST /v1/agents/sessions/ses_1/fork":    session,
 	})
-	if _, err := s.Archive(t.Context(), "ses_1"); err != nil {
+	if _, err := s.ArchiveSession(t.Context(), "ses_1"); err != nil {
 		t.Fatal(err)
 	}
 	if (*calls)[0].Key == "" {
 		t.Error("archive sent no idempotency key")
 	}
-	if _, err := s.Fork(t.Context(), "ses_1", &agents.ForkSessionParams{BeforeSeq: 8, Title: "Again", Message: []agents.ContentBlock{agents.Text("Retry")}, Attended: true, IdempotencyKey: "fork_1"}); err != nil {
+	if _, err := s.ForkSession(t.Context(), "ses_1", &agents.ForkSessionParams{BeforeSeq: 8, Title: "Again", Message: []agents.ContentBlock{agents.Text("Retry")}, Attended: true, IdempotencyKey: "fork_1"}); err != nil {
 		t.Fatal(err)
 	}
 	c := (*calls)[1]
@@ -184,22 +188,22 @@ func TestArchiveAndFork(t *testing.T) {
 	if msg, ok := c.Body["message"].(map[string]any); !ok || fmt.Sprint(msg["content"]) != "[map[text:Retry type:text]]" {
 		t.Errorf("fork message %v", c.Body["message"])
 	}
-	if _, err := s.Fork(t.Context(), "ses_1", nil); err != nil {
+	if _, err := s.ForkSession(t.Context(), "ses_1", nil); err != nil {
 		t.Errorf("a bare fork: %v", err)
 	}
-	if _, err := s.Archive(t.Context(), ""); err == nil {
+	if _, err := s.ArchiveSession(t.Context(), ""); err == nil {
 		t.Error("archive of no id was sent")
 	}
-	if _, err := s.Fork(t.Context(), "", nil); err == nil {
+	if _, err := s.ForkSession(t.Context(), "", nil); err == nil {
 		t.Error("fork of no id was sent")
 	}
-	if _, err := s.Archive(t.Context(), "ses_missing"); err == nil {
+	if _, err := s.ArchiveSession(t.Context(), "ses_missing"); err == nil {
 		t.Error("archive of a missing session succeeded")
 	}
-	if _, err := s.Fork(t.Context(), "ses_missing", nil); err == nil {
+	if _, err := s.ForkSession(t.Context(), "ses_missing", nil); err == nil {
 		t.Error("fork of a missing session succeeded")
 	}
-	if _, err := s.Create(t.Context(), &agents.CreateSessionParams{Agent: "missing-route"}); err != nil {
+	if _, err := s.CreateSession(t.Context(), &agents.CreateSessionParams{Agent: "missing-route"}); err != nil {
 		var apiErr *latere.Error
 		if !errors.As(err, &apiErr) {
 			t.Errorf("create's error is %T", err)
@@ -210,7 +214,7 @@ func TestArchiveAndFork(t *testing.T) {
 func TestEvents(t *testing.T) {
 	s, calls := fakeAPI(t, map[string]string{"GET /v1/agents/sessions/ses_1/events": `{"items":[` + event + `]}`})
 	var got []*agents.Event
-	for e, err := range s.Events(t.Context(), "ses_1", &agents.ListEventsParams{FromSeq: 8, Limit: 10}) {
+	for e, err := range s.ListEvents(t.Context(), "ses_1", &agents.ListEventsParams{FromSeq: 8, Limit: 10}) {
 		if err != nil {
 			t.Fatal(err)
 		}
@@ -220,19 +224,24 @@ func TestEvents(t *testing.T) {
 		t.Fatalf("events %+v", got)
 	}
 	var msg agents.UserMessage
-	if err := got[0].Decode(&msg); err != nil || msg.Content[0].Text != "Hi" || msg.Sender.Kind != "person" {
+	if err := got[0].Decode(&msg); err != nil || msg.Content[0].Text != "Hi" || msg.Sender.Kind != agents.SenderPerson {
 		t.Errorf("payload %+v, %v", msg, err)
 	}
 	if q := (*calls)[0].Query; q != "from_seq=8&limit=10" {
 		t.Errorf("query %q", q)
 	}
-	if _, err := s.EventsPage(t.Context(), "ses_1", &agents.ListEventsParams{Cursor: "c2"}); err != nil || (*calls)[1].Query != "cursor=c2" {
+	// The first sequence is sent as given, as StreamEvents sends it.
+	if _, err := s.ListEventsPage(t.Context(), "ses_1", &agents.ListEventsParams{FromSeq: 1}); err != nil || (*calls)[1].Query != "from_seq=1" {
+		t.Errorf("FromSeq 1: %v, query %q", err, (*calls)[1].Query)
+	}
+	*calls = (*calls)[:1]
+	if _, err := s.ListEventsPage(t.Context(), "ses_1", &agents.ListEventsParams{Cursor: "c2"}); err != nil || (*calls)[1].Query != "cursor=c2" {
 		t.Errorf("EventsPage: %v, query %q", err, (*calls)[1].Query)
 	}
-	if _, err := s.EventsPage(t.Context(), "", nil); err == nil {
+	if _, err := s.ListEventsPage(t.Context(), "", nil); err == nil {
 		t.Error("events of no id were read")
 	}
-	if _, err := s.EventsPage(t.Context(), "ses_missing", nil); err == nil {
+	if _, err := s.ListEventsPage(t.Context(), "ses_missing", nil); err == nil {
 		t.Error("events of a missing session succeeded")
 	}
 	var bad agents.Event
@@ -244,22 +253,22 @@ func TestEvents(t *testing.T) {
 
 func TestSendingEvents(t *testing.T) {
 	s, calls := fakeAPI(t, map[string]string{"POST /v1/agents/sessions/ses_1/events": event})
-	if _, err := s.SendMessage(t.Context(), "ses_1", &agents.MessageParams{Content: []agents.ContentBlock{agents.Text("Hi")}, IdempotencyKey: "m1"}); err != nil {
+	if _, err := s.SendMessage(t.Context(), "ses_1", &agents.SendMessageParams{Content: []agents.ContentBlock{agents.Text("Hi")}, IdempotencyKey: "m1"}); err != nil {
 		t.Fatal(err)
 	}
 	if _, err := s.Interrupt(t.Context(), "ses_1"); err != nil {
 		t.Fatal(err)
 	}
-	if _, err := s.Answer(t.Context(), "ses_1", &agents.AnswerParams{ToolUseID: "call_1", Answers: []agents.AnswerEntry{{Selected: []string{"Yes"}}, {Text: "Mine"}}}); err != nil {
+	if _, err := s.AnswerQuestion(t.Context(), "ses_1", &agents.AnswerQuestionParams{ToolUseID: "call_1", Answers: []agents.Answer{{Selected: []string{"Yes"}}, {Text: "Mine"}}}); err != nil {
 		t.Fatal(err)
 	}
-	if _, err := s.Answer(t.Context(), "ses_1", &agents.AnswerParams{ToolUseID: "call_2"}); err != nil {
+	if _, err := s.AnswerQuestion(t.Context(), "ses_1", &agents.AnswerQuestionParams{ToolUseID: "call_2"}); err != nil {
 		t.Fatal(err)
 	}
-	if _, err := s.ConfirmTool(t.Context(), "ses_1", &agents.ToolConfirmationParams{ToolUseID: "call_3", Decision: agents.Allow, Note: "fine", Remember: "web_fetch(domain:example.com)"}); err != nil {
+	if _, err := s.ConfirmTool(t.Context(), "ses_1", &agents.ConfirmToolParams{ToolUseID: "call_3", Decision: agents.Allow, Note: "fine", Remember: "web_fetch(domain:example.com)"}); err != nil {
 		t.Fatal(err)
 	}
-	if _, err := s.ConfirmTool(t.Context(), "ses_1", &agents.ToolConfirmationParams{ApprovalID: "apr_1", Decision: agents.Deny}); err != nil {
+	if _, err := s.ConfirmTool(t.Context(), "ses_1", &agents.ConfirmToolParams{ApprovalID: "apr_1", Decision: agents.Deny}); err != nil {
 		t.Fatal(err)
 	}
 	want := []string{
@@ -286,12 +295,12 @@ func TestSendingEvents(t *testing.T) {
 		t.Errorf("the message's key is %q", (*calls)[0].Key)
 	}
 	for name, err := range map[string]error{
-		"no content":    second(s.SendMessage(t.Context(), "ses_1", &agents.MessageParams{})),
+		"no content":    second(s.SendMessage(t.Context(), "ses_1", &agents.SendMessageParams{})),
 		"no params":     second(s.SendMessage(t.Context(), "ses_1", nil)),
-		"no call":       second(s.Answer(t.Context(), "ses_1", &agents.AnswerParams{})),
-		"both ids":      second(s.ConfirmTool(t.Context(), "ses_1", &agents.ToolConfirmationParams{ToolUseID: "a", ApprovalID: "b", Decision: agents.Allow})),
-		"no id":         second(s.ConfirmTool(t.Context(), "ses_1", &agents.ToolConfirmationParams{Decision: agents.Allow})),
-		"bad decision":  second(s.ConfirmTool(t.Context(), "ses_1", &agents.ToolConfirmationParams{ToolUseID: "a", Decision: "maybe"})),
+		"no call":       second(s.AnswerQuestion(t.Context(), "ses_1", &agents.AnswerQuestionParams{})),
+		"both ids":      second(s.ConfirmTool(t.Context(), "ses_1", &agents.ConfirmToolParams{ToolUseID: "a", ApprovalID: "b", Decision: agents.Allow})),
+		"no id":         second(s.ConfirmTool(t.Context(), "ses_1", &agents.ConfirmToolParams{Decision: agents.Allow})),
+		"bad decision":  second(s.ConfirmTool(t.Context(), "ses_1", &agents.ConfirmToolParams{ToolUseID: "a", Decision: "maybe"})),
 		"empty session": second(s.Interrupt(t.Context(), "")),
 		"missing":       second(s.Interrupt(t.Context(), "ses_missing")),
 	} {
@@ -314,5 +323,110 @@ func TestQuestions(t *testing.T) {
 	}
 	if _, err := (&agents.ToolUse{Name: "question", Input: json.RawMessage(`[`)}).Questions(); err == nil {
 		t.Error("a broken input yielded questions")
+	}
+}
+
+func TestEndUnarchiveAndDelete(t *testing.T) {
+	s, calls := fakeAPI(t, map[string]string{
+		"POST /v1/agents/sessions/ses_1/end":       session,
+		"POST /v1/agents/sessions/ses_1/unarchive": session,
+		"DELETE /v1/agents/sessions/ses_1":         "",
+	})
+	if _, err := s.EndSession(t.Context(), "ses_1", agents.StopCompleted); err != nil {
+		t.Fatal(err)
+	}
+	if c := (*calls)[0]; c.Body["reason"] != "completed" || c.Key == "" {
+		t.Errorf("end sent %+v", c)
+	}
+	if _, err := s.UnarchiveSession(t.Context(), "ses_1"); err != nil {
+		t.Fatal(err)
+	}
+	if err := s.DeleteSession(t.Context(), "ses_1"); err != nil {
+		t.Fatal(err)
+	}
+	if c := (*calls)[2]; c.Method != http.MethodDelete || c.Path != "/v1/agents/sessions/ses_1" {
+		t.Errorf("delete sent %+v", c)
+	}
+	n := len(*calls)
+	for name, err := range map[string]error{
+		"end with a running reason": second(s.EndSession(t.Context(), "ses_1", agents.StopEndTurn)),
+		"end of no id":              second(s.EndSession(t.Context(), "", agents.StopCanceled)),
+		"delete of no id":           s.DeleteSession(t.Context(), ""),
+	} {
+		if err == nil {
+			t.Errorf("%s: no error", name)
+		}
+	}
+	if len(*calls) != n {
+		t.Errorf("a refused call was sent: %+v", (*calls)[n:])
+	}
+	if err := s.DeleteSession(t.Context(), "ses_missing"); !errors.Is(err, latere.ErrNotFound) {
+		t.Errorf("delete of a missing session: %v", err)
+	}
+}
+
+func TestSendToolResult(t *testing.T) {
+	s, calls := fakeAPI(t, map[string]string{"POST /v1/agents/sessions/ses_1/events": event})
+	if _, err := s.SendToolResult(t.Context(), "ses_1", &agents.SendToolResultParams{ToolUseID: "call_9", Content: []agents.ContentBlock{agents.Text("no such file")}, IsError: true, IdempotencyKey: "r1"}); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := s.SendToolResult(t.Context(), "ses_1", &agents.SendToolResultParams{ToolUseID: "call_10"}); err != nil {
+		t.Fatal(err)
+	}
+	for i, want := range []string{
+		`{"payload":{"content":[{"text":"no such file","type":"text"}],"is_error":true,"tool_use_id":"call_9"},"type":"user.tool_result"}`,
+		`{"payload":{"content":[],"tool_use_id":"call_10"},"type":"user.tool_result"}`,
+	} {
+		got, err := json.Marshal((*calls)[i].Body)
+		if err != nil {
+			t.Fatal(err)
+		}
+		if string(got) != want {
+			t.Errorf("result %d sent %s, want %s", i, got, want)
+		}
+	}
+	if (*calls)[0].Key != "r1" || (*calls)[1].Key == "" {
+		t.Errorf("keys %q and %q", (*calls)[0].Key, (*calls)[1].Key)
+	}
+	if _, err := s.SendToolResult(t.Context(), "ses_1", &agents.SendToolResultParams{}); err == nil {
+		t.Error("a result without a call was sent")
+	}
+}
+
+func TestPayloads(t *testing.T) {
+	decode := func(typ agents.EventType, payload string, v any) {
+		t.Helper()
+		e := agents.Event{ID: "evt_1", Type: typ, Payload: json.RawMessage(payload)}
+		if err := e.Decode(v); err != nil {
+			t.Fatal(err)
+		}
+	}
+	var m agents.AgentMessage
+	decode(agents.EventAgentMessage, `{"message":{"role":"assistant","blocks":[{"type":"thinking","text":"Hmm."},{"type":"text","text":"The notes "},{"type":"tool_use","tool_use":{"id":"call_1","name":"bash"}},{"type":"text","text":"are in NOTES.md."}]},"stop_reason":"end_turn"}`, &m)
+	if m.Text() != "The notes are in NOTES.md." || m.StopReason != agents.StopEndTurn || m.Message.Role != "assistant" || m.Message.Blocks[0].Type != agents.BlockThinking {
+		t.Errorf("agent message %+v, text %q", m, m.Text())
+	}
+	var r agents.ToolResult
+	decode(agents.EventToolResult, `{"tool_use_id":"call_1","content":[{"type":"text","text":"exit 1"}],"is_error":true,"outcome":"error"}`, &r)
+	if r.ToolUseID != "call_1" || !r.IsError || r.Outcome != "error" || r.Text() != "exit 1" || r.Sender != nil {
+		t.Errorf("tool result %+v", r)
+	}
+	var e agents.SessionError
+	decode(agents.EventSessionError, `{"code":"model_busy","message":"The model is busy right now.","retryable":true}`, &e)
+	if e.Code != "model_busy" || !e.Retryable {
+		t.Errorf("session error %+v", e)
+	}
+	var u agents.ToolUse
+	decode(agents.EventAgentToolUse, `{"tool_use_id":"call_2","name":"lookup","input":{},"client":true}`, &u)
+	if !u.Client {
+		t.Errorf("a client tool call decoded as %+v", u)
+	}
+}
+
+func TestAClientWithoutAConfig(t *testing.T) {
+	for _, cfg := range []*latere.Config{nil, {}} {
+		if _, err := agents.New(cfg).GetSession(t.Context(), "ses_1"); err == nil || !strings.Contains(err.Error(), "NewConfig") {
+			t.Errorf("a call without a built Config: %v", err)
+		}
 	}
 }

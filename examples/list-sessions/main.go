@@ -44,7 +44,8 @@ func run(ctx context.Context, agent string, limit int) error {
 	w := tabwriter.NewWriter(os.Stdout, 0, 4, 2, ' ', 0)
 	fmt.Fprintln(w, "SESSION\tSTATUS\tUPDATED\tTITLE")
 	n := 0
-	for s, err := range agents.New(cfg).Sessions.List(ctx, &agents.ListSessionsParams{Agent: agent}) {
+	params := &agents.ListSessionsParams{Agent: agent, Limit: min(limit, 500)}
+	for s, err := range agents.New(cfg).ListSessions(ctx, params) {
 		if err != nil {
 			return err
 		}

@@ -147,7 +147,7 @@ func TestTheStreamExampleDecodes(t *testing.T) {
 		t.Fatal("the stream has no example")
 	}
 	r := sse.NewReader(strings.NewReader(example))
-	n := 0
+	n, messages := 0, 0
 	for {
 		f, err := r.Next()
 		if err != nil {
@@ -160,10 +160,17 @@ func TestTheStreamExampleDecodes(t *testing.T) {
 		if item.Event != nil && item.Event.Seq == 0 {
 			t.Errorf("frame %s decoded without a sequence", f.ID)
 		}
+		if item.Event != nil && item.Event.Type == EventAgentMessage {
+			var m AgentMessage
+			if err := item.Event.Decode(&m); err != nil || m.Text() == "" || m.StopReason == "" {
+				t.Errorf("the example's agent message read as %+v, %v", m, err)
+			}
+			messages++
+		}
 		n++
 	}
-	if n == 0 {
-		t.Error("the stream example held no frame")
+	if n == 0 || messages == 0 {
+		t.Errorf("the stream example held %d frames and %d agent messages", n, messages)
 	}
 }
 
@@ -175,7 +182,10 @@ func TestEndpointsAreInTheDocument(t *testing.T) {
 		{"get", "/sessions"},
 		{"post", "/sessions"},
 		{"get", "/sessions/{id}"},
+		{"delete", "/sessions/{id}"},
 		{"post", "/sessions/{id}/archive"},
+		{"post", "/sessions/{id}/unarchive"},
+		{"post", "/sessions/{id}/end"},
 		{"post", "/sessions/{id}/fork"},
 		{"get", "/sessions/{id}/events"},
 		{"post", "/sessions/{id}/events"},

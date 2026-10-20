@@ -27,12 +27,13 @@ const (
 	// StopEndTurn is a turn that finished; the session waits for a message.
 	StopEndTurn StopReason = "end_turn"
 	// StopToolConfirmation is a tool call waiting for approval; see
-	// SessionsService.ConfirmTool.
+	// Client.ConfirmTool.
 	StopToolConfirmation StopReason = "tool_confirmation"
-	// StopToolResult is a tool call the caller runs, waiting for its result.
+	// StopToolResult is a tool call your program runs, a ToolUse with
+	// Client set, waiting for its result; see Client.SendToolResult.
 	StopToolResult StopReason = "tool_result"
 	// StopQuestion is a question waiting for an answer; see
-	// SessionsService.Answer.
+	// Client.AnswerQuestion.
 	StopQuestion StopReason = "question"
 	// StopBudget is a session that spent its budget.
 	StopBudget StopReason = "budget"
@@ -40,7 +41,7 @@ const (
 	StopTurnLimit StopReason = "turn_limit"
 	// StopOutputLimit is a response that reached its length limit.
 	StopOutputLimit StopReason = "output_limit"
-	// StopInterrupted is a turn stopped by SessionsService.Interrupt.
+	// StopInterrupted is a turn stopped by Client.Interrupt.
 	StopInterrupted StopReason = "interrupted"
 	// StopError is a turn that failed.
 	StopError StopReason = "error"
@@ -51,11 +52,13 @@ const (
 
 // Why an ended session ended.
 const (
-	// StopCompleted is a session its agent finished.
+	// StopCompleted is a session whose work is done; Client.EndSession
+	// takes it.
 	StopCompleted StopReason = "completed"
 	// StopFailed is a session that could not go on.
 	StopFailed StopReason = "failed"
-	// StopCanceled is a session someone ended.
+	// StopCanceled is a session whose work was given up; Client.EndSession
+	// takes it.
 	StopCanceled StopReason = "canceled"
 	// StopExpired is a session that reached its maximum age.
 	StopExpired StopReason = "expired"
@@ -71,9 +74,8 @@ type Session struct {
 	Title string `json:"title,omitempty"`
 	// Initiator is who started the session.
 	Initiator Sender `json:"initiator"`
-	// Runner is where the agent runs: "hosted" on the platform, or
-	// "external" in a program of the caller's.
-	Runner string `json:"runner,omitempty"`
+	// Runner is where the agent runs.
+	Runner Runner `json:"runner,omitempty"`
 	// Status is the session's state.
 	Status Status `json:"status"`
 	// StopReason says why an idle or ended session stopped; empty while it
@@ -112,6 +114,17 @@ type Session struct {
 	ArchivedAt *time.Time `json:"archived_at,omitempty"`
 }
 
+// Runner is where a session's agent runs.
+type Runner string
+
+// The runners of a session.
+const (
+	// RunnerHosted runs the agent on the platform.
+	RunnerHosted Runner = "hosted"
+	// RunnerExternal runs the agent in a program outside the platform.
+	RunnerExternal Runner = "external"
+)
+
 // SessionAgent is the agent a session talks to.
 type SessionAgent struct {
 	// ID identifies the agent.
@@ -128,9 +141,22 @@ type Sender struct {
 	Subject string `json:"subject"`
 	// Name is the sender's display name, when known.
 	Name string `json:"name,omitempty"`
-	// Kind is "person", "trigger" or "service".
-	Kind string `json:"kind"`
+	// Kind is what the sender is.
+	Kind SenderKind `json:"kind"`
 }
+
+// SenderKind is what a Sender is.
+type SenderKind string
+
+// The kinds of Sender.
+const (
+	// SenderPerson is a person, directly or through a key of theirs.
+	SenderPerson SenderKind = "person"
+	// SenderTrigger is a trigger that started a session or sent to it.
+	SenderTrigger SenderKind = "trigger"
+	// SenderService is the platform itself.
+	SenderService SenderKind = "service"
+)
 
 // Model is the model a session's turns run on.
 type Model struct {
@@ -141,20 +167,23 @@ type Model struct {
 	Reasoning string `json:"reasoning,omitempty"`
 }
 
-// The kinds of Machine, as the API names them.
+// MachineKind is what kind of machine a session's commands run on.
+type MachineKind string
+
+// The kinds of Machine.
 const (
 	// MachineSandbox is a sandbox on the platform.
-	MachineSandbox = "cella"
+	MachineSandbox MachineKind = "cella"
 	// MachineDevice is one of the person's own computers.
-	MachineDevice = "device"
+	MachineDevice MachineKind = "device"
 	// MachineHost is the machine of a runner outside the platform.
-	MachineHost = "host"
+	MachineHost MachineKind = "host"
 )
 
 // Machine is where a session's commands run.
 type Machine struct {
-	// Kind is MachineSandbox, MachineDevice or MachineHost.
-	Kind string `json:"kind"`
+	// Kind is the machine's kind.
+	Kind MachineKind `json:"kind"`
 	// Environment names the environment of a MachineDevice: the computer's
 	// id, from account.Device.
 	Environment string `json:"environment,omitempty"`

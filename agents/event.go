@@ -6,6 +6,7 @@ package agents
 import (
 	"encoding/json"
 	"fmt"
+	"strings"
 	"time"
 )
 
@@ -23,17 +24,23 @@ const (
 	EventUserToolConfirmation EventType = "user.tool_confirmation"
 	// EventUserAnswer answered a question the agent asked.
 	EventUserAnswer EventType = "user.answer"
-	// EventAgentMessage is a response the agent wrote.
+	// EventUserToolResult is the result of a tool call your program ran;
+	// its payload is a ToolResult.
+	EventUserToolResult EventType = "user.tool_result"
+	// EventAgentMessage is a response the agent wrote; its payload is an
+	// AgentMessage.
 	EventAgentMessage EventType = "agent.message"
-	// EventAgentToolUse is a tool call the agent made; a question is a call
-	// of the tool named "question".
+	// EventAgentToolUse is a tool call the agent made; its payload is a
+	// ToolUse. A question is a call of the tool named "question".
 	EventAgentToolUse EventType = "agent.tool_use"
-	// EventToolResult is the result of a tool call.
+	// EventToolResult is the result of a tool call; its payload is a
+	// ToolResult.
 	EventToolResult EventType = "tool.result"
 	// EventSessionStatus is a change of the session's status; its payload
 	// is a SessionStatus.
 	EventSessionStatus EventType = "session.status"
-	// EventSessionError is an error the session ran into.
+	// EventSessionError is an error the session ran into; its payload is a
+	// SessionError.
 	EventSessionError EventType = "session.error"
 	// EventTitleChanged is a new title for the session.
 	EventTitleChanged EventType = "session.title_changed"
@@ -90,14 +97,98 @@ type SessionStatus struct {
 
 // A ContentBlock is one part of a message.
 type ContentBlock struct {
-	// Type is the block's kind, such as "text".
-	Type string `json:"type"`
-	// Text is the text of a "text" block.
+	// Type is the block's kind. A response holds blocks of kinds this
+	// type does not read, such as "tool_use", whose own event carries
+	// them.
+	Type BlockType `json:"type"`
+	// Text is the text of a BlockText or BlockThinking block.
 	Text string `json:"text,omitempty"`
 }
 
+// BlockType is the kind of a ContentBlock.
+type BlockType string
+
+// The kinds of ContentBlock a client reads.
+const (
+	// BlockText is text.
+	BlockText BlockType = "text"
+	// BlockThinking is the model's reasoning before it answers, when the
+	// model shows it.
+	BlockThinking BlockType = "thinking"
+)
+
 // Text returns a text block holding s.
-func Text(s string) ContentBlock { return ContentBlock{Type: "text", Text: s} }
+func Text(s string) ContentBlock { return ContentBlock{Type: BlockText, Text: s} }
+
+// textOf joins the text of the BlockText blocks of blocks.
+func textOf(blocks []ContentBlock) string {
+	var b strings.Builder
+	for _, c := range blocks {
+		if c.Type == BlockText {
+			b.WriteString(c.Text)
+		}
+	}
+	return b.String()
+}
+
+// An AgentMessage is the payload of an EventAgentMessage event: one
+// response of the model, complete.
+type AgentMessage struct {
+	// Message is the response.
+	Message Message `json:"message"`
+	// StopReason says why the response ended: StopEndTurn when the agent
+	// is done with the turn, or another reason, such as a tool call it
+	// waits on.
+	StopReason StopReason `json:"stop_reason"`
+}
+
+// Text returns the response's text, its text blocks joined, without its
+// thinking.
+func (m *AgentMessage) Text() string { return textOf(m.Message.Blocks) }
+
+// A Message is a model's response.
+type Message struct {
+	// Role is "assistant" for a response of the agent.
+	Role string `json:"role"`
+	// Blocks are the response's parts, in order.
+	Blocks []ContentBlock `json:"blocks"`
+}
+
+// A ToolResult is the payload of an EventToolResult event, the result of a
+// tool call the platform ran, and of an EventUserToolResult event, the
+// result your program sent with Client.SendToolResult.
+type ToolResult struct {
+	// ToolUseID names the call the result answers.
+	ToolUseID string `json:"tool_use_id"`
+	// Content is the result the agent read.
+	Content []ContentBlock `json:"content"`
+	// IsError reports that the call failed.
+	IsError bool `json:"is_error,omitempty"`
+	// Outcome sums the result up for some tools, such as "ok", "error",
+	// "timeout", or, for a question, "unanswered" or "canceled"; empty
+	// when the tool says nothing more than IsError.
+	Outcome string `json:"outcome,omitempty"`
+	// Sender is who sent an EventUserToolResult; nil for a result the
+	// platform recorded.
+	Sender *Sender `json:"sender,omitempty"`
+}
+
+// Text returns the result's text, its text blocks joined.
+func (r *ToolResult) Text() string { return textOf(r.Content) }
+
+// A SessionError is the payload of an EventSessionError event: something
+// went wrong in the session, such as a model that is busy or a machine
+// that was lost.
+type SessionError struct {
+	// Code identifies the error, such as "model_busy" or "machine_lost".
+	Code string `json:"code"`
+	// Message says what happened, in words for a person.
+	Message string `json:"message"`
+	// Retryable reports that sending the message again may succeed.
+	Retryable bool `json:"retryable,omitempty"`
+	// Detail adds what a developer needs, when there is more to say.
+	Detail string `json:"detail,omitempty"`
+}
 
 // A UserMessage is the payload of an EventUserMessage event.
 type UserMessage struct {
@@ -139,6 +230,10 @@ type ToolUse struct {
 	// Input is the call's input, whose shape depends on the tool; read the
 	// questions of a "question" call with Questions.
 	Input json.RawMessage `json:"input"`
+	// Client reports a call of a tool the agent declares for its client
+	// to run: your program runs it, and the session waits with
+	// StopToolResult until Client.SendToolResult answers it.
+	Client bool `json:"client,omitempty"`
 }
 
 // Questions returns the questions of a call of the "question" tool, and an

@@ -19,20 +19,17 @@ import (
 // basePath is where the agents capability is served.
 const basePath = "/v1/agents"
 
-// Client reaches the agents capability of the Latere API.
+// Client reaches the agents capability of the Latere API: sessions and
+// their events. It is safe for concurrent use.
 type Client struct {
-	// Sessions creates, lists and follows sessions.
-	Sessions *SessionsService
-}
-
-// New returns a Client that sends its requests as cfg says.
-func New(cfg *latere.Config) *Client {
-	return &Client{Sessions: &SessionsService{cfg: cfg}}
-}
-
-// SessionsService is the sessions part of the agents API.
-type SessionsService struct {
 	cfg *latere.Config
+}
+
+// New returns a Client that sends its requests as cfg says. A cfg not
+// built with latere.NewConfig makes every call fail with an error saying
+// so.
+func New(cfg *latere.Config) *Client {
+	return &Client{cfg: cfg}
 }
 
 // errNoID is returned before any request when a session id is empty.
@@ -63,8 +60,8 @@ type ListSessionsParams struct {
 	Agent string
 	// Status keeps the sessions in one state.
 	Status Status
-	// Runner keeps the sessions that run "hosted" or "external".
-	Runner string
+	// Runner keeps the sessions that run where it says.
+	Runner Runner
 	// Archived says whether archived sessions are listed.
 	Archived ArchiveFilter
 	// Root keeps the sessions of the fork tree whose top is this session.
@@ -81,8 +78,8 @@ type ListSessionsParams struct {
 	// Limit is how many sessions a page holds at most, up to 500; the API
 	// chooses when it is zero.
 	Limit int
-	// Cursor asks ListPage for the page after the one that returned it.
-	// List ignores it.
+	// Cursor asks ListSessionsPage for the page after the one that
+	// returned it. ListSessions ignores it.
 	Cursor string
 }
 
@@ -99,7 +96,7 @@ func (p *ListSessionsParams) query(cursor string) url.Values {
 	}
 	set("agent", p.Agent)
 	set("status", string(p.Status))
-	set("runner", p.Runner)
+	set("runner", string(p.Runner))
 	set("archived", string(p.Archived))
 	set("root", p.Root)
 	set("parent", p.Parent)
@@ -117,42 +114,42 @@ func (p *ListSessionsParams) query(cursor string) url.Values {
 	return q
 }
 
-// List returns an iterator over the sessions params keeps, newest first,
-// fetching pages as the loop needs them. An error ends the iteration after
-// it is yielded.
-func (s *SessionsService) List(ctx context.Context, params *ListSessionsParams) iter.Seq2[*Session, error] {
+// ListSessions returns an iterator over the sessions params keeps, newest
+// first, fetching pages as the loop needs them. An error ends the iteration
+// after it is yielded.
+func (c *Client) ListSessions(ctx context.Context, params *ListSessionsParams) iter.Seq2[*Session, error] {
 	return latere.Items(ctx, func(ctx context.Context, cursor string) (*latere.Page[*Session], error) {
-		return s.listPage(ctx, params, cursor)
+		return c.listPage(ctx, params, cursor)
 	})
 }
 
-// ListPage returns one page of the sessions params keeps, starting at
-// params.Cursor, and the cursor of the next page in NextCursor.
-func (s *SessionsService) ListPage(ctx context.Context, params *ListSessionsParams) (*latere.Page[*Session], error) {
+// ListSessionsPage returns one page of the sessions params keeps, starting
+// at params.Cursor, and the cursor of the next page in NextCursor.
+func (c *Client) ListSessionsPage(ctx context.Context, params *ListSessionsParams) (*latere.Page[*Session], error) {
 	cursor := ""
 	if params != nil {
 		cursor = params.Cursor
 	}
-	return s.listPage(ctx, params, cursor)
+	return c.listPage(ctx, params, cursor)
 }
 
-func (s *SessionsService) listPage(ctx context.Context, params *ListSessionsParams, cursor string) (*latere.Page[*Session], error) {
+func (c *Client) listPage(ctx context.Context, params *ListSessionsParams, cursor string) (*latere.Page[*Session], error) {
 	var page latere.Page[*Session]
-	err := s.cfg.Do(ctx, &latere.Request{Method: http.MethodGet, Path: basePath + "/sessions", Query: params.query(cursor)}, &page)
+	err := c.cfg.Do(ctx, &latere.Request{Method: http.MethodGet, Path: basePath + "/sessions", Query: params.query(cursor)}, &page)
 	if err != nil {
 		return nil, err
 	}
 	return &page, nil
 }
 
-// Get returns the session id names. It returns an error matching
+// GetSession returns the session id names. It returns an error matching
 // latere.ErrNotFound when there is no such session the caller may read.
-func (s *SessionsService) Get(ctx context.Context, id string) (*Session, error) {
+func (c *Client) GetSession(ctx context.Context, id string) (*Session, error) {
 	if id == "" {
 		return nil, errNoID
 	}
 	var out Session
-	if err := s.cfg.Do(ctx, &latere.Request{Method: http.MethodGet, Path: sessionPath(id, "")}, &out); err != nil {
+	if err := c.cfg.Do(ctx, &latere.Request{Method: http.MethodGet, Path: sessionPath(id, "")}, &out); err != nil {
 		return nil, err
 	}
 	return &out, nil
@@ -163,7 +160,7 @@ type CreateSessionParams struct {
 	// Agent is the agent to talk to, by its id or its name. Required.
 	Agent string
 	// Message is the first message, sent with the creation; empty to send
-	// one later with SendMessage.
+	// one later with Client.SendMessage.
 	Message string
 	// Title names the session for a person.
 	Title string
@@ -182,10 +179,10 @@ type CreateSessionParams struct {
 	IdempotencyKey string
 }
 
-// Create creates a session and returns it. A creation that fails on the
-// network is retried with the same idempotency key, so it creates at most
-// one session.
-func (s *SessionsService) Create(ctx context.Context, params *CreateSessionParams) (*Session, error) {
+// CreateSession creates a session and returns it. A creation that fails on
+// the network is retried with the same idempotency key, so it creates at
+// most one session.
+func (c *Client) CreateSession(ctx context.Context, params *CreateSessionParams) (*Session, error) {
 	if params == nil || params.Agent == "" {
 		return nil, errors.New("agents: CreateSessionParams.Agent is required")
 	}
@@ -207,21 +204,55 @@ func (s *SessionsService) Create(ctx context.Context, params *CreateSessionParam
 	}
 	var out Session
 	req := &latere.Request{Method: http.MethodPost, Path: basePath + "/sessions", Body: body, IdempotencyKey: keyOr(params.IdempotencyKey)}
-	if err := s.cfg.Do(ctx, req, &out); err != nil {
+	if err := c.cfg.Do(ctx, req, &out); err != nil {
 		return nil, err
 	}
 	return &out, nil
 }
 
-// Archive archives a session, which leaves it out of lists by default, and
-// returns it. Archiving an archived session changes nothing.
-func (s *SessionsService) Archive(ctx context.Context, id string) (*Session, error) {
+// ArchiveSession archives a session, which leaves it out of lists by
+// default, and returns it. Archiving an archived session changes nothing.
+func (c *Client) ArchiveSession(ctx context.Context, id string) (*Session, error) {
+	return c.action(ctx, id, "/archive", nil)
+}
+
+// UnarchiveSession brings an archived session back into lists, and returns
+// it. Unarchiving a session that is not archived changes nothing.
+func (c *Client) UnarchiveSession(ctx context.Context, id string) (*Session, error) {
+	return c.action(ctx, id, "/unarchive", nil)
+}
+
+// EndSession ends an idle session, so it takes no more messages, and
+// returns it. reason is StopCompleted for work that is done or StopCanceled
+// for work given up. It returns an error matching latere.ErrConflict for a
+// session that is running or already ended: interrupt a running session
+// first.
+func (c *Client) EndSession(ctx context.Context, id string, reason StopReason) (*Session, error) {
+	if reason != StopCompleted && reason != StopCanceled {
+		return nil, fmt.Errorf("agents: EndSession: the reason is %q, not StopCompleted or StopCanceled", reason)
+	}
+	return c.action(ctx, id, "/end", map[string]any{"reason": reason})
+}
+
+// DeleteSession deletes a session, its log and its files for good. Forks
+// of the session keep their own copy of the log. It returns an error
+// matching latere.ErrConflict for a running session: interrupt it first.
+func (c *Client) DeleteSession(ctx context.Context, id string) error {
+	if id == "" {
+		return errNoID
+	}
+	return c.cfg.Do(ctx, &latere.Request{Method: http.MethodDelete, Path: sessionPath(id, "")}, nil)
+}
+
+// action posts to one of a session's action routes and returns the
+// session.
+func (c *Client) action(ctx context.Context, id, route string, body any) (*Session, error) {
 	if id == "" {
 		return nil, errNoID
 	}
 	var out Session
-	req := &latere.Request{Method: http.MethodPost, Path: sessionPath(id, "/archive"), IdempotencyKey: latere.NewIdempotencyKey()}
-	if err := s.cfg.Do(ctx, req, &out); err != nil {
+	req := &latere.Request{Method: http.MethodPost, Path: sessionPath(id, route), Body: body, IdempotencyKey: latere.NewIdempotencyKey()}
+	if err := c.cfg.Do(ctx, req, &out); err != nil {
 		return nil, err
 	}
 	return &out, nil
@@ -243,9 +274,9 @@ type ForkSessionParams struct {
 	IdempotencyKey string
 }
 
-// Fork creates a session that holds the log of session id up to a turn
-// boundary, and returns the new session.
-func (s *SessionsService) Fork(ctx context.Context, id string, params *ForkSessionParams) (*Session, error) {
+// ForkSession creates a session that holds the log of session id up to a
+// turn boundary, and returns the new session.
+func (c *Client) ForkSession(ctx context.Context, id string, params *ForkSessionParams) (*Session, error) {
 	if id == "" {
 		return nil, errNoID
 	}
@@ -267,7 +298,7 @@ func (s *SessionsService) Fork(ctx context.Context, id string, params *ForkSessi
 	}
 	var out Session
 	req := &latere.Request{Method: http.MethodPost, Path: sessionPath(id, "/fork"), Body: body, IdempotencyKey: keyOr(params.IdempotencyKey)}
-	if err := s.cfg.Do(ctx, req, &out); err != nil {
+	if err := c.cfg.Do(ctx, req, &out); err != nil {
 		return nil, err
 	}
 	return &out, nil
@@ -280,31 +311,31 @@ type ListEventsParams struct {
 	// Limit is how many events a page holds at most; the API chooses when
 	// it is zero.
 	Limit int
-	// Cursor asks EventsPage for the page after the one that returned it.
-	// Events ignores it.
+	// Cursor asks ListEventsPage for the page after the one that returned
+	// it. ListEvents ignores it.
 	Cursor string
 }
 
-// Events returns an iterator over a session's log from params.FromSeq,
+// ListEvents returns an iterator over a session's log from params.FromSeq,
 // fetching pages as the loop needs them. It ends at the newest event; use
-// Stream to wait for more.
-func (s *SessionsService) Events(ctx context.Context, id string, params *ListEventsParams) iter.Seq2[*Event, error] {
+// StreamEvents to wait for more.
+func (c *Client) ListEvents(ctx context.Context, id string, params *ListEventsParams) iter.Seq2[*Event, error] {
 	return latere.Items(ctx, func(ctx context.Context, cursor string) (*latere.Page[*Event], error) {
-		return s.eventsPage(ctx, id, params, cursor)
+		return c.eventsPage(ctx, id, params, cursor)
 	})
 }
 
-// EventsPage returns one page of a session's log and the cursor of the
+// ListEventsPage returns one page of a session's log and the cursor of the
 // next page in NextCursor.
-func (s *SessionsService) EventsPage(ctx context.Context, id string, params *ListEventsParams) (*latere.Page[*Event], error) {
+func (c *Client) ListEventsPage(ctx context.Context, id string, params *ListEventsParams) (*latere.Page[*Event], error) {
 	cursor := ""
 	if params != nil {
 		cursor = params.Cursor
 	}
-	return s.eventsPage(ctx, id, params, cursor)
+	return c.eventsPage(ctx, id, params, cursor)
 }
 
-func (s *SessionsService) eventsPage(ctx context.Context, id string, params *ListEventsParams, cursor string) (*latere.Page[*Event], error) {
+func (c *Client) eventsPage(ctx context.Context, id string, params *ListEventsParams, cursor string) (*latere.Page[*Event], error) {
 	if id == "" {
 		return nil, errNoID
 	}
@@ -321,14 +352,14 @@ func (s *SessionsService) eventsPage(ctx context.Context, id string, params *Lis
 		q.Set("cursor", cursor)
 	}
 	var page latere.Page[*Event]
-	if err := s.cfg.Do(ctx, &latere.Request{Method: http.MethodGet, Path: sessionPath(id, "/events"), Query: q}, &page); err != nil {
+	if err := c.cfg.Do(ctx, &latere.Request{Method: http.MethodGet, Path: sessionPath(id, "/events"), Query: q}, &page); err != nil {
 		return nil, err
 	}
 	return &page, nil
 }
 
-// MessageParams is a message to a session.
-type MessageParams struct {
+// SendMessageParams is a message to a session.
+type SendMessageParams struct {
 	// Content is the message. Required.
 	Content []ContentBlock
 	// IdempotencyKey makes a repeated send deliver the message once; one is
@@ -338,57 +369,58 @@ type MessageParams struct {
 
 // SendMessage sends a message to an idle session, which starts its next
 // turn, and returns the event the message became.
-func (s *SessionsService) SendMessage(ctx context.Context, id string, params *MessageParams) (*Event, error) {
+func (c *Client) SendMessage(ctx context.Context, id string, params *SendMessageParams) (*Event, error) {
 	if params == nil || len(params.Content) == 0 {
-		return nil, errors.New("agents: MessageParams.Content is required")
+		return nil, errors.New("agents: SendMessageParams.Content is required")
 	}
-	return s.send(ctx, id, EventUserMessage, map[string]any{"content": params.Content}, params.IdempotencyKey)
+	return c.send(ctx, id, EventUserMessage, map[string]any{"content": params.Content}, params.IdempotencyKey)
 }
 
 // Interrupt stops a session's running turn and returns the event the
-// interruption became. The session becomes idle with StopInterrupted.
-func (s *SessionsService) Interrupt(ctx context.Context, id string) (*Event, error) {
-	return s.send(ctx, id, EventUserInterrupt, map[string]any{}, "")
+// interruption became. The session becomes idle with StopInterrupted. It
+// also dismisses a question the session waits on.
+func (c *Client) Interrupt(ctx context.Context, id string) (*Event, error) {
+	return c.send(ctx, id, EventUserInterrupt, map[string]any{}, "")
 }
 
-// AnswerParams answers the questions of one question call.
-type AnswerParams struct {
+// AnswerQuestionParams answers the questions of one question call.
+type AnswerQuestionParams struct {
 	// ToolUseID is the question call's id, from its ToolUse. Required.
 	ToolUseID string
 	// Answers holds one entry per question, in the questions' order.
-	Answers []AnswerEntry
+	Answers []Answer
 	// IdempotencyKey makes a repeated answer count once; one is generated
 	// when it is empty.
 	IdempotencyKey string
 }
 
-// AnswerEntry answers one question. Selected alone is a choice, Text alone
-// an answer in the person's own words, both a choice with a note, and
-// neither leaves the question to the agent.
-type AnswerEntry struct {
+// An Answer answers one question. Selected alone is a choice, Text alone an
+// answer in the person's own words, both a choice with a note, and neither
+// leaves the question to the agent.
+type Answer struct {
 	// Selected holds the labels of the chosen options.
 	Selected []string `json:"selected,omitempty"`
 	// Text is the person's own words.
 	Text string `json:"text,omitempty"`
 }
 
-// Answer answers a question the session asked, which resumes it, and
-// returns the event the answer became.
-func (s *SessionsService) Answer(ctx context.Context, id string, params *AnswerParams) (*Event, error) {
+// AnswerQuestion answers a question the session asked, which resumes it,
+// and returns the event the answer became.
+func (c *Client) AnswerQuestion(ctx context.Context, id string, params *AnswerQuestionParams) (*Event, error) {
 	if params == nil || params.ToolUseID == "" {
-		return nil, errors.New("agents: AnswerParams.ToolUseID is required")
+		return nil, errors.New("agents: AnswerQuestionParams.ToolUseID is required")
 	}
 	answers := params.Answers
 	if answers == nil {
-		answers = []AnswerEntry{}
+		answers = []Answer{}
 	}
-	return s.send(ctx, id, EventUserAnswer, map[string]any{"tool_use_id": params.ToolUseID, "answers": answers}, params.IdempotencyKey)
+	return c.send(ctx, id, EventUserAnswer, map[string]any{"tool_use_id": params.ToolUseID, "answers": answers}, params.IdempotencyKey)
 }
 
 // Decision is the answer to a tool call or an approval.
 type Decision string
 
-// The decisions of ToolConfirmationParams.
+// The decisions of ConfirmToolParams.
 const (
 	// Allow lets the call run.
 	Allow Decision = "allow"
@@ -396,8 +428,8 @@ const (
 	Deny Decision = "deny"
 )
 
-// ToolConfirmationParams approves or denies a tool call or an approval.
-type ToolConfirmationParams struct {
+// ConfirmToolParams approves or denies a tool call or an approval.
+type ConfirmToolParams struct {
 	// ToolUseID names the tool call waiting for approval. Set it or
 	// ApprovalID, not both.
 	ToolUseID string
@@ -417,12 +449,12 @@ type ToolConfirmationParams struct {
 
 // ConfirmTool approves or denies a tool call or an approval the session is
 // waiting on, which resumes it, and returns the event the decision became.
-func (s *SessionsService) ConfirmTool(ctx context.Context, id string, params *ToolConfirmationParams) (*Event, error) {
+func (c *Client) ConfirmTool(ctx context.Context, id string, params *ConfirmToolParams) (*Event, error) {
 	if params == nil || (params.ToolUseID == "") == (params.ApprovalID == "") {
-		return nil, errors.New("agents: ToolConfirmationParams needs exactly one of ToolUseID and ApprovalID")
+		return nil, errors.New("agents: ConfirmToolParams needs exactly one of ToolUseID and ApprovalID")
 	}
 	if params.Decision != Allow && params.Decision != Deny {
-		return nil, fmt.Errorf("agents: ToolConfirmationParams.Decision is %q, not Allow or Deny", params.Decision)
+		return nil, fmt.Errorf("agents: ConfirmToolParams.Decision is %q, not Allow or Deny", params.Decision)
 	}
 	payload := map[string]any{"decision": params.Decision}
 	if params.ToolUseID != "" {
@@ -437,11 +469,44 @@ func (s *SessionsService) ConfirmTool(ctx context.Context, id string, params *To
 	if params.Remember != "" {
 		payload["remember"] = params.Remember
 	}
-	return s.send(ctx, id, EventUserToolConfirmation, payload, params.IdempotencyKey)
+	return c.send(ctx, id, EventUserToolConfirmation, payload, params.IdempotencyKey)
+}
+
+// SendToolResultParams is the result of a tool call your program ran.
+type SendToolResultParams struct {
+	// ToolUseID names the call, from its ToolUse. Required.
+	ToolUseID string
+	// Content is the result the agent reads.
+	Content []ContentBlock
+	// IsError reports that the call failed; Content then says how.
+	IsError bool
+	// IdempotencyKey makes a repeated result count once; one is generated
+	// when it is empty.
+	IdempotencyKey string
+}
+
+// SendToolResult answers a tool call your program runs, a ToolUse with
+// Client set, which the session waits on with StopToolResult. The session
+// resumes with the result, and SendToolResult returns the event the result
+// became. It returns an error matching latere.ErrConflict when no call with
+// that id is waiting.
+func (c *Client) SendToolResult(ctx context.Context, id string, params *SendToolResultParams) (*Event, error) {
+	if params == nil || params.ToolUseID == "" {
+		return nil, errors.New("agents: SendToolResultParams.ToolUseID is required")
+	}
+	content := params.Content
+	if content == nil {
+		content = []ContentBlock{}
+	}
+	payload := map[string]any{"tool_use_id": params.ToolUseID, "content": content}
+	if params.IsError {
+		payload["is_error"] = true
+	}
+	return c.send(ctx, id, EventUserToolResult, payload, params.IdempotencyKey)
 }
 
 // send appends a user event to a session's log.
-func (s *SessionsService) send(ctx context.Context, id string, t EventType, payload map[string]any, key string) (*Event, error) {
+func (c *Client) send(ctx context.Context, id string, t EventType, payload map[string]any, key string) (*Event, error) {
 	if id == "" {
 		return nil, errNoID
 	}
@@ -452,14 +517,14 @@ func (s *SessionsService) send(ctx context.Context, id string, t EventType, payl
 		Body:           map[string]any{"type": t, "payload": payload},
 		IdempotencyKey: keyOr(key),
 	}
-	if err := s.cfg.Do(ctx, req, &out); err != nil {
+	if err := c.cfg.Do(ctx, req, &out); err != nil {
 		return nil, err
 	}
 	return &out, nil
 }
 
-// StreamParams says where a stream of a session's log starts.
-type StreamParams struct {
+// StreamEventsParams says where a stream of a session's log starts.
+type StreamEventsParams struct {
 	// FromSeq is the sequence to start at; zero starts at the first event.
 	FromSeq int64
 	// Deltas also yields the live fragments of a response as the agent
@@ -468,7 +533,7 @@ type StreamParams struct {
 }
 
 // A StreamItem is one item of a session's stream: an event of its log, or,
-// with StreamParams.Deltas, a live fragment of a response.
+// with StreamEventsParams.Deltas, a live fragment of a response.
 type StreamItem struct {
 	// Event is the log's event; nil for a delta.
 	Event *Event
@@ -482,13 +547,15 @@ type Delta struct {
 	// Thread names the helper agent's thread the response belongs to;
 	// empty for the session's own.
 	Thread string `json:"thread,omitempty"`
-	// Turn and Step place the response in the session.
+	// Turn is the turn the response belongs to.
 	Turn int `json:"turn"`
+	// Step is the step of the turn the response answers; a turn takes a
+	// step for each request to the model.
 	Step int `json:"step"`
 	// Block is the index of the response's content block the text extends.
 	Block int `json:"block"`
-	// Kind is "text", "thinking" or "tool_input".
-	Kind string `json:"kind"`
+	// Kind is what the text is part of.
+	Kind DeltaKind `json:"kind"`
 	// Text continues the block.
 	Text string `json:"text"`
 	// Reset discards what the step's deltas carried so far: the response is
@@ -496,12 +563,26 @@ type Delta struct {
 	Reset bool `json:"reset,omitempty"`
 }
 
-// Stream returns an iterator over a session's log from params.FromSeq that
-// waits for each new event, and ends after the event that ends the session.
-// When the connection drops it reconnects and resumes after the last event
-// it yielded, so no event is lost or repeated. Stop the loop, or end ctx, to
-// stop following.
-func (s *SessionsService) Stream(ctx context.Context, id string, params *StreamParams) iter.Seq2[StreamItem, error] {
+// DeltaKind is what a Delta's text is part of.
+type DeltaKind string
+
+// The kinds of Delta.
+const (
+	// DeltaText continues a text block of the response.
+	DeltaText DeltaKind = "text"
+	// DeltaThinking continues a thinking block.
+	DeltaThinking DeltaKind = "thinking"
+	// DeltaToolInput continues a tool call's input as the model writes it.
+	DeltaToolInput DeltaKind = "tool_input"
+)
+
+// StreamEvents returns an iterator over a session's log from
+// params.FromSeq that waits for each new event, and ends after the event
+// that ends the session. When the connection drops it reconnects and
+// resumes after the last event it yielded, so no event is lost or repeated.
+// Stop the loop, or end ctx, to stop following; either releases the
+// connection at once.
+func (c *Client) StreamEvents(ctx context.Context, id string, params *StreamEventsParams) iter.Seq2[StreamItem, error] {
 	return func(yield func(StreamItem, error) bool) {
 		if id == "" {
 			yield(StreamItem{}, errNoID)
@@ -509,7 +590,7 @@ func (s *SessionsService) Stream(ctx context.Context, id string, params *StreamP
 		}
 		q := url.Values{}
 		if params != nil {
-			if params.FromSeq > 1 {
+			if params.FromSeq > 0 {
 				q.Set("from_seq", strconv.FormatInt(params.FromSeq, 10))
 			}
 			if params.Deltas {
@@ -517,7 +598,7 @@ func (s *SessionsService) Stream(ctx context.Context, id string, params *StreamP
 			}
 		}
 		req := &latere.Request{Method: http.MethodGet, Path: sessionPath(id, "/stream"), Query: q}
-		for frame, err := range s.cfg.Stream(ctx, req, endsSession) {
+		for frame, err := range c.cfg.Stream(ctx, req, endsSession) {
 			if err != nil {
 				yield(StreamItem{}, err)
 				return

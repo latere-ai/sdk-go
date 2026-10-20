@@ -186,8 +186,7 @@ for ev, err := range ap.FollowDeployLog(ctx, a.Slug, deploys[0].ID, nil) {
 
 Deploying is a git push, which the package does not do. Calls about who
 may open a private app take the app's ID, which never changes; the others
-take its slug. Every model keeps the JSON the API answered, which
-`RawJSON` returns with every field.
+take its slug.
 
 ## Connections
 
@@ -241,6 +240,25 @@ second time after a failure, since the model may have run.
 Programs built on the OpenAI or Anthropic SDKs reach the same models with
 the same key through the models capability's compatible endpoints; see
 [Providers and doors](https://platform.latere.ai/docs/models/providers).
+
+## The API's own answer
+
+Every resource the `agents`, `account`, `apps` and `connections` packages
+return keeps the JSON the API sent. `RawJSON` returns it with every field,
+including fields the API added after your version of the SDK, for a program
+that shows or passes on the answer as it came, such as a command line's
+`--json` output:
+
+```go
+s, err := ag.GetSession(ctx, id)
+if err != nil {
+	return err
+}
+os.Stdout.Write(s.RawJSON())
+```
+
+A resource your program builds itself has no JSON, and `RawJSON` returns
+nil. The `llm` types need none: they are the Lux dialect's own definition.
 
 ## Streaming
 
@@ -306,8 +324,12 @@ case err != nil:
 ```
 
 A call cut off by its context returns an error matching the context's,
-such as `context.DeadlineExceeded`. Include the request id when you report
-a problem.
+such as `context.DeadlineExceeded`. A call that could not get credentials,
+because the key was revoked or a token source failed, returns a
+`*latere.TokenError` whose `Err` says why. When a refusal carries more
+than the error, `Error.Body` holds the response as the API sent it; a
+trigger's failed firing is one, and `FireTrigger` returns it decoded along
+with the error. Include the request id when you report a problem.
 
 ## Retries
 
@@ -317,10 +339,12 @@ backoff and jitter, and after the wait a `Retry-After` header asks for.
 Only requests that are safe to repeat are retried: `GET`, `PUT` and
 `DELETE`, and requests that carry an idempotency key. Every method that
 creates or sends something sends a key, generated when you give none, so a
-retried `CreateSession` makes one session, not two. The apps part of the
-API takes no key yet, so `apps.CreateApp` and `apps.Invite` are sent once. A repeat that reaches
-the API while the first request is still being answered gets 409
-(`latere.ErrConflict`) even though the first succeeds; read the session to
+retried `CreateSession` makes one session, not two. Two kinds of call are
+sent once instead: those whose part of the API takes no key yet,
+`apps.CreateApp` and `apps.Invite`, and `llm`'s `Generate` and `Stream`,
+since a model may have run and been billed before a failure. A repeat that
+reaches the API while the first request is still being answered gets 409
+(`latere.ErrConflict`) even though the first succeeds; read the resource to
 learn the outcome.
 
 A 401 is retried once with a fresh token when the token source can get one:

@@ -26,20 +26,26 @@ flowchart TD
     account --> latere
     apps --> latere
     connections --> latere
+    llm --> latere
+    llm --> wire[llm/wire]
     signin --> latere
     latere --> sse[internal/sse]
     app[your program] --> agents
     app --> account
     app --> apps
+    app --> connections
+    app --> llm
     app -. a person's sign-in .-> signin
+    gateway[the Lux gateway's codec] --> wire
 ```
 
 `latere` is the core: configuration, credentials, the error type, the
 request loop, pagination and streams. A capability package (`agents`,
-`account`, `apps`, and those to come) holds typed models and one method per
-endpoint, and calls the API only through `Config.Do`, `Config.Stream` and
-`latere.Items`. `signin` is separate because most programs, those that run
-with a key, never sign a person in; the core does not import it.
+`account`, `apps`, `connections`, `llm`, and those to come) holds typed
+models and one method per endpoint, and calls the API only through
+`Config.Do`, `Config.Open`, `Config.Stream` and `latere.Items`. `signin` is separate
+because most programs, those that run with a key, never sign a person in;
+the core does not import it.
 
 A capability package's client is `New(cfg)`, with one method per endpoint
 named verb first after the API's resource, as the AWS SDK names its
@@ -147,7 +153,18 @@ what support needs to find the request. `Error.Is` maps statuses to
 sentinels (`ErrNotFound`, `ErrUnauthorized`, `ErrForbidden`, `ErrConflict`,
 `ErrRateLimited`), so the common checks need `errors.Is` and no type
 assertion. An answer that is not the envelope still produces an `Error`,
-with the body's start or the status text as its message.
+with the body's start or the status text as its message. `Error.Body`
+keeps the whole response, up to the 64 KiB the SDK reads, for the few
+refusals that carry more than the error: a trigger whose firing failed to
+start its session answers 503 with the firing, and `FireTrigger` returns
+that firing decoded beside the error.
+
+A call that fails before any request is sent, because the token source
+failed or the issuer refused the key, returns a `*TokenError` wrapping the
+cause, after any retries. A program can then tell "the credentials are
+wrong" from "the API refused this request"; an issuer's refusal inside it
+is an `*Error`, so `errors.Is(err, ErrUnauthorized)` holds for a revoked
+key either way.
 
 ## Pagination
 
@@ -227,12 +244,19 @@ YAML parser it needs never reaches the SDK's `go.mod`. A weekly workflow
 fetches the documents and fails when they changed, which is the signal to
 update the models.
 
-Each model the apps API answers keeps the bytes it was decoded from,
-returned by `RawJSON`, as Stainless-generated SDKs and stripe-go do. A
-program that shows or stores the API's answer, a command line's `--json`
-output for one, gets every field, including those added after its SDK
-version was released, without waiting for the SDK to model them. A model
-a program builds itself has none.
+Every resource a package returns, a session, an event, a trigger, a wallet,
+an app or a connection, keeps the bytes it was decoded from, returned by
+`RawJSON`, as Stainless-generated SDKs and stripe-go do. A program that
+shows or stores the API's answer, a command line's `--json` output or a
+server that passes answers on, gets every field, including those added
+after its SDK version was released, without waiting for the SDK to model
+them. It is one rule for every package rather than a choice per package,
+so a program never has to know which parts of the API it may relay as
+they came. Parts of a resource, such as a session's budget, keep nothing:
+the resource's JSON already holds them. A model a program builds itself
+has none. The `llm` types are the exception: they are the Lux dialect's
+own definition, shared with the gateway's codec, so they never lag what
+the API sends.
 
 ## Observability
 

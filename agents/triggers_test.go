@@ -34,7 +34,7 @@ func TestGetTrigger(t *testing.T) {
 		t.Fatal(err)
 	}
 	s := got.Spec
-	if got.Metadata.DisplayName != "Weekly digest" || s.Schedule != "0 9 * * 1" || s.Session.Policy != agents.PolicyContinue ||
+	if got.Metadata.DisplayName != "Weekly digest" || s.Schedule != "0 9 * * 1" || s.Session.Policy != agents.SessionPolicyContinue ||
 		s.Session.Machine.Kind != agents.MachineDevice || s.Session.Resources[0].Type != agents.ResourceRepository ||
 		s.Session.Budget.MaxCost != "2.50" || s.Session.Limits.TurnTimeout != "10m" || !*s.Session.EndOnIdle || !*s.SkipIfActive || *s.MaxActive != 2 {
 		t.Errorf("decoded the spec as %+v", s)

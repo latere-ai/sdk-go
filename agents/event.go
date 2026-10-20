@@ -314,7 +314,7 @@ type Destination struct {
 type ApprovalDecided struct {
 	// ApprovalID names the request answered.
 	ApprovalID string `json:"approval_id"`
-	// Decision is Allow or Deny.
+	// Decision is DecisionAllow or DecisionDeny.
 	Decision Decision `json:"decision"`
 	// By is who answered, when a person did.
 	By *Sender `json:"by,omitempty"`

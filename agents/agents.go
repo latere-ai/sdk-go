@@ -366,9 +366,9 @@ func (c *Client) UpdateSession(ctx context.Context, id string, params *UpdateSes
 
 // ResumeSessionParams resumes a session that stopped on its budget.
 type ResumeSessionParams struct {
-	// MaxCostUSDMicro raises the session's cost cap, in millionths of a US
+	// MaxCostMicroUSD raises the session's cost cap, in millionths of a US
 	// dollar; zero keeps the cap and resumes once credit is available.
-	MaxCostUSDMicro int64
+	MaxCostMicroUSD int64
 	// Reason says why the session resumes, such as "budget_raised".
 	Reason string
 }
@@ -379,8 +379,8 @@ type ResumeSessionParams struct {
 func (c *Client) ResumeSession(ctx context.Context, id string, params *ResumeSessionParams) (*Session, error) {
 	body := map[string]any{}
 	if params != nil {
-		if params.MaxCostUSDMicro > 0 {
-			body["max_cost_usd_micro"] = params.MaxCostUSDMicro
+		if params.MaxCostMicroUSD > 0 {
+			body["max_cost_usd_micro"] = params.MaxCostMicroUSD
 		}
 		if params.Reason != "" {
 			body["reason"] = params.Reason
@@ -567,10 +567,10 @@ type Decision string
 
 // The decisions of ConfirmToolParams.
 const (
-	// Allow lets the call run.
-	Allow Decision = "allow"
-	// Deny refuses it; the agent is told and goes on without it.
-	Deny Decision = "deny"
+	// DecisionAllow lets the call run.
+	DecisionAllow Decision = "allow"
+	// DecisionDeny refuses it; the agent is told and goes on without it.
+	DecisionDeny Decision = "deny"
 )
 
 // ConfirmToolParams approves or denies a tool call or an approval.
@@ -580,7 +580,7 @@ type ConfirmToolParams struct {
 	ToolUseID string
 	// ApprovalID names an EventApprovalRequested that asks for approval.
 	ApprovalID string
-	// Decision is Allow or Deny. Required.
+	// Decision is DecisionAllow or DecisionDeny. Required.
 	Decision Decision
 	// Note tells the agent why, in the person's words.
 	Note string
@@ -598,8 +598,8 @@ func (c *Client) ConfirmTool(ctx context.Context, id string, params *ConfirmTool
 	if params == nil || (params.ToolUseID == "") == (params.ApprovalID == "") {
 		return nil, errors.New("agents: ConfirmToolParams needs exactly one of ToolUseID and ApprovalID")
 	}
-	if params.Decision != Allow && params.Decision != Deny {
-		return nil, fmt.Errorf("agents: ConfirmToolParams.Decision is %q, not Allow or Deny", params.Decision)
+	if params.Decision != DecisionAllow && params.Decision != DecisionDeny {
+		return nil, fmt.Errorf("agents: ConfirmToolParams.Decision is %q, not DecisionAllow or DecisionDeny", params.Decision)
 	}
 	payload := map[string]any{"decision": params.Decision}
 	if params.ToolUseID != "" {

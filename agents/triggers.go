@@ -141,9 +141,9 @@ type TriggerSession struct {
 	// Title names a new session for a person.
 	Title string `json:"title,omitempty"`
 	// Policy is whether a firing starts a new session or continues the
-	// open one its Key names; PolicyNew when empty.
+	// open one its Key names; SessionPolicyNew when empty.
 	Policy SessionPolicy `json:"policy,omitempty"`
-	// Key names a firing's session, for PolicyContinue: empty on a
+	// Key names a firing's session, for SessionPolicyContinue: empty on a
 	// schedule, and the event's resource on an event, when left out.
 	Key string `json:"key,omitempty"`
 	// Machine is where the session's commands run; the agent's when nil.
@@ -165,11 +165,11 @@ type SessionPolicy string
 
 // The session policies.
 const (
-	// PolicyNew starts a new session for every firing.
-	PolicyNew SessionPolicy = "new"
-	// PolicyContinue sends the message to the open session the firing's
-	// key names, and starts one when there is none.
-	PolicyContinue SessionPolicy = "continue"
+	// SessionPolicyNew starts a new session for every firing.
+	SessionPolicyNew SessionPolicy = "new"
+	// SessionPolicyContinue sends the message to the open session the
+	// firing's key names, and starts one when there is none.
+	SessionPolicyContinue SessionPolicy = "continue"
 )
 
 // A SessionResource is one thing a triggered session attaches.

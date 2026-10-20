@@ -155,7 +155,7 @@ func ExampleClient_AnswerQuestion() {
 func ExampleClient_ConfirmTool() {
 	_, err := client().ConfirmTool(context.Background(), "ses_01M34G2JF01B91B8399CD1G6YP", &agents.ConfirmToolParams{
 		ToolUseID: "toolu_01",
-		Decision:  agents.Allow,
+		Decision:  agents.DecisionAllow,
 	})
 	if err != nil {
 		log.Fatal(err)

@@ -266,10 +266,10 @@ func TestSendingEvents(t *testing.T) {
 	if _, err := s.AnswerQuestion(t.Context(), "ses_1", &agents.AnswerQuestionParams{ToolUseID: "call_2"}); err != nil {
 		t.Fatal(err)
 	}
-	if _, err := s.ConfirmTool(t.Context(), "ses_1", &agents.ConfirmToolParams{ToolUseID: "call_3", Decision: agents.Allow, Note: "fine", Remember: "web_fetch(domain:example.com)"}); err != nil {
+	if _, err := s.ConfirmTool(t.Context(), "ses_1", &agents.ConfirmToolParams{ToolUseID: "call_3", Decision: agents.DecisionAllow, Note: "fine", Remember: "web_fetch(domain:example.com)"}); err != nil {
 		t.Fatal(err)
 	}
-	if _, err := s.ConfirmTool(t.Context(), "ses_1", &agents.ConfirmToolParams{ApprovalID: "apr_1", Decision: agents.Deny}); err != nil {
+	if _, err := s.ConfirmTool(t.Context(), "ses_1", &agents.ConfirmToolParams{ApprovalID: "apr_1", Decision: agents.DecisionDeny}); err != nil {
 		t.Fatal(err)
 	}
 	want := []string{
@@ -299,8 +299,8 @@ func TestSendingEvents(t *testing.T) {
 		"no content":    second(s.SendMessage(t.Context(), "ses_1", &agents.SendMessageParams{})),
 		"no params":     second(s.SendMessage(t.Context(), "ses_1", nil)),
 		"no call":       second(s.AnswerQuestion(t.Context(), "ses_1", &agents.AnswerQuestionParams{})),
-		"both ids":      second(s.ConfirmTool(t.Context(), "ses_1", &agents.ConfirmToolParams{ToolUseID: "a", ApprovalID: "b", Decision: agents.Allow})),
-		"no id":         second(s.ConfirmTool(t.Context(), "ses_1", &agents.ConfirmToolParams{Decision: agents.Allow})),
+		"both ids":      second(s.ConfirmTool(t.Context(), "ses_1", &agents.ConfirmToolParams{ToolUseID: "a", ApprovalID: "b", Decision: agents.DecisionAllow})),
+		"no id":         second(s.ConfirmTool(t.Context(), "ses_1", &agents.ConfirmToolParams{Decision: agents.DecisionAllow})),
 		"bad decision":  second(s.ConfirmTool(t.Context(), "ses_1", &agents.ConfirmToolParams{ToolUseID: "a", Decision: "maybe"})),
 		"empty session": second(s.Interrupt(t.Context(), "")),
 		"missing":       second(s.Interrupt(t.Context(), "ses_missing")),
@@ -451,7 +451,7 @@ func TestUpdateAndResume(t *testing.T) {
 	if (*calls)[0].Method != http.MethodPatch || (*calls)[0].Key != "" {
 		t.Errorf("update was %s with key %q; want a PATCH with none, which the API does not read", (*calls)[0].Method, (*calls)[0].Key)
 	}
-	if _, err := s.ResumeSession(t.Context(), "ses_1", &agents.ResumeSessionParams{MaxCostUSDMicro: 5000000, Reason: "budget_raised"}); err != nil {
+	if _, err := s.ResumeSession(t.Context(), "ses_1", &agents.ResumeSessionParams{MaxCostMicroUSD: 5000000, Reason: "budget_raised"}); err != nil {
 		t.Fatal(err)
 	}
 	if c := (*calls)[1]; c.Body["reason"] != "budget_raised" || c.Body["max_cost_usd_micro"] != float64(5000000) {
@@ -566,7 +566,7 @@ func TestVerdictsAndApprovals(t *testing.T) {
 	if err := e.Decode(&d); err != nil {
 		t.Fatal(err)
 	}
-	if d.ApprovalID != "apr_1" || d.Decision != agents.Allow || d.By == nil || d.By.Subject != "alice" {
+	if d.ApprovalID != "apr_1" || d.Decision != agents.DecisionAllow || d.By == nil || d.By.Subject != "alice" {
 		t.Errorf("approval decided %+v", d)
 	}
 }

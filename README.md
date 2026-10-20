@@ -17,7 +17,8 @@ they share. Import the ones you use:
 | Package | What it does |
 |---|---|
 | [`latere`](https://pkg.go.dev/latere.ai/x/sdk-go/latere) | The core: configuration, credentials, errors, retries, pagination |
-| [`agents`](https://pkg.go.dev/latere.ai/x/sdk-go/agents) | Sessions with agents: create, list, follow, answer, approve, end |
+| [`agents`](https://pkg.go.dev/latere.ai/x/sdk-go/agents) | Sessions with agents: create, list, follow, answer, approve, end; triggers that start them |
+| [`connections`](https://pkg.go.dev/latere.ai/x/sdk-go/connections) | The services a person connects once, such as a calendar or an MCP server, which agents then use |
 | [`account`](https://pkg.go.dev/latere.ai/x/sdk-go/account) | Your Effort levels, wallet, preferences, pins and computers |
 | [`signin`](https://pkg.go.dev/latere.ai/x/sdk-go/signin) | Signing a person in, for apps Latere registers |
 
@@ -120,7 +121,22 @@ to wait for a tool your program runs, is idle with `StopReason`
 `SendToolResult`. End a session whose work is done with `EndSession`, or
 remove it for good with `DeleteSession`.
 
-The package covers sessions and their events. Defining agents, triggers,
+A trigger starts sessions on its own, on a schedule or when an event
+arrives. Apply one by name; applying it again replaces it:
+
+```go
+_, err = ag.ApplyTrigger(ctx, &agents.Trigger{
+	Metadata: agents.TriggerMetadata{Name: "weekly-digest"},
+	Spec: agents.TriggerSpec{
+		Agent:    "release-notes",
+		Schedule: "0 9 * * 1",
+		TimeZone: "Europe/Berlin",
+		Session:  agents.TriggerSession{Message: "Summarize last week's releases."},
+	},
+})
+```
+
+The package covers sessions, their events and triggers. Defining agents,
 searching sessions, a session's files, changing a session's model and
 resuming a session are not covered yet; call them with `Config.Do` (see
 [Configuration](#configuration)).
@@ -133,6 +149,30 @@ levels, err := acct.GetEffortLevels(ctx) // what each Effort level costs now
 devices, err := acct.ListDevices(ctx)    // the person's computers sessions can work on
 _, err = acct.PinSession(ctx, s.ID)
 ```
+
+## Connections
+
+A person connects a service once, and agents use it without ever holding
+the credential. A service that signs people in answers a page to send them
+to; the browser comes back to your `ReturnTo` page with a code:
+
+```go
+cs := connections.New(cfg)
+r, err := cs.CreateConnection(ctx, &connections.CreateConnectionParams{
+	Connector: "google-calendar",
+	ReturnTo:  "https://example.com/connected",
+})
+if err != nil {
+	return err
+}
+if r.AuthorizationURL != "" {
+	// Send the person to r.AuthorizationURL. On the ReturnTo page:
+	_, err = cs.ConfirmConnection(ctx, r.Connection.ID, code)
+}
+```
+
+`ListConnectors` lists the services a person may connect, and
+`CreateConnector` adds an MCP server of their own.
 
 ## Streaming
 

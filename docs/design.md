@@ -24,6 +24,7 @@ work; the README says how to use them.
 flowchart TD
     agents --> latere
     account --> latere
+    connections --> latere
     signin --> latere
     latere --> sse[internal/sse]
     app[your program] --> agents

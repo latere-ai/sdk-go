@@ -12,6 +12,7 @@ import (
 	"net/http/httptest"
 	"strings"
 	"testing"
+	"time"
 
 	"latere.ai/x/sdk-go/agents"
 	"latere.ai/x/sdk-go/latere"
@@ -436,7 +437,7 @@ func TestUpdateAndResume(t *testing.T) {
 		"PATCH /v1/agents/sessions/ses_1":       session,
 		"POST /v1/agents/sessions/ses_1/resume": session,
 	})
-	got, err := s.UpdateSession(t.Context(), "ses_1", &agents.UpdateSessionParams{Model: &agents.Model{Name: "tier/thorough"}, Policy: agents.PolicyConfirm, Title: "Notes", Metadata: map[string]string{"p": "1"}})
+	got, err := s.UpdateSession(t.Context(), "ses_1", &agents.UpdateSessionParams{Model: &agents.ModelChange{Name: "tier/thorough"}, Policy: agents.PolicyConfirm, Title: "Notes", Metadata: map[string]string{"p": "1"}})
 	if err != nil || got.ID != "ses_1" {
 		t.Fatalf("update: %+v, %v", got, err)
 	}
@@ -447,8 +448,8 @@ func TestUpdateAndResume(t *testing.T) {
 	if want := `{"metadata":{"p":"1"},"model":{"name":"tier/thorough"},"policy":{"mode":"confirm"},"title":"Notes"}`; string(body) != want {
 		t.Errorf("update sent %s, want %s", body, want)
 	}
-	if (*calls)[0].Method != http.MethodPatch || (*calls)[0].Key == "" {
-		t.Errorf("update was %s with key %q", (*calls)[0].Method, (*calls)[0].Key)
+	if (*calls)[0].Method != http.MethodPatch || (*calls)[0].Key != "" {
+		t.Errorf("update was %s with key %q; want a PATCH with none, which the API does not read", (*calls)[0].Method, (*calls)[0].Key)
 	}
 	if _, err := s.ResumeSession(t.Context(), "ses_1", &agents.ResumeSessionParams{MaxCostUSDMicro: 5000000, Reason: "budget_raised"}); err != nil {
 		t.Fatal(err)
@@ -478,6 +479,68 @@ func TestUpdateAndResume(t *testing.T) {
 	}
 	if got, err := s.UpdateSession(t.Context(), "ses_gone", &agents.UpdateSessionParams{Title: "x"}); got != nil || !errors.Is(err, latere.ErrNotFound) {
 		t.Errorf("an update the API refused: %+v, %v; want no session and the 404", got, err)
+	}
+}
+
+// A model change sends only the members it sets: reasoning alone keeps the
+// model, and AgentReasoning sends an empty level, which returns to the
+// agent's own. Labels merge: a deleted one is sent as null.
+func TestUpdateSessionSendsWhatItChanges(t *testing.T) {
+	s, calls := fakeAPI(t, map[string]string{"PATCH /v1/agents/sessions/ses_1": session})
+	for name, tc := range map[string]struct {
+		params *agents.UpdateSessionParams
+		want   string
+	}{
+		"reasoning alone":        {&agents.UpdateSessionParams{Model: &agents.ModelChange{Reasoning: agents.ReasoningHigh}}, `{"model":{"reasoning":"high"}}`},
+		"the agent's own":        {&agents.UpdateSessionParams{Model: &agents.ModelChange{AgentReasoning: true}}, `{"model":{"reasoning":""}}`},
+		"name and level":         {&agents.UpdateSessionParams{Model: &agents.ModelChange{Name: "tier/quick", Reasoning: agents.ReasoningLow}}, `{"model":{"name":"tier/quick","reasoning":"low"}}`},
+		"labels set and removed": {&agents.UpdateSessionParams{Metadata: map[string]string{"p": "2"}, DeleteMetadata: []string{"old"}}, `{"metadata":{"old":null,"p":"2"}}`},
+	} {
+		*calls = nil
+		if _, err := s.UpdateSession(t.Context(), "ses_1", tc.params); err != nil {
+			t.Fatalf("%s: %v", name, err)
+		}
+		body, err := json.Marshal((*calls)[0].Body)
+		if err != nil {
+			t.Fatal(err)
+		}
+		if string(body) != tc.want {
+			t.Errorf("%s: sent %s, want %s", name, body, tc.want)
+		}
+	}
+	*calls = nil
+	for name, params := range map[string]*agents.UpdateSessionParams{
+		"a level and the agent's own": {Model: &agents.ModelChange{Reasoning: agents.ReasoningHigh, AgentReasoning: true}},
+		"an empty model change":       {Model: &agents.ModelChange{}},
+		"a label set and deleted":     {Metadata: map[string]string{"p": "1"}, DeleteMetadata: []string{"p"}},
+	} {
+		if _, err := s.UpdateSession(t.Context(), "ses_1", params); err == nil {
+			t.Errorf("%s: no error", name)
+		}
+	}
+	if len(*calls) != 0 {
+		t.Errorf("a refused change was sent: %+v", *calls)
+	}
+}
+
+// An update that only sets values is retried after a server error.
+func TestUpdateSessionIsRetried(t *testing.T) {
+	var sends int
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		sends++
+		if sends == 1 {
+			w.WriteHeader(http.StatusBadGateway)
+			return
+		}
+		fmt.Fprint(w, session)
+	}))
+	t.Cleanup(srv.Close)
+	cfg, err := latere.NewConfig(latere.WithBaseURL(srv.URL), latere.WithTokenSource(latere.StaticToken("key_test")), latere.WithBackoff(time.Millisecond, time.Millisecond))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err := agents.New(cfg).UpdateSession(t.Context(), "ses_1", &agents.UpdateSessionParams{Title: "x"}); err != nil || sends != 2 {
+		t.Errorf("update: %v after %d sends; want success after 2", err, sends)
 	}
 }
 

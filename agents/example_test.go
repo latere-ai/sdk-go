@@ -204,9 +204,26 @@ func ExampleClient_EndSession() {
 // Running a session's next turn at another Effort level.
 func ExampleClient_UpdateSession() {
 	_, err := client().UpdateSession(context.Background(), "ses_01M34G2JF01B91B8399CD1G6YP", &agents.UpdateSessionParams{
-		Model: &agents.Model{Name: "tier/thorough"},
+		Model: &agents.ModelChange{Name: "tier/thorough"},
 	})
 	if err != nil {
+		log.Fatal(err)
+	}
+}
+
+// Raising how much the model reasons, keeping its model, and later
+// returning to the level the agent names.
+func ExampleModelChange() {
+	ctx := context.Background()
+	id := "ses_01M34G2JF01B91B8399CD1G6YP"
+	if _, err := client().UpdateSession(ctx, id, &agents.UpdateSessionParams{
+		Model: &agents.ModelChange{Reasoning: agents.ReasoningHigh},
+	}); err != nil {
+		log.Fatal(err)
+	}
+	if _, err := client().UpdateSession(ctx, id, &agents.UpdateSessionParams{
+		Model: &agents.ModelChange{AgentReasoning: true},
+	}); err != nil {
 		log.Fatal(err)
 	}
 }

@@ -178,14 +178,28 @@ const (
 	SenderService SenderKind = "service"
 )
 
-// Model is the model a session's turns run on.
+// Model is the model a session's turns run on, as the API reports it.
 type Model struct {
-	// Name is the model's routed name, such as "tier/quick" for an Effort
-	// level.
+	// Name is the model's routed name, such as "tier/quick" for the Quick
+	// Effort level, or a catalog model's name.
 	Name string `json:"name"`
-	// Reasoning is how much the model reasons, when it takes a level.
-	Reasoning string `json:"reasoning,omitempty"`
+	// Reasoning is how much the model reasons, when it takes a level; empty
+	// when it runs at its agent's own level.
+	Reasoning ReasoningLevel `json:"reasoning,omitempty"`
 }
+
+// ReasoningLevel is how much a model reasons before it answers. It is the
+// model's own depth; the Effort level, such as Quick or Thorough, is the
+// tier a session runs on and is chosen by Model.Name.
+type ReasoningLevel string
+
+// The reasoning levels.
+const (
+	ReasoningMinimal ReasoningLevel = "minimal"
+	ReasoningLow     ReasoningLevel = "low"
+	ReasoningMedium  ReasoningLevel = "medium"
+	ReasoningHigh    ReasoningLevel = "high"
+)
 
 // MachineKind is what kind of machine a session's commands run on.
 type MachineKind string

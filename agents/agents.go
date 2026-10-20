@@ -262,15 +262,56 @@ const (
 // UpdateSessionParams changes a session. A field left at its zero value
 // keeps what the session has; set at least one.
 type UpdateSessionParams struct {
-	// Model is the model the session's next turn runs on, such as
-	// &Model{Name: "tier/thorough"} for an Effort level.
-	Model *Model
+	// Model changes the model the session's next turn runs on, its
+	// reasoning level, or both; nil keeps both.
+	Model *ModelChange
 	// Policy is the approval mode of the session's next steps.
 	Policy PolicyMode
 	// Title renames the session.
 	Title string
-	// Metadata replaces the session's labels.
+	// Metadata sets labels on the session: each key is set to its value,
+	// and the session's other labels are kept.
 	Metadata map[string]string
+	// DeleteMetadata removes the labels it names.
+	DeleteMetadata []string
+}
+
+// A ModelChange is a change to the model a session runs on. Set Name,
+// Reasoning or both; a field left at its zero value keeps what the session
+// runs. To return the reasoning to the level the agent names, set
+// AgentReasoning instead of Reasoning.
+type ModelChange struct {
+	// Name is the model to switch to, such as "tier/thorough" for the
+	// Thorough Effort level; empty keeps the session's model.
+	Name string
+	// Reasoning is the reasoning level to run at; empty keeps the session's.
+	Reasoning ReasoningLevel
+	// AgentReasoning returns the reasoning level to the agent's own. It
+	// cannot be combined with Reasoning.
+	AgentReasoning bool
+}
+
+// body returns the change as the API takes it, or an error naming what is
+// wrong with it.
+func (m *ModelChange) body() (map[string]string, error) {
+	if m.Reasoning != "" && m.AgentReasoning {
+		return nil, errors.New("agents: ModelChange sets both Reasoning and AgentReasoning")
+	}
+	out := map[string]string{}
+	if m.Name != "" {
+		out["name"] = m.Name
+	}
+	switch {
+	case m.Reasoning != "":
+		out["reasoning"] = string(m.Reasoning)
+	case m.AgentReasoning:
+		// An empty level is how the API returns to the agent's own.
+		out["reasoning"] = ""
+	}
+	if len(out) == 0 {
+		return nil, errors.New("agents: ModelChange changes nothing; set Name, Reasoning or AgentReasoning")
+	}
+	return out, nil
 }
 
 // UpdateSession changes a session's model, approval mode, title or labels
@@ -284,7 +325,11 @@ func (c *Client) UpdateSession(ctx context.Context, id string, params *UpdateSes
 	}
 	body := map[string]any{}
 	if params.Model != nil {
-		body["model"] = params.Model
+		m, err := params.Model.body()
+		if err != nil {
+			return nil, err
+		}
+		body["model"] = m
 	}
 	if params.Policy != "" {
 		body["policy"] = map[string]any{"mode": params.Policy}
@@ -292,17 +337,27 @@ func (c *Client) UpdateSession(ctx context.Context, id string, params *UpdateSes
 	if params.Title != "" {
 		body["title"] = params.Title
 	}
-	if params.Metadata != nil {
-		body["metadata"] = params.Metadata
+	if len(params.Metadata) > 0 || len(params.DeleteMetadata) > 0 {
+		// The API merges labels: a string sets its key, and null removes it.
+		labels := make(map[string]*string, len(params.Metadata)+len(params.DeleteMetadata))
+		for k, v := range params.Metadata {
+			labels[k] = &v
+		}
+		for _, k := range params.DeleteMetadata {
+			if _, set := params.Metadata[k]; set {
+				return nil, fmt.Errorf("agents: UpdateSessionParams both sets and deletes the label %q", k)
+			}
+			labels[k] = nil
+		}
+		body["metadata"] = labels
 	}
 	if len(body) == 0 {
 		return nil, errors.New("agents: UpdateSessionParams changes nothing")
 	}
 	var out Session
 	// A change sets values rather than adding to them, so sending it again
-	// has the effect of sending it once; the key lets a lost answer be
-	// retried.
-	req := &latere.Request{Method: http.MethodPatch, Path: sessionPath(id, ""), Body: body, IdempotencyKey: latere.NewIdempotencyKey()}
+	// has the effect of sending it once, and it is retried.
+	req := &latere.Request{Method: http.MethodPatch, Path: sessionPath(id, ""), Body: body, Retry: latere.RetryAlways}
 	if err := c.cfg.Do(ctx, req, &out); err != nil {
 		return nil, err
 	}

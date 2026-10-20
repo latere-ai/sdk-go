@@ -112,8 +112,9 @@ key. Every method that creates or sends something sends an
 `Idempotency-Key`, generated when the caller gives none, so retries never
 create a second session or send a message twice. Where a part of the API
 takes no key, as the apps part does not yet, its creating methods send no
-key and are not retried: a repeat could create a second app or send an
-invite twice, and the caller is better placed to decide. A repeat that arrives
+key and are not retried: a repeat could create a second app, or answer
+an invite's people as already invited and count them twice against the
+day's invitations, and the caller is better placed to decide. A repeat that arrives
 while the first request is still being answered is refused with 409, which
 the SDK does not retry, since it cannot tell it from a real conflict; the
 first request still succeeds, and the docs tell the caller to read the

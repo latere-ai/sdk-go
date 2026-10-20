@@ -44,6 +44,16 @@ const (
 	AccessSetPassword AccessAction = "set_password"
 )
 
+// Role is what a person invited to an app may do.
+type Role string
+
+// Roles.
+const (
+	// RoleViewer opens the app at its address and its previews, and
+	// nothing else of it.
+	RoleViewer Role = "viewer"
+)
+
 // AccessState is whether an invited person has signed in yet.
 type AccessState string
 
@@ -118,8 +128,8 @@ type AccessLimits struct {
 type Person struct {
 	// ID identifies the invite; give it to RevokeAccess.
 	ID string `json:"id"`
-	// Role is what the person may do: "viewer", who opens the app.
-	Role string `json:"role"`
+	// Role is what the person may do.
+	Role Role `json:"role"`
 	// Email is the address invited.
 	Email string `json:"email"`
 	// State is AccessPending until a person signs in at the app with the
@@ -161,6 +171,8 @@ type InviteParams struct {
 	// Emails are the addresses to invite, at most
 	// AccessLimits.MaxEmailsPerInvite. Required.
 	Emails []string `json:"emails"`
+	// Role is what the people invited may do; RoleViewer when empty.
+	Role Role `json:"role,omitempty"`
 }
 
 // Invites is the answer of an Invite.
@@ -197,7 +209,8 @@ type SkippedInvite struct {
 }
 
 // Invite invites people to the app appID names by their email addresses.
-// A person opens the app once they sign in at it with an invited address.
+// The platform sends no email: a person opens the app once they sign in at
+// it with an invited address.
 // Addresses already invited, and the caller's own, are skipped rather
 // than refused. Inviting too many people in a day returns an error
 // matching latere.ErrRateLimited.

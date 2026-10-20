@@ -318,11 +318,11 @@ func TestAccess(t *testing.T) {
 		a.Password == nil || a.Organization != nil || a.Limits.MaxPeople != 50 || a.Actions[2] != apps.AccessSetPassword {
 		t.Errorf("GetAccess = %+v", a)
 	}
-	inv, err := c.Invite(ctx, appID, &apps.InviteParams{Emails: []string{"a@b.example", "me@b.example"}})
+	inv, err := c.Invite(ctx, appID, &apps.InviteParams{Emails: []string{"a@b.example", "me@b.example"}, Role: apps.RoleViewer})
 	if err != nil {
 		t.Fatal(err)
 	}
-	if len(inv.People) != 1 || inv.People[0].State != apps.AccessPending || inv.Skipped[0].Reason != "self" {
+	if len(inv.People) != 1 || inv.People[0].State != apps.AccessPending || inv.People[0].Role != apps.RoleViewer || inv.Skipped[0].Reason != "self" {
 		t.Errorf("Invite = %+v", inv)
 	}
 	if err := c.RevokeAccess(ctx, appID, "inv_1"); err != nil {
@@ -337,8 +337,9 @@ func TestAccess(t *testing.T) {
 	calls := f.record()
 	var invite struct {
 		Emails []string `json:"emails"`
+		Role   string   `json:"role"`
 	}
-	if err := json.Unmarshal([]byte(calls[1].Body), &invite); err != nil || len(invite.Emails) != 2 {
+	if err := json.Unmarshal([]byte(calls[1].Body), &invite); err != nil || len(invite.Emails) != 2 || invite.Role != "viewer" {
 		t.Errorf("Invite body = %s", calls[1].Body)
 	}
 	if strings.TrimSpace(calls[3].Body) != `{"password":"harbor-lights"}` || calls[3].Method != http.MethodPut {
@@ -346,8 +347,9 @@ func TestAccess(t *testing.T) {
 	}
 }
 
-// An invite is sent once, whatever the retry policy: a repeat could send
-// the invitation email twice.
+// An invite is sent once, whatever the retry policy: a repeat would answer
+// the people as already invited and count them twice against the day's
+// invitations.
 func TestInvitesAreNotRetried(t *testing.T) {
 	c, f := newFake(t, 2, map[string]http.HandlerFunc{
 		"POST /v1/account/apps/a1/access/invites": answer(http.StatusBadGateway, `{"error":{"code":"unavailable","message":"Try again.","details":{}}}`),

@@ -73,6 +73,23 @@ func jsonFields(t reflect.Type) []string {
 	return out
 }
 
+// requestSchema is the schema of the JSON body an operation takes, which
+// a document may write in place rather than under components.
+func requestSchema(t *testing.T, d *document, method, path string) *schema {
+	t.Helper()
+	var op struct {
+		RequestBody struct {
+			Content map[string]struct {
+				Schema *schema `json:"schema"`
+			} `json:"content"`
+		} `json:"requestBody"`
+	}
+	if err := json.Unmarshal(d.Paths[path][method], &op); err != nil {
+		t.Fatal(err)
+	}
+	return op.RequestBody.Content["application/json"].Schema
+}
+
 // object is the object a nullable schema allows besides null.
 func object(s *schema) *schema {
 	for _, alt := range s.OneOf {
@@ -93,7 +110,8 @@ var leftOut = map[string]string{
 
 func TestModelsMatchTheSchemas(t *testing.T) {
 	a := loadDocument(t, "apps").Components.Schemas
-	acc := loadDocument(t, "account").Components.Schemas
+	accountDoc := loadDocument(t, "account")
+	acc := accountDoc.Components.Schemas
 	access := acc["AppAccess"]
 	cases := map[string]struct {
 		model  any
@@ -125,6 +143,7 @@ func TestModelsMatchTheSchemas(t *testing.T) {
 		"Person":             {apps.Person{}, acc["AppAccessPerson"]},
 		"PersonAccount":      {apps.PersonAccount{}, acc["AppAccessPerson"].Properties["person"]},
 		"Invites":            {apps.Invites{}, acc["AppInvites"]},
+		"InviteParams":       {apps.InviteParams{}, requestSchema(t, accountDoc, "post", "/v1/account/apps/{app_id}/access/invites")},
 		"SkippedInvite":      {apps.SkippedInvite{}, acc["AppInvites"].Properties["skipped"].Items},
 	}
 	for name, c := range cases {

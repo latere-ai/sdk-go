@@ -15,12 +15,13 @@ minor version may break code, and every such change is marked **Breaking**.
   `errors.As`, retries with backoff and jitter for requests that are safe
   to repeat, a default timeout of 80 seconds per call, pagination as Go
   iterators, and resumable event streams.
-- Package `agents`: create, list, read, fork, archive, unarchive, end and
-  delete sessions; read a session's events page by page or follow them
-  live; send messages, interrupt, answer questions, approve or deny tool
-  calls, and send the results of tools your program runs. Typed payloads
-  for the agent's responses, tool calls and their results, status changes
-  and session errors.
+- Package `agents`: create, list, read, change, fork, archive, unarchive,
+  resume, end and delete sessions; read a session's events page by page or
+  follow them live; send messages, interrupt, answer questions, approve or
+  deny tool calls and connections, and send the results of tools your
+  program runs. Typed payloads for the agent's responses, tool calls with
+  the approval policy's verdict, their results, connection approvals,
+  status changes and session errors.
 - Package `account`: Effort levels, the wallet, preferences, pinning
   sessions, the person's computers, and applying a managed agent.
 - Package `signin`: signing a person in through their browser or with a

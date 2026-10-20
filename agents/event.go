@@ -234,6 +234,75 @@ type ToolUse struct {
 	// to run: your program runs it, and the session waits with
 	// StopToolResult until Client.SendToolResult answers it.
 	Client bool `json:"client,omitempty"`
+	// Verdict is what the session's approval policy decided about the
+	// call. VerdictAsk means the session waits with StopToolConfirmation
+	// until Client.ConfirmTool answers the call.
+	Verdict Verdict `json:"verdict,omitempty"`
+	// Reason explains the verdict, when the policy gave one.
+	Reason string `json:"reason,omitempty"`
+}
+
+// Verdict is what a session's approval policy decided about a tool call or
+// a connection.
+type Verdict string
+
+// The verdicts of ToolUse and ApprovalRequested.
+const (
+	// VerdictAllow runs the call without asking.
+	VerdictAllow Verdict = "allow"
+	// VerdictAsk waits for a person to allow or deny the call.
+	VerdictAsk Verdict = "ask"
+	// VerdictDeny refuses the call; the agent is told.
+	VerdictDeny Verdict = "deny"
+	// VerdictFlag runs the call and marks it for review.
+	VerdictFlag Verdict = "flag"
+	// VerdictBlock refuses a connection without asking and records it.
+	VerdictBlock Verdict = "block"
+)
+
+// ApprovalRequested is the payload of an EventApprovalRequested event:
+// after a tool call ran, the session's network refused a connection the
+// call made, and a person is asked whether the session may reach the host.
+// Answer it with Client.ConfirmTool and ConfirmToolParams.ApprovalID.
+type ApprovalRequested struct {
+	// ApprovalID identifies the request; an answer names it.
+	ApprovalID string `json:"approval_id"`
+	// ToolUseID names the call that made the connection.
+	ToolUseID string `json:"tool_use_id"`
+	// Source is what raised the request, such as "egress" for the
+	// session's network.
+	Source string `json:"source"`
+	// Destination is the host the session tried to reach.
+	Destination Destination `json:"destination"`
+	// Reason explains the request, when there is more to say.
+	Reason string `json:"reason,omitempty"`
+	// Verdict is VerdictAsk for a request that waits for a person, or
+	// VerdictBlock for one recorded without asking.
+	Verdict Verdict `json:"verdict"`
+	// More counts further connections to the same host the request
+	// stands for.
+	More int `json:"more,omitempty"`
+}
+
+// Destination is a host a session tried to reach.
+type Destination struct {
+	// Host is the host name or address.
+	Host string `json:"host"`
+	// Port is the port, when the request names one.
+	Port int `json:"port,omitempty"`
+}
+
+// ApprovalDecided is the payload of an EventApprovalDecided event: the
+// answer to an ApprovalRequested.
+type ApprovalDecided struct {
+	// ApprovalID names the request answered.
+	ApprovalID string `json:"approval_id"`
+	// Decision is Allow or Deny.
+	Decision Decision `json:"decision"`
+	// By is who answered, when a person did.
+	By *Sender `json:"by,omitempty"`
+	// Note is the answer's note, when it has one.
+	Note string `json:"note,omitempty"`
 }
 
 // Questions returns the questions of a call of the "question" tool, and an

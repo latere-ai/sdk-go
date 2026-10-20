@@ -200,3 +200,13 @@ func ExampleClient_EndSession() {
 	}
 	fmt.Println(s.Status, s.StopReason)
 }
+
+// Running a session's next turn at another Effort level.
+func ExampleClient_UpdateSession() {
+	_, err := client().UpdateSession(context.Background(), "ses_01M34G2JF01B91B8399CD1G6YP", &agents.UpdateSessionParams{
+		Model: &agents.Model{Name: "tier/thorough"},
+	})
+	if err != nil {
+		log.Fatal(err)
+	}
+}

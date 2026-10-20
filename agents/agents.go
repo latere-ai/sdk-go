@@ -244,6 +244,96 @@ func (c *Client) DeleteSession(ctx context.Context, id string) error {
 	return c.cfg.Do(ctx, &latere.Request{Method: http.MethodDelete, Path: sessionPath(id, "")}, nil)
 }
 
+// PolicyMode is how a session's next steps decide whether a tool call needs
+// a person's approval.
+type PolicyMode string
+
+// The approval modes of UpdateSessionParams.
+const (
+	// PolicyPlan plans without running anything that changes state.
+	PolicyPlan PolicyMode = "plan"
+	// PolicyConfirm asks before every call that changes something.
+	PolicyConfirm PolicyMode = "confirm"
+	// PolicyProgressive asks only for calls its policy marks as needing
+	// a person.
+	PolicyProgressive PolicyMode = "progressive"
+)
+
+// UpdateSessionParams changes a session. A field left at its zero value
+// keeps what the session has; set at least one.
+type UpdateSessionParams struct {
+	// Model is the model the session's next turn runs on, such as
+	// &Model{Name: "tier/thorough"} for an Effort level.
+	Model *Model
+	// Policy is the approval mode of the session's next steps.
+	Policy PolicyMode
+	// Title renames the session.
+	Title string
+	// Metadata replaces the session's labels.
+	Metadata map[string]string
+}
+
+// UpdateSession changes a session's model, approval mode, title or labels
+// and returns the session. A change applies from the session's next turn.
+func (c *Client) UpdateSession(ctx context.Context, id string, params *UpdateSessionParams) (*Session, error) {
+	if id == "" {
+		return nil, errNoID
+	}
+	if params == nil {
+		return nil, errors.New("agents: UpdateSession needs UpdateSessionParams")
+	}
+	body := map[string]any{}
+	if params.Model != nil {
+		body["model"] = params.Model
+	}
+	if params.Policy != "" {
+		body["policy"] = map[string]any{"mode": params.Policy}
+	}
+	if params.Title != "" {
+		body["title"] = params.Title
+	}
+	if params.Metadata != nil {
+		body["metadata"] = params.Metadata
+	}
+	if len(body) == 0 {
+		return nil, errors.New("agents: UpdateSessionParams changes nothing")
+	}
+	var out Session
+	// A change sets values rather than adding to them, so sending it again
+	// has the effect of sending it once; the key lets a lost answer be
+	// retried.
+	req := &latere.Request{Method: http.MethodPatch, Path: sessionPath(id, ""), Body: body, IdempotencyKey: latere.NewIdempotencyKey()}
+	if err := c.cfg.Do(ctx, req, &out); err != nil {
+		return nil, err
+	}
+	return &out, nil
+}
+
+// ResumeSessionParams resumes a session that stopped on its budget.
+type ResumeSessionParams struct {
+	// MaxCostUSDMicro raises the session's cost cap, in millionths of a US
+	// dollar; zero keeps the cap and resumes once credit is available.
+	MaxCostUSDMicro int64
+	// Reason says why the session resumes, such as "budget_raised".
+	Reason string
+}
+
+// ResumeSession resumes a session idle with StopBudget, once its cap is
+// raised or credit is added, and returns it. It returns an error matching
+// latere.ErrConflict for a session that is not stopped on its budget.
+func (c *Client) ResumeSession(ctx context.Context, id string, params *ResumeSessionParams) (*Session, error) {
+	body := map[string]any{}
+	if params != nil {
+		if params.MaxCostUSDMicro > 0 {
+			body["max_cost_usd_micro"] = params.MaxCostUSDMicro
+		}
+		if params.Reason != "" {
+			body["reason"] = params.Reason
+		}
+	}
+	return c.action(ctx, id, "/resume", body)
+}
+
 // action posts to one of a session's action routes and returns the
 // session.
 func (c *Client) action(ctx context.Context, id, route string, body any) (*Session, error) {

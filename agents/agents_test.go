@@ -430,3 +430,77 @@ func TestAClientWithoutAConfig(t *testing.T) {
 		}
 	}
 }
+
+func TestUpdateAndResume(t *testing.T) {
+	s, calls := fakeAPI(t, map[string]string{
+		"PATCH /v1/agents/sessions/ses_1":       session,
+		"POST /v1/agents/sessions/ses_1/resume": session,
+	})
+	got, err := s.UpdateSession(t.Context(), "ses_1", &agents.UpdateSessionParams{Model: &agents.Model{Name: "tier/thorough"}, Policy: agents.PolicyConfirm, Title: "Notes", Metadata: map[string]string{"p": "1"}})
+	if err != nil || got.ID != "ses_1" {
+		t.Fatalf("update: %+v, %v", got, err)
+	}
+	body, err := json.Marshal((*calls)[0].Body)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if want := `{"metadata":{"p":"1"},"model":{"name":"tier/thorough"},"policy":{"mode":"confirm"},"title":"Notes"}`; string(body) != want {
+		t.Errorf("update sent %s, want %s", body, want)
+	}
+	if (*calls)[0].Method != http.MethodPatch || (*calls)[0].Key == "" {
+		t.Errorf("update was %s with key %q", (*calls)[0].Method, (*calls)[0].Key)
+	}
+	if _, err := s.ResumeSession(t.Context(), "ses_1", &agents.ResumeSessionParams{MaxCostUSDMicro: 5000000, Reason: "budget_raised"}); err != nil {
+		t.Fatal(err)
+	}
+	if c := (*calls)[1]; c.Body["reason"] != "budget_raised" || c.Body["max_cost_usd_micro"] != float64(5000000) {
+		t.Errorf("resume sent %+v", c.Body)
+	}
+	if _, err := s.ResumeSession(t.Context(), "ses_1", nil); err != nil {
+		t.Fatal(err)
+	}
+	if c := (*calls)[2]; len(c.Body) != 0 {
+		t.Errorf("a resume with no parameters sent %+v", c.Body)
+	}
+	n := len(*calls)
+	for name, err := range map[string]error{
+		"update of no id":         second(s.UpdateSession(t.Context(), "", &agents.UpdateSessionParams{Title: "x"})),
+		"update with no params":   second(s.UpdateSession(t.Context(), "ses_1", nil)),
+		"update changing nothing": second(s.UpdateSession(t.Context(), "ses_1", &agents.UpdateSessionParams{})),
+		"resume of no id":         second(s.ResumeSession(t.Context(), "", nil)),
+	} {
+		if err == nil {
+			t.Errorf("%s: no error", name)
+		}
+	}
+	if len(*calls) != n {
+		t.Errorf("a refused call was sent: %+v", (*calls)[n:])
+	}
+}
+
+func TestVerdictsAndApprovals(t *testing.T) {
+	var u agents.ToolUse
+	e := agents.Event{ID: "evt_1", Type: agents.EventAgentToolUse, Payload: json.RawMessage(`{"tool_use_id":"call_3","name":"bash","input":{"command":"rm -r build"},"verdict":"ask","reason":"Deletes files."}`)}
+	if err := e.Decode(&u); err != nil {
+		t.Fatal(err)
+	}
+	if u.Verdict != agents.VerdictAsk || u.Reason != "Deletes files." {
+		t.Errorf("tool use %+v", u)
+	}
+	var a agents.ApprovalRequested
+	e = agents.Event{ID: "evt_2", Type: agents.EventApprovalRequested, Payload: json.RawMessage(`{"approval_id":"apr_1","tool_use_id":"call_3","source":"egress","destination":{"host":"example.com","port":443},"verdict":"ask","more":2}`)}
+	if err := e.Decode(&a); err != nil {
+		t.Fatal(err)
+	}
+	if a.ApprovalID != "apr_1" || a.Destination.Host != "example.com" || a.Destination.Port != 443 || a.Verdict != agents.VerdictAsk || a.More != 2 {
+		t.Errorf("approval requested %+v", a)
+	}
+	var d agents.ApprovalDecided
+	e = agents.Event{ID: "evt_3", Type: agents.EventApprovalDecided, Payload: json.RawMessage(`{"approval_id":"apr_1","decision":"allow","by":{"subject":"alice","kind":"person"}}`)}
+	if err := e.Decode(&d); err != nil {
+		t.Fatal(err)
+	}
+	if d.ApprovalID != "apr_1" || d.Decision != agents.Allow || d.By == nil || d.By.Subject != "alice" {
+		t.Errorf("approval decided %+v", d)
+	}
+}

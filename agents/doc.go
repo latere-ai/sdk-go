@@ -37,10 +37,10 @@
 // # Scope
 //
 // The package covers sessions and their events: listing, reading,
-// creating, forking, archiving, ending and deleting sessions, reading and
-// following their logs, and sending messages, interrupts, answers,
-// approvals and tool results. It does not cover yet defining agents and
-// their versions, triggers, searching and counting sessions, a session's
-// files, changing a session's model, resuming a session, or redacting an
-// event. Call those with latere.Config.Do until it does.
+// creating, changing, forking, archiving, resuming, ending and deleting
+// sessions, reading and following their logs, and sending messages,
+// interrupts, answers, approvals and tool results. It does not cover yet
+// defining agents and their versions, triggers, searching and counting
+// sessions, a session's files, or redacting an event. Call those with
+// latere.Config.Do until it does.
 package agents

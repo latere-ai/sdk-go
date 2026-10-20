@@ -120,10 +120,12 @@ to wait for a tool your program runs, is idle with `StopReason`
 `SendToolResult`. End a session whose work is done with `EndSession`, or
 remove it for good with `DeleteSession`.
 
+Change a session's model or approval mode with `UpdateSession`, and
+resume one that stopped on its budget with `ResumeSession`.
+
 The package covers sessions and their events. Defining agents, triggers,
-searching sessions, a session's files, changing a session's model and
-resuming a session are not covered yet; call them with `Config.Do` (see
-[Configuration](#configuration)).
+searching sessions and a session's files are not covered yet; call them
+with `Config.Do` (see [Configuration](#configuration)).
 
 ## Account
 

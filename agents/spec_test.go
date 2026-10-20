@@ -187,6 +187,8 @@ func TestEndpointsAreInTheDocument(t *testing.T) {
 		{"post", "/sessions/{id}/unarchive"},
 		{"post", "/sessions/{id}/end"},
 		{"post", "/sessions/{id}/fork"},
+		{"patch", "/sessions/{id}"},
+		{"post", "/sessions/{id}/resume"},
 		{"get", "/sessions/{id}/events"},
 		{"post", "/sessions/{id}/events"},
 		{"get", "/sessions/{id}/stream"},

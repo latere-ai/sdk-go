@@ -22,11 +22,16 @@ jobs:
         os: [ubuntu-latest, macos-latest, windows-latest]
         go: ["1.26.x", "1.27.x"]
     steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-go@v5
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e # v7.0.0
         with:
           go-version: ${{ matrix.go }}
+          # The module has no dependencies, so there is nothing to cache.
+          cache: false
       - name: Test
+        # bash on every runner: PowerShell splits -coverprofile=coverage.out
+        # at the dot.
+        shell: bash
         run: go test -race -count=1 -covermode=atomic -coverprofile=coverage.out ./...
       - name: Coverage
         if: matrix.os == 'ubuntu-latest' && matrix.go == '1.27.x'
@@ -39,10 +44,12 @@ jobs:
   lint:
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-go@v5
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e # v7.0.0
         with:
           go-version: "1.27.x"
+          # The linters and the refresh tool are the module downloads.
+          cache-dependency-path: tools/go.sum
       - name: gofmt
         run: make fmt-check
       - name: go vet

@@ -44,8 +44,9 @@ type Error struct {
 	// Details holds developer detail when the API sent any, such as the
 	// field a request got wrong.
 	Details map[string]any
-	// RequestID identifies the request in the API's logs; include it when
-	// you report a problem.
+	// RequestID identifies the request in the API's logs, from the
+	// X-Request-Id header or the error's details; include it when you report
+	// a problem.
 	RequestID string
 	// RetryAfter is how long the API asked the caller to wait before
 	// trying again, from the Retry-After header; zero when it did not say.
@@ -111,6 +112,11 @@ func newError(resp *http.Response, body []byte) *Error {
 		e.Code = envelope.Error.Code
 		e.Message = envelope.Error.Message
 		e.Details = envelope.Error.Details
+		// Some services, the models capability among them, name the request
+		// in the envelope's details rather than in a header.
+		if id, ok := e.Details["request_id"].(string); ok && e.RequestID == "" {
+			e.RequestID = id
+		}
 		return e
 	}
 	text := strings.TrimSpace(string(body))

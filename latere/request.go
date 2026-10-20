@@ -51,6 +51,29 @@ type Request struct {
 	// key, one built with WithTokenSource, sends its token as for any
 	// request.
 	SendKey bool
+	// Content, when not nil, is the request's body as raw bytes, sent in
+	// place of Body: ContentLength bytes from its start, of the media type
+	// ContentType. Each attempt reads it from the start, so a request with
+	// Content is retried by its Retry rule like any other. An *os.File, a
+	// *bytes.Reader and an *io.SectionReader are each an io.ReaderAt.
+	Content io.ReaderAt
+	// ContentLength is how many bytes of Content are sent, as the
+	// Content-Length header; the API admits a write by it before reading
+	// the bytes.
+	ContentLength int64
+	// ContentType is Content's media type; "application/octet-stream"
+	// when it is empty.
+	ContentType string
+	// SignedURL, when set, is an address the API signed and handed out,
+	// such as an upload part's link. The request goes there in place of
+	// the base URL and Path, and without the Config's credential, which
+	// the link stands in for.
+	SignedURL string
+	// KeepRedirect makes Open return a 3xx answer as it is, rather than
+	// following it: its Location header says where the API sent the
+	// request, such as a short-lived link to a file's bytes. Do refuses a
+	// request that sets it, since a redirect has no JSON to decode.
+	KeepRedirect bool
 }
 
 // Do sends r and decodes the JSON answer into out, which may be nil to
@@ -60,6 +83,9 @@ type Request struct {
 func (c *Config) Do(ctx context.Context, r *Request, out any) error {
 	if err := c.built(); err != nil {
 		return err
+	}
+	if r.KeepRedirect {
+		return errors.New("latere: a request that keeps its redirect is sent with Open, not Do")
 	}
 	if c.timeout > 0 {
 		if _, has := ctx.Deadline(); !has {
@@ -197,7 +223,12 @@ func (c *Config) send(ctx context.Context, r *Request) (*http.Response, error) {
 		return nil, err
 	}
 	var body []byte
-	if r.Body != nil {
+	switch {
+	case r.Content != nil && r.Body != nil:
+		return nil, fmt.Errorf("latere: %s %s sets both Body and Content; it sends one body", r.Method, r.Path)
+	case r.Content != nil && r.ContentLength < 0:
+		return nil, fmt.Errorf("latere: %s %s has a ContentLength of %d", r.Method, r.Path, r.ContentLength)
+	case r.Body != nil:
 		if body, err = json.Marshal(r.Body); err != nil {
 			return nil, fmt.Errorf("latere: encoding the body of %s %s: %w", r.Method, r.Path, err)
 		}
@@ -218,7 +249,7 @@ func (c *Config) send(ctx context.Context, r *Request) (*http.Response, error) {
 			}
 			continue
 		}
-		if resp.StatusCode/100 == 2 {
+		if resp.StatusCode/100 == 2 || (r.KeepRedirect && resp.StatusCode/100 == 3) {
 			return resp, nil
 		}
 		raw, readErr := io.ReadAll(io.LimitReader(resp.Body, maxErrorBody))
@@ -231,7 +262,7 @@ func (c *Config) send(ctx context.Context, r *Request) (*http.Response, error) {
 		// once more with a fresh token whatever its method. A request that
 		// sent the key itself has no token to renew.
 		_, sentKey := c.key(r)
-		if resp.StatusCode == http.StatusUnauthorized && !resetDone && !sentKey {
+		if resp.StatusCode == http.StatusUnauthorized && !resetDone && !sentKey && r.SignedURL == "" {
 			if rs, ok := c.tokens.(Resetter); ok {
 				rs.Reset()
 				resetDone = true
@@ -305,7 +336,7 @@ func (c *Config) key(r *Request) (string, bool) {
 // attempt sends r once.
 func (c *Config) attempt(ctx context.Context, r *Request, target string, body []byte) (*http.Response, error) {
 	bearer, sentKey := c.key(r)
-	if !sentKey {
+	if !sentKey && r.SignedURL == "" {
 		token, err := c.tokens.Token(ctx)
 		if err != nil {
 			return nil, &TokenError{Err: err}
@@ -313,24 +344,42 @@ func (c *Config) attempt(ctx context.Context, r *Request, target string, body []
 		bearer = token.Value
 	}
 	var reader io.Reader
-	if body != nil {
+	switch {
+	case r.Content != nil:
+		reader = io.NewSectionReader(r.Content, 0, r.ContentLength)
+	case body != nil:
 		reader = bytes.NewReader(body)
 	}
 	req, err := http.NewRequestWithContext(ctx, r.Method, target, reader)
 	if err != nil {
 		return nil, err
 	}
+	if r.Content != nil {
+		// A section reader is not one of the readers a request takes its
+		// length from, and the API admits a write by its length.
+		req.ContentLength = r.ContentLength
+		if r.ContentLength == 0 {
+			req.Body = http.NoBody
+		}
+	}
 	for k, vs := range r.Header {
 		for _, v := range vs {
 			req.Header.Add(k, v)
 		}
 	}
-	req.Header.Set("Authorization", "Bearer "+bearer)
+	if bearer != "" {
+		req.Header.Set("Authorization", "Bearer "+bearer)
+	}
 	req.Header.Set("User-Agent", c.userAgent)
-	if req.Header.Get("Accept") == "" {
+	if req.Header.Get("Accept") == "" && r.SignedURL == "" {
 		req.Header.Set("Accept", "application/json")
 	}
-	if body != nil {
+	switch {
+	case r.Content != nil && r.ContentType != "":
+		req.Header.Set("Content-Type", r.ContentType)
+	case r.Content != nil:
+		req.Header.Set("Content-Type", "application/octet-stream")
+	case body != nil:
 		req.Header.Set("Content-Type", "application/json")
 	}
 	if r.IdempotencyKey != "" {
@@ -339,8 +388,16 @@ func (c *Config) attempt(ctx context.Context, r *Request, target string, body []
 	if c.hooks.BeforeRequest != nil {
 		c.hooks.BeforeRequest(req)
 	}
+	client := c.httpClient
+	if r.KeepRedirect {
+		// A copy of the caller's client that stops at a redirect; the copy
+		// shares its transport, so its connections are reused.
+		kept := *client
+		kept.CheckRedirect = func(*http.Request, []*http.Request) error { return http.ErrUseLastResponse }
+		client = &kept
+	}
 	start := time.Now()
-	resp, err := c.httpClient.Do(req)
+	resp, err := client.Do(req)
 	if c.hooks.AfterResponse != nil {
 		c.hooks.AfterResponse(req, resp, err, time.Since(start))
 	}
@@ -352,6 +409,13 @@ func (c *Config) attempt(ctx context.Context, r *Request, target string, body []
 func (c *Config) url(r *Request) (string, error) {
 	if r.Method == "" {
 		return "", errors.New("latere: the request has no method")
+	}
+	if r.SignedURL != "" {
+		u, err := url.Parse(r.SignedURL)
+		if err != nil || (u.Scheme != "https" && u.Scheme != "http") || u.Host == "" {
+			return "", fmt.Errorf("latere: the signed URL %q is not an http or https address", r.SignedURL)
+		}
+		return r.SignedURL, nil
 	}
 	if !strings.HasPrefix(r.Path, "/") || strings.ContainsAny(r.Path, "?#") {
 		return "", fmt.Errorf("latere: the path %q does not start with / or holds a query or a fragment", r.Path)

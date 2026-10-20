@@ -485,6 +485,11 @@ type TriggerEvent struct {
 // trigger fires now without one. A firing whose session failed to start
 // returns both the firing, whose Outcome and Reason say what went wrong,
 // and an *latere.Error with status 503; firing again runs it again.
+//
+// FireTrigger is sent once, never again after a failure: the API forgets
+// a firing's idempotency key when it answers with a server error, so a
+// repeat would fire the trigger again. Pass the same IdempotencyKey to
+// fire again yourself; an answered firing then returns its first answer.
 func (c *Client) FireTrigger(ctx context.Context, ref string, params *FireTriggerParams) (*Firing, error) {
 	if ref == "" {
 		return nil, errNoTrigger
@@ -499,6 +504,7 @@ func (c *Client) FireTrigger(ctx context.Context, ref string, params *FireTrigge
 	if req.IdempotencyKey == "" {
 		req.IdempotencyKey = latere.NewIdempotencyKey()
 	}
+	req.Retry = latere.RetryNever
 	var out Firing
 	if err := c.cfg.Do(ctx, req, &out); err != nil {
 		var apiErr *latere.Error

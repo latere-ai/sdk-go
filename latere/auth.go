@@ -157,11 +157,13 @@ func (b *boundTransport) get() *transport {
 }
 
 // KeyTokens returns API tokens for a key created under Keys in the console.
-// A key is not sent with requests: it is exchanged at the issuer's token
-// endpoint (an OAuth 2.0 client credentials grant, with the key as the
-// secret of the shared client id "pat") for a token of about 15 minutes
-// that acts as the key's owner, and exchanged again shortly before that
-// token expires. Build one with NewKeyTokens, or let WithKey build it.
+// A key is exchanged at the issuer's token endpoint (an OAuth 2.0 client
+// credentials grant, with the key as the secret of the shared client id
+// "pat") for a token of about 15 minutes that acts as the key's owner, and
+// exchanged again shortly before that token expires. Requests carry that
+// token, not the key, except a request with Request.SendKey set: the models
+// capability authenticates a key as itself. Build one with NewKeyTokens, or
+// let WithKey build it.
 //
 // Its exchanges go through the HTTP client, User-Agent and hooks of the
 // Config it is given to, the first one when it is given to several.
@@ -198,6 +200,15 @@ func (k *KeyTokens) Token(ctx context.Context) (Token, error) { return k.reuse.T
 
 // Reset drops the held token, so the next call exchanges the key again.
 func (k *KeyTokens) Reset() { k.reuse.Reset() }
+
+// platformKey returns the key itself, for a request with Request.SendKey.
+func (k *KeyTokens) platformKey() string { return k.key }
+
+// keyHolder is a token source that holds a platform key, which a request
+// with Request.SendKey sends as itself.
+type keyHolder interface {
+	platformKey() string
+}
 
 func (k *KeyTokens) bind(t *transport) { k.tr.bind(t) }
 

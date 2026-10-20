@@ -40,6 +40,12 @@ type Request struct {
 	// refused with 409 and ErrConflict, even though the first succeeds:
 	// read the resource to learn the outcome.
 	IdempotencyKey string
+	// SendKey sends the platform key itself as the bearer credential,
+	// instead of the short-lived token it is exchanged for. The models
+	// capability authenticates this way. A Config whose credentials are not
+	// a key, one built with WithTokenSource, sends its token as for any
+	// request.
+	SendKey bool
 }
 
 // Do sends r and decodes the JSON answer into out, which may be nil to
@@ -193,8 +199,10 @@ func (c *Config) send(ctx context.Context, r *Request) (*http.Response, error) {
 		}
 		apiErr := newError(resp, raw)
 		// A 401 means the request was not acted on, so it is safe to send
-		// once more with a fresh token whatever its method.
-		if resp.StatusCode == http.StatusUnauthorized && !resetDone {
+		// once more with a fresh token whatever its method. A request that
+		// sent the key itself has no token to renew.
+		_, sentKey := c.key(r)
+		if resp.StatusCode == http.StatusUnauthorized && !resetDone && !sentKey {
 			if rs, ok := c.tokens.(Resetter); ok {
 				rs.Reset()
 				resetDone = true
@@ -242,11 +250,28 @@ func temporary(err error) bool {
 	return errors.As(te.err, &netErr)
 }
 
+// key returns the platform key to send as r's credential, when r asks for
+// the key and the Config holds one.
+func (c *Config) key(r *Request) (string, bool) {
+	if !r.SendKey {
+		return "", false
+	}
+	kh, ok := c.tokens.(keyHolder)
+	if !ok {
+		return "", false
+	}
+	return kh.platformKey(), true
+}
+
 // attempt sends r once.
 func (c *Config) attempt(ctx context.Context, r *Request, target string, body []byte) (*http.Response, error) {
-	token, err := c.tokens.Token(ctx)
-	if err != nil {
-		return nil, &tokenError{err}
+	bearer, sentKey := c.key(r)
+	if !sentKey {
+		token, err := c.tokens.Token(ctx)
+		if err != nil {
+			return nil, &tokenError{err}
+		}
+		bearer = token.Value
 	}
 	var reader io.Reader
 	if body != nil {
@@ -261,7 +286,7 @@ func (c *Config) attempt(ctx context.Context, r *Request, target string, body []
 			req.Header.Add(k, v)
 		}
 	}
-	req.Header.Set("Authorization", "Bearer "+token.Value)
+	req.Header.Set("Authorization", "Bearer "+bearer)
 	req.Header.Set("User-Agent", c.userAgent)
 	if req.Header.Get("Accept") == "" {
 		req.Header.Set("Accept", "application/json")

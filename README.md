@@ -4,8 +4,9 @@
 [![CI](https://github.com/latere-ai/sdk-go/actions/workflows/ci.yml/badge.svg)](https://github.com/latere-ai/sdk-go/actions/workflows/ci.yml)
 
 The official Go client for the [Latere API](https://platform.latere.ai/docs):
-start sessions with agents, follow them as they work, answer what they ask,
-publish apps, and read your account. It depends on the Go standard library alone.
+start sessions with agents and follow them as they work, connect the
+services they use, publish apps, call models, and read your account. It
+depends on the Go standard library alone.
 
 ```sh
 go get latere.ai/x/sdk-go
@@ -21,6 +22,8 @@ they share. Import the ones you use:
 | [`connections`](https://pkg.go.dev/latere.ai/x/sdk-go/connections) | The services a person connects once, such as a calendar or an MCP server, which agents then use |
 | [`account`](https://pkg.go.dev/latere.ai/x/sdk-go/account) | Your Effort levels, wallet, preferences, pins and computers |
 | [`apps`](https://pkg.go.dev/latere.ai/x/sdk-go/apps) | Apps: create, list, change, delete; their deploys, build logs, releases and who may open them |
+| [`llm`](https://pkg.go.dev/latere.ai/x/sdk-go/llm) | Calling models in the Lux dialect: generate, stream, count tokens, list models |
+| [`llm/wire`](https://pkg.go.dev/latere.ai/x/sdk-go/llm/wire) | The Lux dialect's types alone, for code that reads or writes the format without calling the API |
 | [`signin`](https://pkg.go.dev/latere.ai/x/sdk-go/signin) | Signing a person in, for apps Latere registers |
 
 Create a key under **Keys** in the
@@ -65,8 +68,8 @@ func main() {
 }
 ```
 
-More packages will follow the same pattern: storage, repos,
-environments, connections, and `llm` for calling models.
+More packages will follow the same pattern: storage, repos and
+environments.
 
 ## Requirements
 
@@ -209,6 +212,35 @@ if r.AuthorizationURL != "" {
 
 `ListConnectors` lists the services a person may connect, and
 `CreateConnector` adds an MCP server of their own.
+
+## Models
+
+Package `llm` calls models in the Lux dialect, one request, response and
+streaming shape for every catalog model. The models capability takes the
+key itself rather than a token exchanged for it, which the package handles:
+build its Client from a `Config` whose credentials are a key.
+
+```go
+models := llm.New(cfg)
+res, err := models.Generate(ctx, &llm.Request{
+	Model:    "anthropic/claude-sonnet-4.5",
+	Messages: []llm.Message{llm.UserText("Hello")},
+})
+if err != nil {
+	return err
+}
+fmt.Println(res.Text())
+```
+
+`Stream` delivers the answer as typed events, `CountTokens` counts a
+request's input tokens without spending any, and `ListModels` lists what
+the key may call. A field the model's provider cannot represent is named in
+`Result.Loss` rather than dropped silently. A generation is never sent a
+second time after a failure, since the model may have run.
+
+Programs built on the OpenAI or Anthropic SDKs reach the same models with
+the same key through the models capability's compatible endpoints; see
+[Providers and doors](https://platform.latere.ai/docs/models/providers).
 
 ## Streaming
 

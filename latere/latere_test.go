@@ -551,3 +551,69 @@ func TestVersionMatchesTheChangelog(t *testing.T) {
 		t.Errorf("Version is %q, and the newest release in CHANGELOG.md is %s", Version, m[1])
 	}
 }
+
+// A request with SendKey carries the platform key itself, and asks the
+// issuer for nothing: the models capability authenticates a key as itself.
+func TestSendKeyPresentsTheKeyItself(t *testing.T) {
+	var issued atomic.Int32
+	issuer := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		issued.Add(1)
+		http.Error(w, "not expected", http.StatusTeapot)
+	}))
+	defer issuer.Close()
+	var got []string
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		got = append(got, r.Header.Get("Authorization"))
+		w.WriteHeader(http.StatusUnauthorized)
+		fmt.Fprint(w, `{"error":{"code":"unauthenticated","message":"This request needs a valid credential."}}`)
+	}))
+	defer srv.Close()
+	kt, err := NewKeyTokens("pat_test", WithIssuer(issuer.URL))
+	if err != nil {
+		t.Fatal(err)
+	}
+	c, _ := testConfig(t, srv, WithTokenSource(kt))
+	err = c.Do(t.Context(), &Request{Method: http.MethodPost, Path: "/v1/models/lux/v1/generate", SendKey: true}, nil)
+	if !errors.Is(err, ErrUnauthorized) {
+		t.Fatalf("err = %v, want ErrUnauthorized", err)
+	}
+	if len(got) != 1 || got[0] != "Bearer pat_test" {
+		t.Errorf("Authorization = %q, want the key itself, sent once: a key has no token to renew after a 401", got)
+	}
+	if issued.Load() != 0 {
+		t.Errorf("the issuer was asked %d times, want none", issued.Load())
+	}
+}
+
+// A Config whose credentials are not a key sends its token, SendKey or not.
+func TestSendKeyWithATokenSourceSendsItsToken(t *testing.T) {
+	var got string
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		got = r.Header.Get("Authorization")
+		fmt.Fprint(w, `{}`)
+	}))
+	defer srv.Close()
+	c, _ := testConfig(t, srv)
+	if err := c.Do(t.Context(), &Request{Method: http.MethodGet, Path: "/v1/models/lux/v1/models", SendKey: true}, nil); err != nil {
+		t.Fatal(err)
+	}
+	if got != "Bearer key_test" {
+		t.Errorf("Authorization = %q, want the token source's token", got)
+	}
+}
+
+// A service that names the request in the envelope's details, rather than
+// in X-Request-Id, still gives the Error its request id.
+func TestErrorRequestIDFromTheDetails(t *testing.T) {
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.WriteHeader(http.StatusNotFound)
+		fmt.Fprint(w, `{"error":{"code":"model_not_found","message":"There is no model of that name.","details":{"detail":"no Model named \"x\"","request_id":"req_1"}}}`)
+	}))
+	defer srv.Close()
+	c, _ := testConfig(t, srv)
+	err := c.Do(t.Context(), &Request{Method: http.MethodGet, Path: "/v1/x"}, nil)
+	var apiErr *Error
+	if !errors.As(err, &apiErr) || apiErr.RequestID != "req_1" || apiErr.Code != "model_not_found" {
+		t.Fatalf("err = %#v, want model_not_found with request req_1", err)
+	}
+}

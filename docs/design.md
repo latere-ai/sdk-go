@@ -159,6 +159,32 @@ web app for instance. The iterator stops at an empty cursor and also at a
 cursor equal to the last one, so a server answering the same page forever
 cannot hang a loop.
 
+## The models capability
+
+The models capability authenticates a key as itself: a model client sends
+one fixed string, and the service matches it by hash. So `latere.Request`
+has `SendKey`, which sends the key a `Config` holds instead of the token it
+is exchanged for, and package `llm` sets it on every request. A `Config`
+whose credentials are a token source sends its token, which the service
+accepts only when it is a key's value.
+
+A generation is not idempotent: the model runs, and the call is billed.
+`llm` sends it without an idempotency key, so the core never sends it
+again, and a generation's stream is read once, with no reconnect, unlike a
+session's log: a dropped stream ends with `io.ErrUnexpectedEOF`. Counting
+tokens changes nothing, so it carries an idempotency key and is retried as
+any safe request.
+
+The Lux dialect's request, response and stream types are its one public
+definition, and the service's own codec uses them, so a field cannot be
+added on one side and missed on the other. They live in `llm/wire`, not in
+`llm`, because the codec runs inside the gateway: importing `llm` would put
+this module's HTTP client and token exchange in the gateway's build, where
+its architecture admits no identity library. `wire` imports the standard
+library alone. `llm` names each type as an alias and each constant again,
+so a program imports one package, and a test fails when `wire` exports a
+name `llm` does not.
+
 ## Streams
 
 A session's events are a log with sequence numbers, served as server-sent

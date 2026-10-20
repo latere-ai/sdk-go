@@ -7,6 +7,10 @@ minor version may break code, and every such change is marked **Breaking**.
 
 ## [Unreleased]
 
+## [0.1.0] - 2026-10-20
+
+The first release.
+
 ### Added
 
 - The core package `latere`: one configuration shared by every package,

@@ -476,6 +476,9 @@ func TestUpdateAndResume(t *testing.T) {
 	if len(*calls) != n {
 		t.Errorf("a refused call was sent: %+v", (*calls)[n:])
 	}
+	if got, err := s.UpdateSession(t.Context(), "ses_gone", &agents.UpdateSessionParams{Title: "x"}); got != nil || !errors.Is(err, latere.ErrNotFound) {
+		t.Errorf("an update the API refused: %+v, %v; want no session and the 404", got, err)
+	}
 }
 
 func TestVerdictsAndApprovals(t *testing.T) {

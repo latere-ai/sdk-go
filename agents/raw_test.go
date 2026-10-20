@@ -52,3 +52,22 @@ func TestEveryResourceKeepsItsJSON(t *testing.T) {
 		}
 	}
 }
+
+// JSON of the wrong shape is refused, and nothing is kept.
+func TestAResourceRefusesJSONOfTheWrongShape(t *testing.T) {
+	for _, v := range []interface {
+		RawJSON() json.RawMessage
+	}{
+		&agents.Session{},
+		&agents.Event{},
+		&agents.Trigger{},
+		&agents.Firing{},
+	} {
+		if err := json.Unmarshal([]byte(`[]`), v); err == nil {
+			t.Errorf("%T decoded an array", v)
+		}
+		if v.RawJSON() != nil {
+			t.Errorf("%T kept JSON it refused", v)
+		}
+	}
+}

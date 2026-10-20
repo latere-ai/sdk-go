@@ -48,3 +48,23 @@ func TestTheWalletKeepsTheJSONTheAPIAnswered(t *testing.T) {
 		t.Errorf("wallet %+v with %s; want the decoded amount and the whole answer", w, w.RawJSON())
 	}
 }
+
+// JSON of the wrong shape is refused, and nothing is kept.
+func TestAResourceRefusesJSONOfTheWrongShape(t *testing.T) {
+	for _, v := range []interface {
+		RawJSON() json.RawMessage
+	}{
+		&account.AppliedAgent{},
+		&account.EffortLevels{},
+		&account.Wallet{},
+		&account.Preferences{},
+		&account.Device{},
+	} {
+		if err := json.Unmarshal([]byte(`[]`), v); err == nil {
+			t.Errorf("%T decoded an array", v)
+		}
+		if v.RawJSON() != nil {
+			t.Errorf("%T kept JSON it refused", v)
+		}
+	}
+}

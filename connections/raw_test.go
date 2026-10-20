@@ -46,3 +46,22 @@ func TestAConnectionKeepsTheJSONTheAPIAnswered(t *testing.T) {
 		t.Errorf("connection %s with %.40s; want the decoded id and the whole answer", got.ID, got.RawJSON())
 	}
 }
+
+// JSON of the wrong shape is refused, and nothing is kept.
+func TestAResourceRefusesJSONOfTheWrongShape(t *testing.T) {
+	for _, v := range []interface {
+		RawJSON() json.RawMessage
+	}{
+		&connections.Connection{},
+		&connections.Connector{},
+		&connections.Tool{},
+		&connections.Call{},
+	} {
+		if err := json.Unmarshal([]byte(`[]`), v); err == nil {
+			t.Errorf("%T decoded an array", v)
+		}
+		if v.RawJSON() != nil {
+			t.Errorf("%T kept JSON it refused", v)
+		}
+	}
+}

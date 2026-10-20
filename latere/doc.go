@@ -53,6 +53,10 @@
 //		log.Printf("%s (request %s)", apiErr.Code, apiErr.RequestID)
 //	}
 //
+// An answer without the API's error envelope, such as a proxy's page, has
+// the HTTP status text as its Message; [Error.Body] holds the response as
+// it was sent.
+//
 // # Retries
 //
 // A request that failed on the network, or that the API answered with 408,
@@ -60,9 +64,10 @@
 // jitter, honoring Retry-After, when sending it twice is safe, as its
 // [RetryRule] says: by default a GET, HEAD, PUT or DELETE request, and a
 // POST that carries an idempotency key, which the API reads on POST alone.
-// The capability packages send a key on every POST that creates or sends
-// something, and retry every PATCH that only sets values. These calls are
-// sent once instead, never again after a failure:
+// The capability packages send a key on the POSTs that create or send
+// something, and retry every PATCH that only sets values and
+// llm.CountTokens, which changes nothing. These calls are sent once
+// instead, never again after a failure:
 //
 //	agents.FireTrigger               the API forgets a firing's key on a server error
 //	apps.CreateApp, apps.Invite      the apps API takes no key yet

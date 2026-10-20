@@ -125,8 +125,10 @@ to wait for a tool your program runs, is idle with `StopReason`
 `SendToolResult`. End a session whose work is done with `EndSession`, or
 remove it for good with `DeleteSession`.
 
-Change a session's model or approval mode with `UpdateSession`, and
-resume one that stopped on its budget with `ResumeSession`.
+Change a session's model, reasoning, approval mode, title or labels with
+`UpdateSession`; an `agents.ModelChange` changes the model, its reasoning
+level, or both, and `AgentReasoning` returns to the level the agent sets.
+Resume a session that stopped on its budget with `ResumeSession`.
 
 A trigger starts sessions on its own, on a schedule or when an event
 arrives. Apply one by name; applying it again replaces it:
@@ -174,6 +176,9 @@ deploys, err := ap.ListDeploys(ctx, a.Slug)
 if err != nil {
 	return err
 }
+if len(deploys) == 0 {
+	return nil // nothing was pushed yet
+}
 for ev, err := range ap.FollowDeployLog(ctx, a.Slug, deploys[0].ID, nil) {
 	if err != nil {
 		return err
@@ -192,22 +197,27 @@ take its slug.
 
 A person connects a service once, and agents use it without ever holding
 the credential. A service that signs people in answers a page to send them
-to; the browser comes back to your `ReturnTo` page with a code:
+to, and the browser comes back to the `ReturnTo` page:
 
 ```go
 cs := connections.New(cfg)
 r, err := cs.CreateConnection(ctx, &connections.CreateConnectionParams{
 	Connector: "google-calendar",
-	ReturnTo:  "https://example.com/connected",
+	ReturnTo:  "https://platform.latere.ai/console/connections",
 })
 if err != nil {
 	return err
 }
 if r.AuthorizationURL != "" {
-	// Send the person to r.AuthorizationURL. On the ReturnTo page:
-	_, err = cs.ConfirmConnection(ctx, r.Connection.ID, code)
+	fmt.Println("sign in at", r.AuthorizationURL)
 }
 ```
+
+`ReturnTo` must be a page Latere accepts: the console's Connections page,
+which finishes the sign-in itself, or Latere Chat's connector settings. A
+page of your own is refused with 400 until Latere registers apps' return
+pages; an app it registers finishes the sign-in with `ConfirmConnection`
+and the code its page receives.
 
 `ListConnectors` lists the services a person may connect, and
 `CreateConnector` adds an MCP server of their own.
@@ -222,7 +232,7 @@ build its Client from a `Config` whose credentials are a key.
 ```go
 models := llm.New(cfg)
 res, err := models.Generate(ctx, &llm.Request{
-	Model:    "anthropic/claude-sonnet-4.5",
+	Model:    "anthropic/claude-sonnet-4-5",
 	Messages: []llm.Message{llm.UserText("Hello")},
 })
 if err != nil {
@@ -326,10 +336,12 @@ case err != nil:
 A call cut off by its context returns an error matching the context's,
 such as `context.DeadlineExceeded`. A call that could not get credentials,
 because the key was revoked or a token source failed, returns a
-`*latere.TokenError` whose `Err` says why. When a refusal carries more
-than the error, `Error.Body` holds the response as the API sent it; a
-trigger's failed firing is one, and `FireTrigger` returns it decoded along
-with the error. Include the request id when you report a problem.
+`*latere.TokenError` whose `Err` says why. `Error.Body` holds the response as it was sent, up to 64 KiB. An answer
+without the API's error envelope, such as a proxy's page, has the HTTP
+status text as its `Message` and its own text only in `Body`. When a
+refusal carries more than the error, `Body` holds that too; a trigger's
+failed firing is one, and `FireTrigger` returns it decoded along with the
+error. Include the request id when you report a problem.
 
 ## Retries
 
@@ -337,15 +349,26 @@ A request that failed on the network, or that the API answered with 408,
 429, 500, 502, 503 or 504, is sent again up to twice, with exponential
 backoff and jitter, and after the wait a `Retry-After` header asks for.
 Only requests that are safe to repeat are retried: `GET`, `PUT` and
-`DELETE`, and requests that carry an idempotency key. Every method that
-creates or sends something sends a key, generated when you give none, so a
-retried `CreateSession` makes one session, not two. Two kinds of call are
-sent once instead: those whose part of the API takes no key yet,
-`apps.CreateApp` and `apps.Invite`, and `llm`'s `Generate` and `Stream`,
-since a model may have run and been billed before a failure. A repeat that
-reaches the API while the first request is still being answered gets 409
-(`latere.ErrConflict`) even though the first succeeds; read the resource to
-learn the outcome.
+`DELETE`, a `PATCH` that only sets values, such as `UpdateSession`, and a
+`POST` that carries an idempotency key, which the API reads on `POST`
+alone. The methods that create or send something send a key, generated
+when you give none, so a retried `CreateSession` makes one session, not
+two. These calls are sent once instead, never again after a failure:
+
+| Call | Why |
+|---|---|
+| `agents.FireTrigger` | the API forgets a firing's key when it answers with a server error |
+| `apps.CreateApp`, `apps.Invite` | the apps API takes no key yet |
+| `connections.ConfirmConnection` | a finished sign-in answers 410 to a repeat |
+| `connections.ReconnectConnection` | a repeat replaces the sign-in the first one started |
+| `llm.Generate`, `llm.Stream` | the model may have run and been billed |
+
+A repeat that reaches the API while the first request is still being
+answered gets 409 (`latere.ErrConflict`) even though the first succeeds;
+read the resource to learn the outcome. A request you send with
+`Config.Do` follows its method, or `latere.Request.Retry`:
+`latere.RetryAlways` for one that is safe to repeat whatever its method,
+`latere.RetryNever` for one that is not.
 
 A 401 is retried once with a fresh token when the token source can get one:
 keys, `latere.NewActorTokens` and `signin`'s sources can, and a source of

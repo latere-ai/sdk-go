@@ -38,7 +38,7 @@ func newClient(t *testing.T, h http.HandlerFunc, opts ...llm.Option) *llm.Client
 }
 
 func hello() *llm.Request {
-	return &llm.Request{Model: "anthropic/claude-sonnet-4.5", Messages: []llm.Message{llm.UserText("Hello")}}
+	return &llm.Request{Model: "anthropic/claude-sonnet-4-5", Messages: []llm.Message{llm.UserText("Hello")}}
 }
 
 func TestGenerateSendsTheKeyAndReadsTheAnswer(t *testing.T) {
@@ -54,12 +54,12 @@ func TestGenerateSendsTheKeyAndReadsTheAnswer(t *testing.T) {
 		if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
 			t.Fatal(err)
 		}
-		if req.Stream || req.Model != "anthropic/claude-sonnet-4.5" || req.Messages[0].Blocks[0].Text != "Hello" {
+		if req.Stream || req.Model != "anthropic/claude-sonnet-4-5" || req.Messages[0].Blocks[0].Text != "Hello" {
 			t.Errorf("request = %+v", req)
 		}
 		w.Header().Set("Lux-Loss", "top_k,cache_control")
 		w.Header().Set("Lux-Request-Id", "req_1")
-		fmt.Fprint(w, `{"id":"msg_1","model":"anthropic/claude-sonnet-4.5","blocks":[{"type":"thinking","text":"hm"},{"type":"text","text":"Hel"},{"type":"text","text":"lo"}],"stop_reason":"end_turn","usage":{"input_tokens":12,"output_tokens":3,"cost_usd_micro":0}}`)
+		fmt.Fprint(w, `{"id":"msg_1","model":"anthropic/claude-sonnet-4-5","blocks":[{"type":"thinking","text":"hm"},{"type":"text","text":"Hel"},{"type":"text","text":"lo"}],"stop_reason":"end_turn","usage":{"input_tokens":12,"output_tokens":3,"cost_usd_micro":0}}`)
 	})
 	req := hello()
 	req.Stream = true // Generate sends its own copy with Stream false
@@ -232,13 +232,13 @@ func TestListModels(t *testing.T) {
 		}
 		fmt.Fprint(w, `{"object":"list","data":[
 			{"id":"openai/gpt-5","object":"model","created":0,"owned_by":"openai"},
-			{"id":"anthropic/claude-sonnet-4.5","object":"model","created":1760000000,"owned_by":"anthropic","context_window":200000,"max_output_tokens":64000,"input_modalities":["text","image"],"pricing":{"currency":"USD","per":1000000,"input":"3","output":"15","cached_input":"0.3","cache_write":"3.75"}}]}`)
+			{"id":"anthropic/claude-sonnet-4-5","object":"model","created":1760000000,"owned_by":"anthropic","context_window":200000,"max_output_tokens":64000,"input_modalities":["text","image"],"pricing":{"currency":"USD","per":1000000,"input":"3","output":"15","cached_input":"0.3","cache_write":"3.75"}}]}`)
 	})
 	models, err := c.ListModels(t.Context())
 	if err != nil {
 		t.Fatal(err)
 	}
-	if len(models) != 2 || models[0].ID != "anthropic/claude-sonnet-4.5" || models[1].ID != "openai/gpt-5" {
+	if len(models) != 2 || models[0].ID != "anthropic/claude-sonnet-4-5" || models[1].ID != "openai/gpt-5" {
 		t.Fatalf("models = %+v, want them sorted by id", models)
 	}
 	m := models[0]

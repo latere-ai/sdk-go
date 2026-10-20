@@ -107,6 +107,23 @@ type Connection struct {
 	// LastUsedAt is when a session last made a request through it; nil
 	// before the first.
 	LastUsedAt *time.Time `json:"last_used_at,omitempty"`
+
+	raw json.RawMessage
+}
+
+// RawJSON returns the JSON the API answered for the connection, with every
+// field, including those this package does not model; nil for a Connection
+// the program built itself.
+func (c *Connection) RawJSON() json.RawMessage { return c.raw }
+
+// UnmarshalJSON decodes the connection and keeps the JSON for RawJSON.
+func (c *Connection) UnmarshalJSON(b []byte) error {
+	type plain Connection
+	if err := json.Unmarshal(b, (*plain)(c)); err != nil {
+		return err
+	}
+	c.raw = keep(b)
+	return nil
 }
 
 // ConnectionLinks are pages about a connection at its service.
@@ -201,6 +218,23 @@ type Connector struct {
 	// Connections is how many connections use an added server, answered
 	// to a caller who may change it.
 	Connections int `json:"connections,omitempty"`
+
+	raw json.RawMessage
+}
+
+// RawJSON returns the JSON the API answered for the connector, with every
+// field, including those this package does not model; nil for a Connector
+// the program built itself.
+func (c *Connector) RawJSON() json.RawMessage { return c.raw }
+
+// UnmarshalJSON decodes the connector and keeps the JSON for RawJSON.
+func (c *Connector) UnmarshalJSON(b []byte) error {
+	type plain Connector
+	if err := json.Unmarshal(b, (*plain)(c)); err != nil {
+		return err
+	}
+	c.raw = keep(b)
+	return nil
 }
 
 // ConnectorAuth is how a person gives a service access.
@@ -514,6 +548,23 @@ type Tool struct {
 	Effect Effect `json:"effect"`
 	// Hidden is true when a hidden mark names the tool.
 	Hidden bool `json:"hidden,omitempty"`
+
+	raw json.RawMessage
+}
+
+// RawJSON returns the JSON the API answered for the tool, with every field,
+// including those this package does not model; nil for a Tool the program
+// built itself.
+func (t *Tool) RawJSON() json.RawMessage { return t.raw }
+
+// UnmarshalJSON decodes the tool and keeps the JSON for RawJSON.
+func (t *Tool) UnmarshalJSON(b []byte) error {
+	type plain Tool
+	if err := json.Unmarshal(b, (*plain)(t)); err != nil {
+		return err
+	}
+	t.raw = keep(b)
+	return nil
 }
 
 // Effect is whether a tool or a request changes anything at a service.
@@ -580,6 +631,23 @@ type Call struct {
 	BytesOut int64 `json:"bytes_out"`
 	// Refs is how many branches and tags a git push named.
 	Refs int `json:"refs,omitempty"`
+
+	raw json.RawMessage
+}
+
+// RawJSON returns the JSON the API answered for the call, with every field,
+// including those this package does not model; nil for a Call the program
+// built itself.
+func (c *Call) RawJSON() json.RawMessage { return c.raw }
+
+// UnmarshalJSON decodes the call and keeps the JSON for RawJSON.
+func (c *Call) UnmarshalJSON(b []byte) error {
+	type plain Call
+	if err := json.Unmarshal(b, (*plain)(c)); err != nil {
+		return err
+	}
+	c.raw = keep(b)
+	return nil
 }
 
 // Outcome is what came of a request through a connection.

@@ -101,6 +101,10 @@ func (f *fakeIssuer) token(w http.ResponseWriter, r *http.Request) {
 		writeJSON(w, answer)
 	case "urn:ietf:params:oauth:grant-type:device_code":
 		i := int(f.polls.Add(1)) - 1
+		if i < len(f.devicePlan) && f.devicePlan[i] == "down" {
+			w.WriteHeader(http.StatusServiceUnavailable)
+			return
+		}
 		if i < len(f.devicePlan) && f.devicePlan[i] != "ok" {
 			oauthError(w, http.StatusBadRequest, f.devicePlan[i], "")
 			return
@@ -222,6 +226,20 @@ func TestDeviceSignsIn(t *testing.T) {
 	}
 	if f.polls.Load() != 3 {
 		t.Errorf("polled %d times, want 3", f.polls.Load())
+	}
+}
+
+func TestDeviceToleratesOneFailedPoll(t *testing.T) {
+	defaultInterval, slowDownStep = time.Millisecond, time.Millisecond
+	f := newIssuer(t)
+	f.devicePlan = []string{"down", "authorization_pending", "down", "ok"}
+	if _, err := f.config().Device(t.Context(), func(DeviceCode) error { return nil }); err != nil || f.polls.Load() != 4 {
+		t.Errorf("two failed polls apart: %v after %d polls", err, f.polls.Load())
+	}
+	f = newIssuer(t)
+	f.devicePlan = []string{"authorization_pending", "down", "down", "ok"}
+	if _, err := f.config().Device(t.Context(), func(DeviceCode) error { return nil }); err == nil || f.polls.Load() != 3 {
+		t.Errorf("two failed polls in a row: %v after %d polls", err, f.polls.Load())
 	}
 }
 
@@ -382,6 +400,11 @@ func TestDefaults(t *testing.T) {
 	c := &Config{}
 	if c.issuer() != "https://auth.latere.ai" || c.scopes() != "openid email profile offline_access" || c.httpClient() != http.DefaultClient {
 		t.Errorf("defaults %q %q", c.issuer(), c.scopes())
+	}
+	scopes := DefaultScopes()
+	scopes[0] = "changed"
+	if DefaultScopes()[0] != "openid" {
+		t.Error("a caller changed the default scopes")
 	}
 	c.Scopes, c.HTTPClient = []string{"openid"}, &http.Client{}
 	if c.scopes() != "openid" || c.httpClient() == http.DefaultClient {

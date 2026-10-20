@@ -8,19 +8,33 @@
 // who signed in (UserInfo), and ends it (Revoke).
 //
 // A sign-in's token opens the sign-in service only. To call the API as the
-// person, exchange it for API tokens with latere.ActorTokens:
+// person, exchange it for API tokens with latere.NewActorTokens:
 //
 //	signer := &signin.Config{ClientID: "my-app"}
 //	tok, err := signer.Browser(ctx, openInBrowser)
 //	if err != nil {
 //		return err
 //	}
-//	session := signer.TokenSource(tok, saveToKeychain)
-//	cfg, err := latere.NewConfig(latere.WithTokenSource(&latere.ActorTokens{Session: session}))
+//	tokens, err := latere.NewActorTokens(signer.TokenSource(tok, saveToKeychain))
+//	if err != nil {
+//		return err
+//	}
+//	cfg, err := latere.NewConfig(latere.WithTokenSource(tokens))
 //
-// Your program needs a client id registered with Latere's sign-in service,
-// allowed to return to a loopback address for Browser and to use the device
-// flow for Device.
+// # Registering your program
+//
+// Signing a person in needs a client id that Latere registers for your
+// program; registration is not self-service yet. To ask for one, write to
+// contact@latere.ai with your program's name, what it does, and which flows
+// it uses. The client is registered with api.latere.ai among its
+// audiences, so its sign-ins can be exchanged for API tokens. For Browser,
+// it is registered with exactly the redirect address
+// http://127.0.0.1/callback: Browser picks a free port when it runs, and
+// the sign-in service accepts any port on that address, but the path must
+// be /callback. For Device, it is registered for the device flow.
+//
+// A program that does not act for a person, such as a script or a server,
+// needs none of this: it uses a key with latere.WithKey.
 package signin
 
 import (
@@ -38,9 +52,12 @@ import (
 	"latere.ai/x/sdk-go/latere"
 )
 
-// DefaultScopes are the scopes a sign-in asks for when Config.Scopes is nil:
-// who the person is, and a refresh token that keeps them signed in.
-var DefaultScopes = []string{"openid", "email", "profile", "offline_access"}
+// DefaultScopes returns the scopes a sign-in asks for when Config.Scopes is
+// nil: who the person is, and a refresh token that keeps them signed in.
+// Each call returns a new slice, which the caller may change.
+func DefaultScopes() []string {
+	return []string{"openid", "email", "profile", "offline_access"}
+}
 
 // Config describes how your program signs a person in. Its fields are read
 // on first use and must not change after.
@@ -62,12 +79,15 @@ type Config struct {
 // as the system keychain: it keeps the person signed in.
 type Token struct {
 	// AccessToken opens the sign-in service as the person; exchange it with
-	// latere.ActorTokens to call the API.
+	// latere.NewActorTokens to call the API.
 	AccessToken string `json:"access_token"`
 	// RefreshToken obtains new tokens without the person; empty when the
 	// sign-in did not ask for offline_access.
 	RefreshToken string `json:"refresh_token,omitempty"`
 	// IDToken is the OpenID Connect ID token, when the service issued one.
+	// The package does not verify its signature or claims: verify it
+	// before trusting what it says, or ask UserInfo, which the service
+	// answers over its own connection.
 	IDToken string `json:"id_token,omitempty"`
 	// Expiry is when AccessToken expires; zero when the service did not
 	// say.
@@ -147,7 +167,7 @@ func (c *Config) scopes() string {
 	if c.Scopes != nil {
 		return strings.Join(c.Scopes, " ")
 	}
-	return strings.Join(DefaultScopes, " ")
+	return strings.Join(DefaultScopes(), " ")
 }
 
 // discover returns the service's endpoints, reading its discovery document
@@ -276,7 +296,7 @@ func (c *Config) Refresh(ctx context.Context, refreshToken string) (*Token, erro
 }
 
 // TokenSource returns a source of the person's access token for
-// latere.ActorTokens. It returns tok's access token while it is valid and
+// latere.NewActorTokens. It returns tok's access token while it is valid and
 // refreshes it with the refresh token shortly before it expires, one
 // refresh at a time however many requests wait. save, which may be nil, is
 // called with every refreshed token before the token is used, so your

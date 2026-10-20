@@ -24,7 +24,9 @@ import (
 // first, and an error matching ErrDenied when the person declines.
 //
 // It uses the authorization code flow with PKCE (RFC 7636) and a loopback
-// redirect (RFC 8252), so it needs no client secret.
+// redirect (RFC 8252), so it needs no client secret. The client must be
+// registered with the redirect address http://127.0.0.1/callback; see the
+// package documentation.
 func (c *Config) Browser(ctx context.Context, open func(signInURL string) error) (*Token, error) {
 	if open == nil {
 		return nil, errors.New("signin: Browser: open is nil")
@@ -172,9 +174,10 @@ type DeviceCode struct {
 // Device signs a person in with a code they enter on another device, for a
 // program in a terminal or on a machine without a browser (RFC 8628). It
 // calls prompt with the code to show, then waits until the person has
-// entered it and returns the tokens. It returns an error matching ErrDenied
-// when the person declines, ErrExpired when the code expires first, and
-// ctx's error when ctx ends.
+// entered it and returns the tokens. One failed poll, on the network or of
+// a service that is down, is tolerated, and the next poll decides. It
+// returns an error matching ErrDenied when the person declines, ErrExpired
+// when the code expires first, and ctx's error when ctx ends.
 func (c *Config) Device(ctx context.Context, prompt func(DeviceCode) error) (*Token, error) {
 	if prompt == nil {
 		return nil, errors.New("signin: Device: prompt is nil")
@@ -215,6 +218,7 @@ func (c *Config) Device(ctx context.Context, prompt func(DeviceCode) error) (*To
 	if interval <= 0 {
 		interval = defaultInterval
 	}
+	failed := false
 	for {
 		t := time.NewTimer(interval)
 		select {
@@ -230,16 +234,24 @@ func (c *Config) Device(ctx context.Context, prompt func(DeviceCode) error) (*To
 		if err == nil {
 			return tok, nil
 		}
+		if ctx.Err() != nil {
+			return nil, ctx.Err()
+		}
 		var oe *Error
-		if !errors.As(err, &oe) {
-			return nil, err
-		}
-		switch oe.Code {
-		case "authorization_pending":
-		case "slow_down":
+		switch {
+		case errors.As(err, &oe) && oe.Code == "authorization_pending":
+		case errors.As(err, &oe) && oe.Code == "slow_down":
 			interval += slowDownStep
-		default:
+		case errors.As(err, &oe) && oe.StatusCode < http.StatusInternalServerError:
 			return nil, err
+		case failed:
+			return nil, fmt.Errorf("signin: Device: polling failed twice in a row: %w", err)
+		default:
+			// A poll that failed on the network or met a service that is
+			// down leaves the code valid, so the next poll may succeed.
+			failed = true
+			continue
 		}
+		failed = false
 	}
 }

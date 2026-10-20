@@ -1,0 +1,3 @@
+# Keep LF endings on every platform, so a Windows checkout formats and
+# tests the same files as Linux and macOS.
+* text=auto eol=lf

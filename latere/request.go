@@ -45,8 +45,10 @@ type Request struct {
 	Retry RetryRule
 	// SendKey sends the platform key itself as the bearer credential,
 	// instead of the short-lived token it is exchanged for. The models
-	// capability authenticates this way. A Config whose credentials are not
-	// a key, one built with WithTokenSource, sends its token as for any
+	// capability authenticates this way; package llm sets it, and a
+	// program calling a models endpoint llm does not cover yet sets it too,
+	// which is why it is exported. A Config whose credentials are not a
+	// key, one built with WithTokenSource, sends its token as for any
 	// request.
 	SendKey bool
 }

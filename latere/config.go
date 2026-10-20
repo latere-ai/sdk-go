@@ -88,8 +88,9 @@ type Config struct {
 type Hooks struct {
 	// BeforeRequest is called with an attempt's request just before it is
 	// sent. It may add headers; it must not read or replace the body. The
-	// request carries credentials in its Authorization header, a bearer
-	// token or, for a key's exchange, the key itself: never log that
+	// request carries credentials in its Authorization header: a bearer
+	// token, or the key itself, for a key's exchange and for every request
+	// that sets SendKey, as each of package llm's does. Never log that
 	// header.
 	BeforeRequest func(req *http.Request)
 	// AfterResponse is called when an attempt ends, with its response or the

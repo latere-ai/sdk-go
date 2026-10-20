@@ -36,6 +36,10 @@ through `go run`, and the module has no dependencies to install.
 - `openapi/` holds the API's OpenAPI documents the tests check the models
   against, and `tools/` the program that refreshes them.
 
+[docs/design.md](docs/design.md) explains the reasons behind the layout,
+credentials, retries, pagination and streams. Read it before proposing a
+change to any of them.
+
 ## The models and the API's documents
 
 The request and response types are written by hand from the API's OpenAPI

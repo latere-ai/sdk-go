@@ -48,7 +48,7 @@ func TestTheCallsSentOnceAndThePatchesRetried(t *testing.T) {
 		}, 1},
 		"ConfirmConnection": {func(ctx context.Context) error { _, err := cs.ConfirmConnection(ctx, "con_1", "code"); return err }, 1},
 		"ReconnectConnection": {func(ctx context.Context) error {
-			_, err := cs.ReconnectConnection(ctx, "con_1", &connections.ReconnectConnectionParams{ReturnTo: "https://chat.latere.ai/connected"})
+			_, err := cs.ReconnectConnection(ctx, "con_1", &connections.ReconnectConnectionParams{ReturnTo: "https://platform.latere.ai/console/connections"})
 			return err
 		}, 1},
 		"Generate": {func(ctx context.Context) error { _, err := ml.Generate(ctx, &llm.Request{Model: "m"}); return err }, 1},

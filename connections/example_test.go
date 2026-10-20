@@ -21,13 +21,12 @@ func client() *connections.Client {
 }
 
 // Connecting a service that signs people in: send the person to the page
-// the answer names, then finish with the code the browser brings back.
+// the answer names. The browser returns to the console's Connections page,
+// which finishes the connection.
 func ExampleClient_CreateConnection() {
-	ctx := context.Background()
-	cs := client()
-	r, err := cs.CreateConnection(ctx, &connections.CreateConnectionParams{
+	r, err := client().CreateConnection(context.Background(), &connections.CreateConnectionParams{
 		Connector: "google-calendar",
-		ReturnTo:  "https://example.com/connected",
+		ReturnTo:  "https://platform.latere.ai/console/connections",
 	})
 	if err != nil {
 		log.Fatal(err)
@@ -37,9 +36,13 @@ func ExampleClient_CreateConnection() {
 		return
 	}
 	fmt.Println("Sign in at", r.AuthorizationURL)
-	// Later, on the page at ReturnTo, with the code from its query:
-	code := "the code from the return address"
-	c, err := cs.ConfirmConnection(ctx, r.Connection.ID, code)
+}
+
+// An app Latere registers with its own return page finishes the sign-in
+// with the code the browser brings back to that page.
+func ExampleClient_ConfirmConnection() {
+	code := "the code from the return page's query"
+	c, err := client().ConfirmConnection(context.Background(), "con_01M34G2JF01B91B8399CD1G6YP", code)
 	if err != nil {
 		log.Fatal(err)
 	}

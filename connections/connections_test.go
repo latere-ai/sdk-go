@@ -131,7 +131,7 @@ func TestCreateConnectionAnswersASignIn(t *testing.T) {
 	pending := strings.Replace(connection, `"state":"connected"`, `"state":"pending"`, 1)
 	c, calls := fakeAPI(t, map[string]string{"POST /v1/connections/connections": `201 {"connection":` + pending + `,"authorization_url":"https://accounts.google.com/o/oauth2/auth?x=1"}`})
 	got, err := c.CreateConnection(t.Context(), &connections.CreateConnectionParams{
-		Connector: "google-calendar", Name: "calendar", ReturnTo: "https://chat.latere.ai/connected", Scopes: []string{"calendar.events"},
+		Connector: "google-calendar", Name: "calendar", ReturnTo: "https://platform.latere.ai/console/connections", Scopes: []string{"calendar.events"},
 	})
 	if err != nil {
 		t.Fatal(err)
@@ -140,7 +140,7 @@ func TestCreateConnectionAnswersASignIn(t *testing.T) {
 		t.Errorf("answered %+v", got)
 	}
 	sent := (*calls)[0]
-	if sent.Key == "" || sent.Body["return_to"] != "https://chat.latere.ai/connected" || sent.Body["name"] != "calendar" || sent.Body["scopes"] == nil {
+	if sent.Key == "" || sent.Body["return_to"] != "https://platform.latere.ai/console/connections" || sent.Body["name"] != "calendar" || sent.Body["scopes"] == nil {
 		t.Errorf("sent %+v", sent)
 	}
 	if _, has := sent.Body["credential"]; has {

@@ -9,8 +9,12 @@
 // an MCP server someone added. A connection is one person's connection to
 // a connector. Connecting a service that signs people in answers a page to
 // send the person's browser to; after they sign in, the browser returns to
-// the page the program named, with a one-time code that
-// Client.ConfirmConnection exchanges to finish the connection.
+// the ReturnTo page with a one-time code that finishes the connection.
+// ReturnTo must be one of the pages Latere accepts for a sign-in: the
+// console's Connections page, which finishes the connection itself, or
+// Latere Chat's connector settings. A page of your own is refused with
+// status 400 until registering one is open; an app Latere registers with
+// its own page finishes the connection with Client.ConfirmConnection.
 //
 //	cfg, err := latere.NewConfig() // the key in LATERE_KEY
 //	if err != nil {
@@ -19,7 +23,7 @@
 //	cs := connections.New(cfg)
 //	r, err := cs.CreateConnection(ctx, &connections.CreateConnectionParams{
 //		Connector: "google-calendar",
-//		ReturnTo:  "https://chat.latere.ai/connected",
+//		ReturnTo:  "https://platform.latere.ai/console/connections",
 //	})
 //	if err != nil {
 //		return err
@@ -367,8 +371,9 @@ type CreateConnectionParams struct {
 	// Credential is the key, for a connector that takes one; nil for one
 	// that signs people in.
 	Credential *Credential
-	// ReturnTo is where the browser goes after a sign-in: one of Latere's
-	// own pages. Required for a connector that signs people in.
+	// ReturnTo is where the browser goes after a sign-in, one of the pages
+	// Latere accepts, such as https://platform.latere.ai/console/connections. Required for a connector
+	// that signs people in.
 	ReturnTo string
 	// Scopes are what to ask for at a sign-in, beside the connector's own.
 	Scopes []string
@@ -514,8 +519,8 @@ func (c *Client) ConfirmConnection(ctx context.Context, id, code string) (*Conne
 
 // ReconnectConnectionParams describes a new sign-in for a connection.
 type ReconnectConnectionParams struct {
-	// ReturnTo is where the browser goes after the sign-in: one of
-	// Latere's own pages. Required.
+	// ReturnTo is where the browser goes after the sign-in, one of the
+	// pages Latere accepts, such as https://platform.latere.ai/console/connections. Required.
 	ReturnTo string
 	// Scopes are what to ask for beside the scopes granted before.
 	Scopes []string

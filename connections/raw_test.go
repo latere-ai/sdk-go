@@ -81,7 +81,7 @@ func TestConnectedKeepsTheJSONTheAPIAnswered(t *testing.T) {
 	if string(got.RawJSON()) != connection {
 		t.Errorf("a connected answer kept %.40s", got.RawJSON())
 	}
-	again, err := c.ReconnectConnection(t.Context(), "con_1", &connections.ReconnectConnectionParams{ReturnTo: "https://chat.latere.ai/connected"})
+	again, err := c.ReconnectConnection(t.Context(), "con_1", &connections.ReconnectConnectionParams{ReturnTo: "https://platform.latere.ai/console/connections"})
 	if err != nil {
 		t.Fatal(err)
 	}

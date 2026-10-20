@@ -232,7 +232,7 @@ build its Client from a `Config` whose credentials are a key.
 ```go
 models := llm.New(cfg)
 res, err := models.Generate(ctx, &llm.Request{
-	Model:    "anthropic/claude-sonnet-4-5",
+	Model:    "anthropic/claude-sonnet-4.5",
 	Messages: []llm.Message{llm.UserText("Hello")},
 })
 if err != nil {

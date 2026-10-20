@@ -8,9 +8,11 @@ import (
 	"io"
 	"net/http"
 	"net/http/httptest"
+	"net/url"
 	"strings"
 	"sync/atomic"
 	"testing"
+	"time"
 )
 
 // A request with Content sends those bytes, with their length and type,
@@ -160,5 +162,151 @@ func TestKeepRedirectReturnsTheRedirect(t *testing.T) {
 	closeBody(resp)
 	if !followed {
 		t.Fatal("a plain Open did not follow the redirect")
+	}
+}
+
+// A signed link's query is its credential: no error names it, whether the
+// network failed on the way there or the link is not an address at all.
+func TestASignedURLsQueryNeverReachesAnError(t *testing.T) {
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {}))
+	defer srv.Close()
+	c, _ := testConfig(t, srv, WithMaxRetries(0))
+	err := c.Do(context.Background(), &Request{Method: http.MethodPut, SignedURL: "http://127.0.0.1:1/bucket/key?partNumber=1&X-Amz-Signature=SECRETSIG", Content: strings.NewReader("abcd"), ContentLength: 4}, nil)
+	if err == nil || strings.Contains(err.Error(), "SECRETSIG") || strings.Contains(err.Error(), "partNumber") {
+		t.Fatalf("err = %v, want one without the link's query", err)
+	}
+	if !strings.Contains(err.Error(), "PUT http://127.0.0.1:1/bucket/key") {
+		t.Errorf("err = %v, want it to name the request by the link's host and path", err)
+	}
+	err = c.Do(context.Background(), &Request{Method: http.MethodPut, SignedURL: "ftp://x/y?X-Amz-Signature=SECRET2", Content: strings.NewReader("a"), ContentLength: 1}, nil)
+	if err == nil || strings.Contains(err.Error(), "SECRET2") {
+		t.Fatalf("err = %v, want one without the link", err)
+	}
+}
+
+// A redirect to another host that then fails is named without its query:
+// the API's redirects lead to signed links.
+func TestARedirectElsewhereIsNamedWithoutItsQuery(t *testing.T) {
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		http.Redirect(w, r, "http://127.0.0.1:1/obj?X-Amz-Signature=READSIG", http.StatusFound)
+	}))
+	defer srv.Close()
+	c, _ := testConfig(t, srv, WithMaxRetries(0))
+	_, err := c.Open(context.Background(), &Request{Method: http.MethodGet, Path: "/v1/storage/files/me/files/big.bin", Query: url.Values{"cursor": {"c1"}}})
+	if err == nil || strings.Contains(err.Error(), "READSIG") {
+		t.Fatalf("err = %v, want one without the link's query", err)
+	}
+}
+
+// A request to a signed URL takes no credential, so it cannot send the
+// key either.
+func TestASignedURLRefusesSendKey(t *testing.T) {
+	var calls atomic.Int32
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) { calls.Add(1) }))
+	defer srv.Close()
+	c, err := NewConfig(WithKey("lk_live_THEKEY"), WithBaseURL(srv.URL))
+	if err != nil {
+		t.Fatal(err)
+	}
+	_, err = c.Open(context.Background(), &Request{Method: http.MethodPut, SignedURL: srv.URL + "/p?sig=x", SendKey: true, Content: strings.NewReader("a"), ContentLength: 1})
+	if err == nil || calls.Load() != 0 {
+		t.Fatalf("err = %v after %d requests; want it refused before sending", err, calls.Load())
+	}
+}
+
+// Sending bytes may take longer than the timeout meant for an answer:
+// each attempt gets the timeout and TransferTime for its length.
+func TestContentIsNotCutOffByTheAnswersTimeout(t *testing.T) {
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		// A slow uplink: the body arrives after the timeout has passed.
+		time.Sleep(300 * time.Millisecond)
+		if _, err := io.Copy(io.Discard, r.Body); err != nil {
+			t.Error(err)
+		}
+		w.Header().Set("ETag", `"e"`)
+	}))
+	defer srv.Close()
+	c, _ := testConfig(t, srv, WithTimeout(100*time.Millisecond))
+	resp, err := c.Open(context.Background(), &Request{Method: http.MethodPut, SignedURL: srv.URL + "/p", Content: strings.NewReader("x"), ContentLength: 1})
+	if err != nil {
+		t.Fatalf("a slow part was cut off: %v", err)
+	}
+	closeBody(resp)
+	if err := c.Do(context.Background(), &Request{Method: http.MethodPut, Path: "/v1/x", Content: strings.NewReader("x"), ContentLength: 1}, nil); err != nil {
+		t.Fatalf("a slow write was cut off: %v", err)
+	}
+}
+
+// An attempt still cut off by its bound is sent again, as a failure on
+// the network is.
+func TestAContentAttemptCutOffIsSentAgain(t *testing.T) {
+	var calls atomic.Int32
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if calls.Add(1) == 1 {
+			select {
+			case <-r.Context().Done():
+			case <-time.After(2 * time.Second):
+			}
+			return
+		}
+		w.WriteHeader(http.StatusNoContent)
+	}))
+	defer srv.Close()
+	c, _ := testConfig(t, srv, WithTimeout(100*time.Millisecond))
+	// An empty body has no transfer time, so the bound is the timeout.
+	if err := c.Do(context.Background(), &Request{Method: http.MethodPut, Path: "/v1/x", Content: strings.NewReader(""), ContentLength: 0}, nil); err != nil {
+		t.Fatalf("err = %v, want the second attempt's answer", err)
+	}
+	if calls.Load() != 2 {
+		t.Fatalf("sent %d times, want 2", calls.Load())
+	}
+}
+
+func TestTransferTime(t *testing.T) {
+	for n, want := range map[int64]time.Duration{0: 0, -1: 0, 1: 2 * time.Minute, 16 << 20: 2 * time.Minute, 16<<20 + 1: 4 * time.Minute, 5 << 30: 640 * time.Minute} {
+		if got := TransferTime(n); got != want {
+			t.Errorf("TransferTime(%d) = %v, want %v", n, got, want)
+		}
+	}
+}
+
+// RetryAnswers sends a request again after an answer that says it failed,
+// and never after a failure on the network.
+func TestRetryAnswers(t *testing.T) {
+	var calls atomic.Int32
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if calls.Add(1) == 1 {
+			writeError(w, http.StatusServiceUnavailable, "unavailable", "try again")
+			return
+		}
+		w.WriteHeader(http.StatusNoContent)
+	}))
+	defer srv.Close()
+	c, _ := testConfig(t, srv)
+	if err := c.Do(context.Background(), &Request{Method: http.MethodPost, Path: "/v1/x", Retry: RetryAnswers}, nil); err != nil {
+		t.Fatal(err)
+	}
+	if calls.Load() != 2 {
+		t.Fatalf("sent %d times, want 2", calls.Load())
+	}
+	gone := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		calls.Add(1)
+		conn, _, err := w.(http.Hijacker).Hijack()
+		if err != nil {
+			t.Error(err)
+			return
+		}
+		if err := conn.Close(); err != nil {
+			t.Error(err)
+		}
+	}))
+	defer gone.Close()
+	c, _ = testConfig(t, gone)
+	calls.Store(0)
+	if err := c.Do(context.Background(), &Request{Method: http.MethodPost, Path: "/v1/x", Retry: RetryAnswers}, nil); err == nil {
+		t.Fatal("a broken connection: nil error")
+	}
+	if calls.Load() != 1 {
+		t.Fatalf("sent %d times after a failure on the network, want once", calls.Load())
 	}
 }

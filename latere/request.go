@@ -56,6 +56,12 @@ type Request struct {
 	// ContentType. Each attempt reads it from the start, so a request with
 	// Content is retried by its Retry rule like any other. An *os.File, a
 	// *bytes.Reader and an *io.SectionReader are each an io.ReaderAt.
+	//
+	// Sending the bytes takes as long as the network allows, so the
+	// Config's timeout does not bound such a call as a whole: each attempt
+	// gets the timeout and TransferTime for its length, and an attempt cut
+	// off by that bound is sent again by the Retry rule, as a failure on
+	// the network is.
 	Content io.ReaderAt
 	// ContentLength is how many bytes of Content are sent, as the
 	// Content-Length header; the API admits a write by it before reading
@@ -67,7 +73,9 @@ type Request struct {
 	// SignedURL, when set, is an address the API signed and handed out,
 	// such as an upload part's link. The request goes there in place of
 	// the base URL and Path, and without the Config's credential, which
-	// the link stands in for.
+	// the link stands in for; a request that also sets SendKey is refused.
+	// The link's query is a credential: an error names the link without
+	// it.
 	SignedURL string
 	// KeepRedirect makes Open return a 3xx answer as it is, rather than
 	// following it: its Location header says where the API sent the
@@ -87,7 +95,8 @@ func (c *Config) Do(ctx context.Context, r *Request, out any) error {
 	if r.KeepRedirect {
 		return errors.New("latere: a request that keeps its redirect is sent with Open, not Do")
 	}
-	if c.timeout > 0 {
+	// A request with Content bounds each attempt instead (send).
+	if c.timeout > 0 && r.Content == nil {
 		if _, has := ctx.Deadline(); !has {
 			var cancel context.CancelFunc
 			ctx, cancel = context.WithTimeout(ctx, c.timeout)
@@ -105,7 +114,7 @@ func (c *Config) Do(ctx context.Context, r *Request, out any) error {
 		return nil
 	}
 	if err := json.NewDecoder(resp.Body).Decode(out); err != nil {
-		return fmt.Errorf("latere: decoding the answer to %s %s: %w", r.Method, r.Path, causeOr(ctx, err))
+		return fmt.Errorf("latere: decoding the answer to %s %s: %w", r.Method, c.where(r), causeOr(ctx, err))
 	}
 	return nil
 }
@@ -119,7 +128,8 @@ func (c *Config) Open(ctx context.Context, r *Request) (*http.Response, error) {
 	if err := c.built(); err != nil {
 		return nil, err
 	}
-	if c.timeout <= 0 {
+	if c.timeout <= 0 || r.Content != nil {
+		// A request with Content bounds each attempt instead (send).
 		return c.send(ctx, r)
 	}
 	if _, has := ctx.Deadline(); has {
@@ -134,7 +144,7 @@ func (c *Config) Open(ctx context.Context, r *Request) (*http.Response, error) {
 		// The timer fired, even if an answer arrived at the same moment.
 		if err == nil {
 			closeStream(resp)
-			err = fmt.Errorf("latere: %s %s: %w", r.Method, r.Path, context.DeadlineExceeded)
+			err = fmt.Errorf("latere: %s %s: %w", r.Method, c.where(r), context.DeadlineExceeded)
 		}
 		cancel(nil)
 		return nil, err
@@ -196,6 +206,12 @@ const (
 	// RetryNever sends the request once: a second send could do the work
 	// twice, such as creating a second app or running a model again.
 	RetryNever
+	// RetryAnswers sends the request again after an answer of 408, 429,
+	// 500, 502, 503 or 504, which says it failed, but never after a
+	// failure on the network, after which it may have been done: for a
+	// request the API can resume but not repeat, such as completing an
+	// upload in parts.
+	RetryAnswers
 )
 
 // safeToRepeat reports whether sending r twice has the effect of sending
@@ -204,7 +220,7 @@ func safeToRepeat(r *Request) bool {
 	switch r.Retry {
 	case RetryAlways:
 		return true
-	case RetryNever:
+	case RetryNever, RetryAnswers:
 		return false
 	}
 	switch r.Method {
@@ -216,46 +232,65 @@ func safeToRepeat(r *Request) bool {
 	return false
 }
 
+// TransferTime is how long a request's Content may take to send, beyond
+// the Config's timeout: two minutes for every 16 MiB begun, the pace
+// Latere Chat gives an upload's part, a little over 1 Mbit/s.
+func TransferTime(n int64) time.Duration {
+	const chunk, pace = 16 << 20, 2 * time.Minute
+	if n <= 0 {
+		return 0
+	}
+	return time.Duration((n+chunk-1)/chunk) * pace
+}
+
 // send performs r with retries and returns a 2xx response.
 func (c *Config) send(ctx context.Context, r *Request) (*http.Response, error) {
 	target, err := c.url(r)
 	if err != nil {
 		return nil, err
 	}
+	where := c.where(r)
 	var body []byte
 	switch {
+	case r.SignedURL != "" && r.SendKey:
+		return nil, fmt.Errorf("latere: %s %s goes to a signed URL, which takes no credential, and also sets SendKey", r.Method, where)
 	case r.Content != nil && r.Body != nil:
-		return nil, fmt.Errorf("latere: %s %s sets both Body and Content; it sends one body", r.Method, r.Path)
+		return nil, fmt.Errorf("latere: %s %s sets both Body and Content; it sends one body", r.Method, where)
 	case r.Content != nil && r.ContentLength < 0:
-		return nil, fmt.Errorf("latere: %s %s has a ContentLength of %d", r.Method, r.Path, r.ContentLength)
+		return nil, fmt.Errorf("latere: %s %s has a ContentLength of %d", r.Method, where, r.ContentLength)
 	case r.Body != nil:
 		if body, err = json.Marshal(r.Body); err != nil {
-			return nil, fmt.Errorf("latere: encoding the body of %s %s: %w", r.Method, r.Path, err)
+			return nil, fmt.Errorf("latere: encoding the body of %s %s: %w", r.Method, where, err)
 		}
 	}
 	repeatable := safeToRepeat(r)
+	answers := repeatable || r.Retry == RetryAnswers
 	resetDone := false
 	for attempt := 0; ; attempt++ {
-		resp, err := c.attempt(ctx, r, target, body)
+		actx, done := c.attemptContext(ctx, r)
+		resp, err := c.attempt(actx, r, target, body)
 		if err != nil {
+			done()
 			if ctx.Err() != nil {
-				return nil, fmt.Errorf("latere: %s %s: %w", r.Method, r.Path, context.Cause(ctx))
+				return nil, fmt.Errorf("latere: %s %s: %w", r.Method, where, context.Cause(ctx))
 			}
 			if !repeatable || attempt >= c.maxRetries || !temporary(err) {
-				return nil, fmt.Errorf("latere: %s %s: %w", r.Method, r.Path, err)
+				return nil, fmt.Errorf("latere: %s %s: %w", r.Method, where, err)
 			}
 			if err := c.sleep(ctx, c.backoff(attempt)); err != nil {
-				return nil, fmt.Errorf("latere: %s %s: %w", r.Method, r.Path, context.Cause(ctx))
+				return nil, fmt.Errorf("latere: %s %s: %w", r.Method, where, context.Cause(ctx))
 			}
 			continue
 		}
 		if resp.StatusCode/100 == 2 || (r.KeepRedirect && resp.StatusCode/100 == 3) {
+			resp.Body = &cancelOnClose{ReadCloser: resp.Body, cancel: done}
 			return resp, nil
 		}
 		raw, readErr := io.ReadAll(io.LimitReader(resp.Body, maxErrorBody))
 		closeBody(resp)
+		done()
 		if readErr != nil {
-			return nil, fmt.Errorf("latere: %s %s: reading the %d answer: %w", r.Method, r.Path, resp.StatusCode, causeOr(ctx, readErr))
+			return nil, fmt.Errorf("latere: %s %s: reading the %d answer: %w", r.Method, where, resp.StatusCode, causeOr(ctx, readErr))
 		}
 		apiErr := newError(resp, raw)
 		// A 401 means the request was not acted on, so it is safe to send
@@ -270,7 +305,7 @@ func (c *Config) send(ctx context.Context, r *Request) (*http.Response, error) {
 				continue
 			}
 		}
-		if !repeatable || !retryable(resp.StatusCode) || attempt >= c.maxRetries {
+		if !answers || !retryable(resp.StatusCode) || attempt >= c.maxRetries {
 			return nil, apiErr
 		}
 		wait := c.backoff(attempt)
@@ -281,8 +316,58 @@ func (c *Config) send(ctx context.Context, r *Request) (*http.Response, error) {
 			wait = apiErr.RetryAfter
 		}
 		if err := c.sleep(ctx, wait); err != nil {
-			return nil, fmt.Errorf("latere: %s %s: %w while waiting to retry after: %w", r.Method, r.Path, context.Cause(ctx), apiErr)
+			return nil, fmt.Errorf("latere: %s %s: %w while waiting to retry after: %w", r.Method, where, context.Cause(ctx), apiErr)
 		}
+	}
+}
+
+// attemptContext bounds one attempt of a request with Content by the
+// Config's timeout and TransferTime for its length, so a slow upload is
+// not cut off by a bound meant for an answer, and an attempt that is
+// still cut off can be sent again. Other requests are bounded by the call
+// (Do, Open). The returned function releases the bound.
+func (c *Config) attemptContext(ctx context.Context, r *Request) (context.Context, context.CancelFunc) {
+	if r.Content == nil || c.timeout <= 0 {
+		return ctx, func() {}
+	}
+	return context.WithTimeout(ctx, c.timeout+TransferTime(r.ContentLength))
+}
+
+// where names r's target in an error: its path, or a signed URL without
+// its query, which is a credential.
+func (c *Config) where(r *Request) string {
+	if r.SignedURL != "" {
+		return redact(r.SignedURL)
+	}
+	return r.Path
+}
+
+// redact is an address as an error may name it: its scheme, host and
+// path, without the user, the query and the fragment, which a signed link
+// carries its signature in.
+func redact(raw string) string {
+	u, err := url.Parse(raw)
+	if err != nil || u.Host == "" {
+		return "an address that is not one"
+	}
+	return (&url.URL{Scheme: u.Scheme, Host: u.Host, Path: u.Path}).String()
+}
+
+// redactError drops the credential from the address a transport's error
+// names, when the address is a signed URL or another host's than the
+// API's, such as a link a redirect led to.
+func (c *Config) redactError(r *Request, err error) {
+	var ue *url.Error
+	if !errors.As(err, &ue) {
+		return
+	}
+	if u, perr := url.Parse(ue.URL); r.SignedURL != "" || perr != nil || u.Host != c.baseURL.Host {
+		ue.URL = redact(ue.URL)
+	}
+	// net/http quotes a redirect's Location it cannot parse, which may be
+	// a signed link, before any rule of the client's can stop it.
+	if ue.Err != nil && strings.Contains(ue.Err.Error(), "Location header") {
+		ue.Err = errors.New("the answer's Location header is not an address")
 	}
 }
 
@@ -398,6 +483,9 @@ func (c *Config) attempt(ctx context.Context, r *Request, target string, body []
 	}
 	start := time.Now()
 	resp, err := client.Do(req)
+	if err != nil {
+		c.redactError(r, err)
+	}
 	if c.hooks.AfterResponse != nil {
 		c.hooks.AfterResponse(req, resp, err, time.Since(start))
 	}
@@ -413,7 +501,8 @@ func (c *Config) url(r *Request) (string, error) {
 	if r.SignedURL != "" {
 		u, err := url.Parse(r.SignedURL)
 		if err != nil || (u.Scheme != "https" && u.Scheme != "http") || u.Host == "" {
-			return "", fmt.Errorf("latere: the signed URL %q is not an http or https address", r.SignedURL)
+			// The link is a credential, so the error does not quote it.
+			return "", fmt.Errorf("latere: the signed URL of %s is not an http or https address", r.Method)
 		}
 		return r.SignedURL, nil
 	}

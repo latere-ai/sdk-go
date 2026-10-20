@@ -36,7 +36,9 @@ const (
 	DefaultMaxBackoff = 30 * time.Second
 	// DefaultTimeout bounds a call whose context has no deadline, its
 	// retries included, so a server that stops answering cannot hold a
-	// call forever. A stream is bounded only until its first answer.
+	// call forever. A stream is bounded only until its first answer, and
+	// each attempt of a request that sends bytes by this and TransferTime
+	// for their length.
 	DefaultTimeout = 80 * time.Second
 )
 
@@ -91,11 +93,15 @@ type Hooks struct {
 	// request carries credentials in its Authorization header: a bearer
 	// token, or the key itself, for a key's exchange and for every request
 	// that sets SendKey, as each of package llm's does. Never log that
-	// header.
+	// header. A request to a signed URL, such as an upload's part, carries
+	// its credential in the URL's query instead: log such a URL without
+	// its query.
 	BeforeRequest func(req *http.Request)
 	// AfterResponse is called when an attempt ends, with its response or the
 	// error that ended it, and how long it took. It must not read or close
-	// the response body.
+	// the response body. A redirect's Location header is a credential too
+	// when it leads to a signed link, as one to a file's bytes does: log
+	// it without its query.
 	AfterResponse func(req *http.Request, resp *http.Response, err error, took time.Duration)
 }
 
@@ -248,7 +254,10 @@ func WithBackoff(min, max time.Duration) Option {
 // WithTimeout bounds every call, its retries included, to d instead of
 // DefaultTimeout when the call's context has no deadline of its own; zero
 // leaves such calls unbounded. A stream is bounded only until the API's
-// first answer, since it then lasts as long as the session.
+// first answer, since it then lasts as long as the session. A request that
+// sends bytes, Request.Content, bounds each attempt by d and TransferTime
+// for their length instead, since sending them takes as long as the
+// network allows.
 func WithTimeout(d time.Duration) Option {
 	return func(c *Config) error {
 		if d < 0 {

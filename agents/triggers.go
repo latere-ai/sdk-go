@@ -45,6 +45,23 @@ type Trigger struct {
 	// Status is the API's record of the trigger, written by the API and
 	// ignored when a trigger is applied.
 	Status TriggerStatus `json:"status,omitzero"`
+
+	raw json.RawMessage
+}
+
+// RawJSON returns the JSON the API answered for the trigger, with every
+// field, including those this package does not model; nil for a Trigger the
+// program built itself.
+func (t *Trigger) RawJSON() json.RawMessage { return t.raw }
+
+// UnmarshalJSON decodes the trigger and keeps the JSON for RawJSON.
+func (t *Trigger) UnmarshalJSON(b []byte) error {
+	type plain Trigger
+	if err := json.Unmarshal(b, (*plain)(t)); err != nil {
+		return err
+	}
+	t.raw = keep(b)
+	return nil
 }
 
 // TriggerMetadata names a trigger. Apart from Name, none of it is part of
@@ -264,6 +281,23 @@ type Firing struct {
 	SessionID string `json:"session_id,omitempty"`
 	// ReceivedAt is when the firing arrived.
 	ReceivedAt time.Time `json:"received_at"`
+
+	raw json.RawMessage
+}
+
+// RawJSON returns the JSON the API answered for the firing, with every
+// field, including those this package does not model; nil for a Firing the
+// program built itself.
+func (f *Firing) RawJSON() json.RawMessage { return f.raw }
+
+// UnmarshalJSON decodes the firing and keeps the JSON for RawJSON.
+func (f *Firing) UnmarshalJSON(b []byte) error {
+	type plain Firing
+	if err := json.Unmarshal(b, (*plain)(f)); err != nil {
+		return err
+	}
+	f.raw = keep(b)
+	return nil
 }
 
 // FiringEvent identifies the event a firing came from.

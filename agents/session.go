@@ -3,7 +3,10 @@
 
 package agents
 
-import "time"
+import (
+	"encoding/json"
+	"time"
+)
 
 // Status is the state of a session.
 type Status string
@@ -112,6 +115,23 @@ type Session struct {
 	ExpiresAt time.Time `json:"expires_at,omitzero"`
 	// ArchivedAt is when the session was archived; nil when it is not.
 	ArchivedAt *time.Time `json:"archived_at,omitempty"`
+
+	raw json.RawMessage
+}
+
+// RawJSON returns the JSON the API answered for the session, with every
+// field, including those this package does not model; nil for a Session the
+// program built itself.
+func (s *Session) RawJSON() json.RawMessage { return s.raw }
+
+// UnmarshalJSON decodes the session and keeps the JSON for RawJSON.
+func (s *Session) UnmarshalJSON(b []byte) error {
+	type plain Session
+	if err := json.Unmarshal(b, (*plain)(s)); err != nil {
+		return err
+	}
+	s.raw = keep(b)
+	return nil
 }
 
 // Runner is where a session's agent runs.

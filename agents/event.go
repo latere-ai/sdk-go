@@ -74,6 +74,23 @@ type Event struct {
 	// Payload is the event's content, whose shape depends on Type; read it
 	// with Decode.
 	Payload json.RawMessage `json:"payload"`
+
+	raw json.RawMessage
+}
+
+// RawJSON returns the JSON the API answered for the event, with every field,
+// including those this package does not model; nil for an Event the program
+// built itself.
+func (e *Event) RawJSON() json.RawMessage { return e.raw }
+
+// UnmarshalJSON decodes the event and keeps the JSON for RawJSON.
+func (e *Event) UnmarshalJSON(b []byte) error {
+	type plain Event
+	if err := json.Unmarshal(b, (*plain)(e)); err != nil {
+		return err
+	}
+	e.raw = keep(b)
+	return nil
 }
 
 // Decode unmarshals the event's payload into v, such as a *SessionStatus

@@ -1,0 +1,10 @@
+{
+  "account": {
+    "url": "https://platform.latere.ai/docs/account/openapi.yaml",
+    "sha256": "25678cb61f8ada2e7f04ea6a0a3ed7751e887adb424c2fb262ffbf5c7dd1aee9"
+  },
+  "agents": {
+    "url": "https://platform.latere.ai/docs/agents/openapi.yaml",
+    "sha256": "6f1472338e112cab9c95ade91ba61704fb23f48004bc3b5a2e1ea2c24a87b457"
+  }
+}

@@ -65,3 +65,30 @@ func TestAResourceRefusesJSONOfTheWrongShape(t *testing.T) {
 		}
 	}
 }
+
+// A connect's answer keeps its JSON, whichever shape it takes: the
+// connection, or a sign-in to finish.
+func TestConnectedKeepsTheJSONTheAPIAnswered(t *testing.T) {
+	signIn := `{"connection":` + connection + `,"authorization_url":"https://accounts.example.com/o/authorize"}`
+	c, _ := fakeAPI(t, map[string]string{
+		"POST /v1/connections/connections":                 connection,
+		"POST /v1/connections/connections/con_1/reconnect": signIn,
+	})
+	got, err := c.CreateConnection(t.Context(), &connections.CreateConnectionParams{Connector: "google-calendar"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if string(got.RawJSON()) != connection {
+		t.Errorf("a connected answer kept %.40s", got.RawJSON())
+	}
+	again, err := c.ReconnectConnection(t.Context(), "con_1", &connections.ReconnectConnectionParams{ReturnTo: "https://chat.latere.ai/connected"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if string(again.RawJSON()) != signIn || again.AuthorizationURL == "" || again.Connection == nil {
+		t.Errorf("a sign-in answer: %+v with %.40s; want the sign-in and its JSON", again, again.RawJSON())
+	}
+	if (&connections.Connected{}).RawJSON() != nil {
+		t.Error("a Connected the program built has JSON")
+	}
+}

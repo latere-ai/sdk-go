@@ -79,9 +79,9 @@ type Connection struct {
 	Auth AuthType `json:"auth"`
 	// State is whether the connection can be used.
 	State State `json:"state"`
-	// Reason says why a connection needs reconnecting, such as
-	// "refresh_refused", "revoked" or "credential_refused".
-	Reason string `json:"reason,omitempty"`
+	// Reason says why a connection needs reconnecting; empty for one that
+	// works.
+	Reason Reason `json:"reason,omitempty"`
 	// Account is the account at the service the connection acts as, such
 	// as a Google address.
 	Account string `json:"account,omitempty"`
@@ -395,7 +395,14 @@ type Connected struct {
 	// the browser returns to ReturnTo with a code for
 	// Client.ConfirmConnection.
 	AuthorizationURL string
+
+	raw json.RawMessage
 }
+
+// RawJSON returns the JSON the API answered, with every field, including
+// those this package does not model; nil for a Connected the program built
+// itself.
+func (c *Connected) RawJSON() json.RawMessage { return c.raw }
 
 // started is the API's answer when a connection waits for a sign-in.
 type started struct {
@@ -411,13 +418,13 @@ func decodeConnected(raw json.RawMessage) (*Connected, error) {
 		return nil, err
 	}
 	if s.AuthorizationURL != "" {
-		return &Connected{Connection: s.Connection, AuthorizationURL: s.AuthorizationURL}, nil
+		return &Connected{Connection: s.Connection, AuthorizationURL: s.AuthorizationURL, raw: keep(raw)}, nil
 	}
 	var conn Connection
 	if err := json.Unmarshal(raw, &conn); err != nil {
 		return nil, err
 	}
-	return &Connected{Connection: &conn}, nil
+	return &Connected{Connection: &conn, raw: keep(raw)}, nil
 }
 
 // CreateConnection connects a service. A connector that takes a key or
@@ -532,12 +539,12 @@ func (c *Client) ReconnectConnection(ctx context.Context, id string, params *Rec
 	if len(params.Scopes) > 0 {
 		body["scopes"] = params.Scopes
 	}
-	var s started
+	var raw json.RawMessage
 	req := &latere.Request{Method: http.MethodPost, Path: connectionPath(id, "/reconnect"), Body: body, Retry: latere.RetryNever}
-	if err := c.cfg.Do(ctx, req, &s); err != nil {
+	if err := c.cfg.Do(ctx, req, &raw); err != nil {
 		return nil, err
 	}
-	return &Connected{Connection: s.Connection, AuthorizationURL: s.AuthorizationURL}, nil
+	return decodeConnected(raw)
 }
 
 // ReplaceCredential replaces the key of the connection id names, for a
@@ -668,13 +675,35 @@ type Outcome string
 
 // The outcomes of a request.
 const (
-	OutcomeOK              Outcome = "ok"
-	OutcomeDenied          Outcome = "denied"
-	OutcomeNotConnected    Outcome = "not_connected"
-	OutcomeUpstreamError   Outcome = "upstream_error"
+	// OutcomeOK reached the service and was answered.
+	OutcomeOK Outcome = "ok"
+	// OutcomeDenied was refused by Latere before it reached the service:
+	// the caller may not make it.
+	OutcomeDenied Outcome = "denied"
+	// OutcomeNotConnected found the connection needing reconnecting.
+	OutcomeNotConnected Outcome = "not_connected"
+	// OutcomeUpstreamError failed on the way to or from the service.
+	OutcomeUpstreamError Outcome = "upstream_error"
+	// OutcomeUpstreamRefused was refused by the service as unauthorized,
+	// or for a scope the connection was not granted.
 	OutcomeUpstreamRefused Outcome = "upstream_refused"
-	OutcomeTimeout         Outcome = "timeout"
-	OutcomeCanceled        Outcome = "canceled"
+	// OutcomeTimeout ran out of time.
+	OutcomeTimeout Outcome = "timeout"
+	// OutcomeCanceled was canceled by its caller.
+	OutcomeCanceled Outcome = "canceled"
+)
+
+// Reason is why a connection needs reconnecting.
+type Reason string
+
+// The reasons a connection stops working.
+const (
+	// ReasonRefreshRefused is a credential the service refused to renew.
+	ReasonRefreshRefused Reason = "refresh_refused"
+	// ReasonRevoked is a credential revoked at the service.
+	ReasonRevoked Reason = "revoked"
+	// ReasonCredentialRefused is a key the service refused.
+	ReasonCredentialRefused Reason = "credential_refused"
 )
 
 // ListCallsParams pages a connection's calls.

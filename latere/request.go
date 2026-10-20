@@ -226,28 +226,38 @@ func (c *Config) send(ctx context.Context, r *Request) (*http.Response, error) {
 	}
 }
 
-// tokenError is a failure of the token source, before any request was
-// sent.
-type tokenError struct{ err error }
+// A TokenError is a call that failed before any request was sent, because
+// the Config's credentials could not be obtained: the token source failed,
+// or the issuer refused the key or the sign-in. Err is the cause; when the
+// issuer refused, it is an *Error, so errors.Is(err, ErrUnauthorized) holds
+// for a revoked key. A call returns it after any retries.
+type TokenError struct {
+	// Err is why the credentials could not be obtained.
+	Err error
+}
 
-func (e *tokenError) Error() string { return "the token: " + e.err.Error() }
-func (e *tokenError) Unwrap() error { return e.err }
+// Error returns the cause, prefixed to say it happened while getting a
+// token; the call that returns it names the request in front.
+func (e *TokenError) Error() string { return "getting a token: " + e.Err.Error() }
+
+// Unwrap returns the cause.
+func (e *TokenError) Unwrap() error { return e.Err }
 
 // temporary reports whether an attempt's failure may pass if the request
 // is sent again: a failure on the network does, and so does a token source
 // that failed on the network or met an issuer that is down. A refusal from
 // the issuer, such as a revoked key's, does not.
 func temporary(err error) bool {
-	var te *tokenError
+	var te *TokenError
 	if !errors.As(err, &te) {
 		return true
 	}
 	var apiErr *Error
-	if errors.As(te.err, &apiErr) {
+	if errors.As(te.Err, &apiErr) {
 		return retryable(apiErr.StatusCode)
 	}
 	var netErr *url.Error
-	return errors.As(te.err, &netErr)
+	return errors.As(te.Err, &netErr)
 }
 
 // key returns the platform key to send as r's credential, when r asks for
@@ -269,7 +279,7 @@ func (c *Config) attempt(ctx context.Context, r *Request, target string, body []
 	if !sentKey {
 		token, err := c.tokens.Token(ctx)
 		if err != nil {
-			return nil, &tokenError{err}
+			return nil, &TokenError{Err: err}
 		}
 		bearer = token.Value
 	}

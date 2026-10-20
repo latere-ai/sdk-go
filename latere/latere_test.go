@@ -436,6 +436,38 @@ func TestATokenErrorIsReturned(t *testing.T) {
 	}
 }
 
+// A token source's failure is a *TokenError naming its cause, so a program
+// can tell it from a refusal of the request itself.
+func TestATokenErrorNamesItsCause(t *testing.T) {
+	srv := httptest.NewServer(http.NotFoundHandler())
+	defer srv.Close()
+	cause := &Error{StatusCode: http.StatusUnauthorized, Code: "invalid_client"}
+	c, _ := testConfig(t, srv, WithTokenSource(TokenSourceFunc(func(context.Context) (Token, error) {
+		return Token{}, cause
+	})))
+	err := c.Do(t.Context(), &Request{Method: http.MethodGet, Path: "/v1/x"}, nil)
+	var te *TokenError
+	if !errors.As(err, &te) || te.Err != cause {
+		t.Fatalf("err = %v, want a *TokenError wrapping the issuer's refusal", err)
+	}
+	if !errors.Is(err, ErrUnauthorized) || !strings.Contains(err.Error(), "getting a token: ") {
+		t.Errorf("err = %q; want ErrUnauthorized and the token prefix", err)
+	}
+}
+
+// An error response's body is kept whole, up to the read bound, for an
+// answer that carries more than the error.
+func TestAnErrorKeepsItsBody(t *testing.T) {
+	long := `{"trigger_id":"trg_1","reason":"` + strings.Repeat("x", 300) + `"}`
+	e := newError(&http.Response{StatusCode: http.StatusServiceUnavailable, Header: http.Header{}}, []byte(long))
+	if string(e.Body) != long {
+		t.Errorf("Body = %.40q (%d bytes), want the whole body (%d bytes)", e.Body, len(e.Body), len(long))
+	}
+	if e := newError(&http.Response{StatusCode: http.StatusBadGateway, Header: http.Header{}}, nil); e.Body != nil {
+		t.Errorf("an empty body kept %q", e.Body)
+	}
+}
+
 func TestACallOnAConfigNotBuilt(t *testing.T) {
 	r := &Request{Method: http.MethodGet, Path: "/v1/x"}
 	for name, c := range map[string]*Config{"nil": nil, "zero": {}} {

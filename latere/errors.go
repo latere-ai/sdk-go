@@ -51,6 +51,10 @@ type Error struct {
 	// RetryAfter is how long the API asked the caller to wait before
 	// trying again, from the Retry-After header; zero when it did not say.
 	RetryAfter time.Duration
+	// Body is the error response's body as the API sent it, up to 64 KiB,
+	// for an answer that carries more than the error, such as a trigger's
+	// failed firing; empty when the response had none.
+	Body []byte
 }
 
 // Error returns the status, code, message and request id on one line.
@@ -100,6 +104,9 @@ func newError(resp *http.Response, body []byte) *Error {
 		StatusCode: resp.StatusCode,
 		RequestID:  resp.Header.Get("X-Request-Id"),
 		RetryAfter: retryAfter(resp.Header.Get("Retry-After"), time.Now()),
+	}
+	if len(body) > 0 {
+		e.Body = append([]byte(nil), body...)
 	}
 	var envelope struct {
 		Error struct {

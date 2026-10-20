@@ -1,0 +1,9 @@
+# Test and coverage output.
+coverage.out
+coverage.html
+*.test
+
+# Editors and operating systems.
+.idea/
+.vscode/
+.DS_Store

@@ -24,6 +24,7 @@ package account
 
 import (
 	"context"
+	"encoding/json"
 	"errors"
 	"net/http"
 	"net/url"
@@ -75,6 +76,23 @@ type AppliedAgent struct {
 	Model string `json:"model"`
 	// Agent is the copy among the caller's agents.
 	Agent AgentCopy `json:"agent"`
+
+	raw json.RawMessage
+}
+
+// RawJSON returns the JSON the API answered for the applied agent, with
+// every field, including those this package does not model; nil for an
+// AppliedAgent the program built itself.
+func (a *AppliedAgent) RawJSON() json.RawMessage { return a.raw }
+
+// UnmarshalJSON decodes the applied agent and keeps the JSON for RawJSON.
+func (a *AppliedAgent) UnmarshalJSON(b []byte) error {
+	type plain AppliedAgent
+	if err := json.Unmarshal(b, (*plain)(a)); err != nil {
+		return err
+	}
+	a.raw = keep(b)
+	return nil
 }
 
 // AgentCopy is the caller's copy of a managed agent, as an agent of the
@@ -108,6 +126,23 @@ type EffortLevels struct {
 	// ZeroRetentionBy says who keeps ZeroRetention on: "organization" or
 	// "person".
 	ZeroRetentionBy string `json:"zero_retention_by,omitempty"`
+
+	raw json.RawMessage
+}
+
+// RawJSON returns the JSON the API answered for the Effort levels, with
+// every field, including those this package does not model; nil for an
+// EffortLevels the program built itself.
+func (e *EffortLevels) RawJSON() json.RawMessage { return e.raw }
+
+// UnmarshalJSON decodes the Effort levels and keeps the JSON for RawJSON.
+func (e *EffortLevels) UnmarshalJSON(b []byte) error {
+	type plain EffortLevels
+	if err := json.Unmarshal(b, (*plain)(e)); err != nil {
+		return err
+	}
+	e.raw = keep(b)
+	return nil
 }
 
 // An EffortLevel is one level of effort.
@@ -255,6 +290,23 @@ type Wallet struct {
 	// LimitResetsAt is when an organization's monthly limit opens again,
 	// for an organization that pays after it spends; zero otherwise.
 	LimitResetsAt time.Time `json:"limit_resets_at,omitzero"`
+
+	raw json.RawMessage
+}
+
+// RawJSON returns the JSON the API answered for the wallet, with every
+// field, including those this package does not model; nil for a Wallet the
+// program built itself.
+func (w *Wallet) RawJSON() json.RawMessage { return w.raw }
+
+// UnmarshalJSON decodes the wallet and keeps the JSON for RawJSON.
+func (w *Wallet) UnmarshalJSON(b []byte) error {
+	type plain Wallet
+	if err := json.Unmarshal(b, (*plain)(w)); err != nil {
+		return err
+	}
+	w.raw = keep(b)
+	return nil
 }
 
 // NextGrant is free credit on its way.
@@ -300,6 +352,23 @@ type Preferences struct {
 	Bookmarks *Bookmarks `json:"bookmarks,omitempty"`
 	// Data holds the person's own data retention setting.
 	Data *DataPreferences `json:"data,omitempty"`
+
+	raw json.RawMessage
+}
+
+// RawJSON returns the JSON the API answered for the preferences, with every
+// field, including those this package does not model; nil for a Preferences
+// the program built itself.
+func (p *Preferences) RawJSON() json.RawMessage { return p.raw }
+
+// UnmarshalJSON decodes the preferences and keeps the JSON for RawJSON.
+func (p *Preferences) UnmarshalJSON(b []byte) error {
+	type plain Preferences
+	if err := json.Unmarshal(b, (*plain)(p)); err != nil {
+		return err
+	}
+	p.raw = keep(b)
+	return nil
 }
 
 // Network is which sites a session may reach.
@@ -460,6 +529,23 @@ type Device struct {
 	Network *DeviceNetwork `json:"network,omitempty"`
 	// CreatedAt is when it was connected.
 	CreatedAt time.Time `json:"created_at"`
+
+	raw json.RawMessage
+}
+
+// RawJSON returns the JSON the API answered for the device, with every
+// field, including those this package does not model; nil for a Device the
+// program built itself.
+func (d *Device) RawJSON() json.RawMessage { return d.raw }
+
+// UnmarshalJSON decodes the device and keeps the JSON for RawJSON.
+func (d *Device) UnmarshalJSON(b []byte) error {
+	type plain Device
+	if err := json.Unmarshal(b, (*plain)(d)); err != nil {
+		return err
+	}
+	d.raw = keep(b)
+	return nil
 }
 
 // DeviceStatus is whether a computer serves sessions.

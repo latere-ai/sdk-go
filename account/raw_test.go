@@ -21,6 +21,8 @@ func TestEveryResourceKeepsItsJSON(t *testing.T) {
 		"wallet":        &account.Wallet{},
 		"preferences":   &account.Preferences{},
 		"device":        &account.Device{},
+		"pins":          &account.Pins{},
+		"devices":       &account.Devices{},
 	} {
 		if v.RawJSON() != nil {
 			t.Errorf("%s: one the program built has JSON", name)
@@ -59,6 +61,8 @@ func TestAResourceRefusesJSONOfTheWrongShape(t *testing.T) {
 		&account.Wallet{},
 		&account.Preferences{},
 		&account.Device{},
+		&account.Pins{},
+		&account.Devices{},
 	} {
 		if err := json.Unmarshal([]byte(`[]`), v); err == nil {
 			t.Errorf("%T decoded an array", v)

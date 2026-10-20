@@ -435,6 +435,23 @@ type Pins struct {
 	MaxApps int `json:"max_apps"`
 	// MaxProjects is the most projects a context holds pinned.
 	MaxProjects int `json:"max_projects"`
+
+	raw json.RawMessage
+}
+
+// RawJSON returns the JSON the API answered for the pins, with every field,
+// including those this package does not model; nil for a Pins the
+// program built itself.
+func (p *Pins) RawJSON() json.RawMessage { return p.raw }
+
+// UnmarshalJSON decodes the pins and keeps the JSON for RawJSON.
+func (p *Pins) UnmarshalJSON(b []byte) error {
+	type plain Pins
+	if err := json.Unmarshal(b, (*plain)(p)); err != nil {
+		return err
+	}
+	p.raw = keep(b)
+	return nil
 }
 
 // Bookmarks are the turns a person bookmarked.
@@ -500,6 +517,23 @@ type Devices struct {
 	Items []Device `json:"items"`
 	// Limit is how many computers the person may hold.
 	Limit int `json:"limit"`
+
+	raw json.RawMessage
+}
+
+// RawJSON returns the JSON the API answered for the list of computers, with every field,
+// including those this package does not model; nil for a Devices the
+// program built itself.
+func (d *Devices) RawJSON() json.RawMessage { return d.raw }
+
+// UnmarshalJSON decodes the list of computers and keeps the JSON for RawJSON.
+func (d *Devices) UnmarshalJSON(b []byte) error {
+	type plain Devices
+	if err := json.Unmarshal(b, (*plain)(d)); err != nil {
+		return err
+	}
+	d.raw = keep(b)
+	return nil
 }
 
 // A Device is one of a person's computers, which sessions can work on.

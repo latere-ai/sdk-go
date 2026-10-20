@@ -27,7 +27,7 @@ func ExampleClient_Generate() {
 	ctx := context.Background()
 	maxTokens := int64(256)
 	res, err := models().Generate(ctx, &llm.Request{
-		Model:     "anthropic/claude-sonnet-4-5",
+		Model:     "anthropic/claude-sonnet-4.5",
 		System:    []llm.Block{{Type: llm.BlockText, Text: "Answer in one sentence."}},
 		Messages:  []llm.Message{llm.UserText("Why is the sky blue?")},
 		MaxTokens: &maxTokens,
@@ -45,7 +45,7 @@ func ExampleClient_Generate() {
 func ExampleClient_Stream() {
 	ctx := context.Background()
 	stream, err := models().Stream(ctx, &llm.Request{
-		Model:    "anthropic/claude-sonnet-4-5",
+		Model:    "anthropic/claude-sonnet-4.5",
 		Messages: []llm.Message{llm.UserText("Write a haiku about rain.")},
 	})
 	if err != nil {
@@ -75,7 +75,7 @@ func ExampleClient_Generate_tools() {
 	ctx := context.Background()
 	c := models()
 	req := &llm.Request{
-		Model:    "anthropic/claude-sonnet-4-5",
+		Model:    "anthropic/claude-sonnet-4.5",
 		Messages: []llm.Message{llm.UserText("What time is it in Berlin?")},
 		Tools: []llm.Tool{{
 			Name:        "clock",
@@ -110,7 +110,7 @@ func ExampleClient_Generate_tools() {
 func ExampleClient_CountTokens() {
 	ctx := context.Background()
 	tc, err := models().CountTokens(ctx, &llm.Request{
-		Model:    "anthropic/claude-sonnet-4-5",
+		Model:    "anthropic/claude-sonnet-4.5",
 		Messages: []llm.Message{llm.UserText("A long document...")},
 	})
 	if err != nil {
@@ -147,7 +147,7 @@ func ExampleWithLabels() {
 	}
 	acme := llm.New(cfg, llm.WithLabels(map[string]string{"tenant": "acme"}))
 	res, err := acme.Generate(context.Background(), &llm.Request{
-		Model:    "anthropic/claude-sonnet-4-5",
+		Model:    "anthropic/claude-sonnet-4.5",
 		Messages: []llm.Message{llm.UserText("Hello")},
 	})
 	if err != nil {

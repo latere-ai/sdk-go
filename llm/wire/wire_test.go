@@ -24,7 +24,7 @@ func TestRequestWireFormat(t *testing.T) {
 	maxTokens, topK := int64(256), int64(40)
 	temperature, topP := 0.5, 0.9
 	req := wire.Request{
-		Model:       "anthropic/claude-sonnet-4-5",
+		Model:       "anthropic/claude-sonnet-4.5",
 		System:      []wire.Block{{Type: wire.BlockText, Text: "Be brief.", CacheHint: true}},
 		Messages:    []wire.Message{hi, {Role: wire.RoleAssistant, Blocks: []wire.Block{{Type: wire.BlockToolUse, ToolUse: &wire.ToolUse{ID: "tu_1", Name: "bash", Args: json.RawMessage(`{"cmd":"ls"}`)}}}}},
 		Tools:       []wire.Tool{{Name: "bash", Description: "run", InputSchema: json.RawMessage(`{"type":"object"}`)}},
@@ -46,7 +46,7 @@ func TestRequestWireFormat(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	want := `{"model":"anthropic/claude-sonnet-4-5","system":[{"type":"text","text":"Be brief.","cache_hint":true}],` +
+	want := `{"model":"anthropic/claude-sonnet-4.5","system":[{"type":"text","text":"Be brief.","cache_hint":true}],` +
 		`"messages":[{"role":"user","blocks":[{"type":"text","text":"Hi"}]},{"role":"assistant","blocks":[{"type":"tool_use","tool_use":{"id":"tu_1","name":"bash","args":{"cmd":"ls"}}}]}],` +
 		`"tools":[{"name":"bash","description":"run","input_schema":{"type":"object"}}],"server_tools":[{"type":"web_search","name":"search","config":{}}],` +
 		`"tool_choice":{"mode":"tool","name":"bash","disable_parallel":true},"max_tokens":256,"temperature":0.5,"top_p":0.9,"top_k":40,` +

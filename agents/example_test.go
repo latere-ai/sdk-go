@@ -5,9 +5,12 @@ package agents_test
 
 import (
 	"context"
+	"errors"
 	"fmt"
+	"io"
 	"log"
 	"os"
+	"path/filepath"
 
 	"latere.ai/x/sdk-go/agents"
 	"latere.ai/x/sdk-go/latere"
@@ -260,6 +263,68 @@ func ExampleClient_SendMessage_files() {
 		},
 	})
 	if err != nil {
+		log.Fatal(err)
+	}
+}
+
+// Saving the pictures and files the agent's answers showed or linked,
+// from the copies the session kept.
+func ExampleClient_ReadBlob() {
+	ctx := context.Background()
+	ag := client()
+	id := "ses_01M34G2JF01B91B8399CD1G6YP"
+	for e, err := range ag.ListEvents(ctx, id, nil) {
+		if err != nil {
+			log.Fatal(err)
+		}
+		if e.Type != agents.EventFilesKept {
+			continue
+		}
+		var kept agents.FilesKept
+		if err := e.Decode(&kept); err != nil {
+			log.Fatal(err)
+		}
+		for _, f := range kept.Files {
+			r, err := ag.ReadBlob(ctx, id, f.Blob)
+			if err != nil {
+				log.Fatal(err)
+			}
+			out, err := os.Create(filepath.Base(f.Path))
+			if err != nil {
+				log.Fatal(err)
+			}
+			_, err = io.Copy(out, r)
+			_ = r.Close() // the bytes are copied; closing releases the connection
+			if err != nil {
+				log.Fatal(err)
+			}
+			if err := out.Close(); err != nil {
+				log.Fatal(err)
+			}
+			fmt.Println("saved", f.Path, f.MediaType, f.Size, "bytes")
+		}
+	}
+}
+
+// Showing a file the agent wrote, which the session's machine holds while
+// it runs.
+func ExampleClient_ReadSessionFile() {
+	r, err := client().ReadSessionFile(context.Background(), "ses_01M34G2JF01B91B8399CD1G6YP", "notes/summary.md")
+	switch {
+	case errors.Is(err, agents.ErrFileUnavailable):
+		fmt.Println("the session's machine is not running; the file can be read once the session runs again")
+		return
+	case errors.Is(err, agents.ErrFileTooLarge):
+		fmt.Println("the file is larger than", agents.MaxSessionFileBytes, "bytes")
+		return
+	case errors.Is(err, latere.ErrNotFound):
+		fmt.Println("there is no such file")
+		return
+	case err != nil:
+		log.Fatal(err)
+	}
+	defer r.Close()
+	if _, err := io.Copy(os.Stdout, r); err != nil {
 		log.Fatal(err)
 	}
 }

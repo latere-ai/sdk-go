@@ -34,15 +34,24 @@
 // StopQuestion, StopToolConfirmation or StopToolResult; answer it with
 // Client.AnswerQuestion, Client.ConfirmTool or Client.SendToolResult.
 //
+// # Files
+//
+// A session keeps a copy of each file a message carried, and of each
+// picture or file of its machine an answer showed or linked, which an
+// EventFilesKept records. Client.ReadBlob reads a copy by the digest its
+// record names, after the session ends too. Client.ReadSessionFile reads
+// a file of the session's working directory as it is now, while the
+// session's machine runs.
+//
 // # Scope
 //
 // The package covers sessions and their events: listing, reading,
 // creating, changing, forking, archiving, resuming, ending and deleting
-// sessions, reading and following their logs, and sending messages,
-// interrupts, answers, approvals and tool results. It also covers triggers,
-// which start sessions on a schedule or when an event arrives: applying,
-// listing, reading, firing and deleting them, and listing their firings. It
-// does not cover yet defining agents and their versions, searching and
-// counting sessions, a session's files, or redacting an event. Call those
-// with latere.Config.Do until it does.
+// sessions, reading and following their logs, sending messages,
+// interrupts, answers, approvals and tool results, and reading a
+// session's files. It also covers triggers, which start sessions on a
+// schedule or when an event arrives: applying, listing, reading, firing
+// and deleting them, and listing their firings. It does not cover yet
+// defining agents and their versions, searching and counting sessions, or
+// redacting an event. Call those with latere.Config.Do until it does.
 package agents

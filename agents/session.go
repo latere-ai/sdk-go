@@ -227,6 +227,32 @@ type Machine struct {
 	Workdir string `json:"workdir,omitempty"`
 }
 
+// The labels the platform writes on the sandbox a session's commands run
+// in, which Environments lists, and the annotation beside them. A program
+// that serves sessions on a person's computer reads them to show its owner
+// which session asks to run there, for which agent, and whether a trigger
+// started it. Every sandbox of a session carries LabelSession and
+// LabelAgent; a sandbox on a person's computer also carries
+// LabelAgentVersion and AnnotationAgentName, and, for a session a trigger
+// started, LabelTrigger and LabelTriggerFiresOn.
+const (
+	// LabelSession holds the session's id.
+	LabelSession = "topos.latere.ai/session"
+	// LabelAgent holds the agent's name.
+	LabelAgent = "topos.latere.ai/agent"
+	// LabelAgentVersion holds the agent's version the session runs, in
+	// decimal.
+	LabelAgentVersion = "topos.latere.ai/agent-version"
+	// LabelTrigger holds the id of the trigger that started the session.
+	LabelTrigger = "topos.latere.ai/trigger"
+	// LabelTriggerFiresOn holds what that trigger fires on: "schedule" or
+	// "events".
+	LabelTriggerFiresOn = "topos.latere.ai/trigger-fires-on"
+	// AnnotationAgentName is the annotation that holds the agent's display
+	// name, which a label cannot hold.
+	AnnotationAgentName = "topos.latere.ai/agent-name"
+)
+
 // Parent is where a forked session came from.
 type Parent struct {
 	// SessionID is the session it was forked from.

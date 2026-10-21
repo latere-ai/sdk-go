@@ -51,6 +51,10 @@ const (
 	EventApprovalDecided EventType = "approval.decided"
 	// EventMachineWaiting is a session waiting for the computer it works on.
 	EventMachineWaiting EventType = "session.machine_waiting"
+	// EventFilesKept follows an EventAgentMessage that shows pictures or
+	// links files of the session's machine, and records the copies the
+	// session kept of them; its payload is a FilesKept.
+	EventFilesKept EventType = "files.kept"
 )
 
 // An Event is one entry of a session's log.
@@ -267,6 +271,87 @@ type Attachment struct {
 	// beside the line that names it.
 	Inline bool `json:"inline,omitempty"`
 }
+
+// FilesKept is the payload of an EventFilesKept event: the files of the
+// session's machine that an answer showed as pictures or linked, which
+// the session kept a copy of, and those it did not. A client shows a
+// kept file from its copy, with Client.ReadBlob and its Blob, and may
+// read one it did not keep with Client.ReadSessionFile while the
+// session's machine runs.
+type FilesKept struct {
+	// MessageID is the id of the EventAgentMessage that names the files.
+	MessageID string `json:"message"`
+	// Files are the files the session kept.
+	Files []KeptFile `json:"files"`
+	// Skipped are the files the answer named that the session did not
+	// keep, each with why.
+	Skipped []SkippedFile `json:"skipped"`
+}
+
+// A KeptFile is a file of the session's machine that an answer showed or
+// linked, as the session kept a copy of it.
+type KeptFile struct {
+	// Path is the file as the answer named it, such as "chart.png".
+	Path string `json:"path"`
+	// Resolved is the file's absolute path on the session's machine,
+	// inside its working directory.
+	Resolved string `json:"resolved"`
+	// Blob is the digest the session keeps the copy by, "sha256:" and the
+	// hex of its hash; read the copy with Client.ReadBlob.
+	Blob string `json:"blob"`
+	// MediaType is the file's media type: for a picture the answer
+	// showed, the format of its bytes; for a file it linked, the type its
+	// name's extension names, or else its leading bytes.
+	MediaType string `json:"media_type"`
+	// Size is the file's length in bytes.
+	Size int64 `json:"size"`
+	// Width and Height are a shown picture's size in pixels, and 0 for a
+	// linked file, whatever its bytes are.
+	Width  int `json:"width"`
+	Height int `json:"height"`
+	// Ref is where the copy is in the session's folder of files, for a
+	// session that keeps one; empty otherwise.
+	Ref string `json:"ref,omitempty"`
+}
+
+// A SkippedFile is a file an answer named that the session did not keep.
+type SkippedFile struct {
+	// Path is the file as the answer named it.
+	Path string `json:"path"`
+	// Reason is why the session did not keep it.
+	Reason SkipReason `json:"reason"`
+}
+
+// SkipReason is why a session did not keep a file an answer named.
+type SkipReason string
+
+// The reasons of a SkippedFile.
+const (
+	// SkipNotFound is a path nothing is at.
+	SkipNotFound SkipReason = "not_found"
+	// SkipTooLarge is a file past the size a file is kept at, or a picture
+	// past the pixels a picture is kept at.
+	SkipTooLarge SkipReason = "too_large"
+	// SkipNotAnImage is a file shown as a picture that is no PNG, JPEG,
+	// GIF or WebP, an SVG included, or no regular file.
+	SkipNotAnImage SkipReason = "not_an_image"
+	// SkipNotAFile is a link to something that is no regular file, such
+	// as a directory.
+	SkipNotAFile SkipReason = "not_a_file"
+	// SkipOutsideWorkdir is a path outside the session's working
+	// directory, or a link that leads out of it.
+	SkipOutsideWorkdir SkipReason = "outside_workdir"
+	// SkipNoMachine is a file named in a turn that opened no machine;
+	// keeping a file never opens one.
+	SkipNoMachine SkipReason = "no_machine"
+	// SkipLimit is a file past the pictures or the linked files one
+	// answer keeps, or past the bytes its linked files are kept at
+	// together.
+	SkipLimit SkipReason = "limit"
+	// SkipUnavailable is a read or a copy that failed, which the turn
+	// went on past.
+	SkipUnavailable SkipReason = "unavailable"
+)
 
 // An AttachmentSource names a file of a person's Storage, which a message
 // carries by reference: the platform reads its bytes when the message is

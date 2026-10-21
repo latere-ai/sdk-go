@@ -229,6 +229,11 @@ func TestModelsMatchTheSchemas(t *testing.T) {
 		}
 		d.checkModel(t, strings.Join(p.types, "|"), p.model, union, false)
 	}
+	// The files an answer kept, which a client reads them by, are read
+	// whole.
+	d.checkModel(t, "files.kept", reflect.TypeFor[FilesKept](), d.payload("files.kept"), true)
+	d.checkModel(t, "KeptFile", reflect.TypeFor[KeptFile](), s["KeptFile"], true)
+	d.checkModel(t, "SkippedFile", reflect.TypeFor[SkippedFile](), s["SkippedFile"], true)
 }
 
 // TestEnumsAreTheDocuments: every value a model's enum declares is one
@@ -536,6 +541,8 @@ func TestEndpointsAreInTheDocument(t *testing.T) {
 		{"get", "/sessions/{id}/events"},
 		{"post", "/sessions/{id}/events"},
 		{"get", "/sessions/{id}/stream"},
+		{"get", "/sessions/{id}/blobs/{digest}"},
+		{"get", "/sessions/{id}/files"},
 	} {
 		if _, ok := d.Paths[e.path][e.method]; !ok {
 			t.Errorf("%s %s is not in the document", strings.ToUpper(e.method), e.path)

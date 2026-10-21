@@ -7,6 +7,8 @@ minor version may break code, and every such change is marked **Breaking**.
 
 ## [Unreleased]
 
+## [0.5.0] - 2026-10-21
+
 ### Added
 
 - Package `agents`: `ToolResult.Meta`, a `*ToolMeta` with what a tool

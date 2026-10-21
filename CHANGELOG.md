@@ -7,6 +7,39 @@ minor version may break code, and every such change is marked **Breaking**.
 
 ## [Unreleased]
 
+### Added
+
+- Package `agents`: `ReadBlob` reads a file a session keeps by its
+  digest, a message's file or a picture or file an answer showed or
+  linked, also after the session ended; `ReadSessionFile` reads a file of
+  the session's working directory as it is now, while its machine runs.
+  Each returns a `*FileReader` with the file's media type and size, which
+  the caller closes; the configured timeout bounds the wait for the
+  answer, and only the context bounds the read after it. A read of a
+  machine that is not running returns an error matching
+  `ErrFileUnavailable`, and a file past `MaxSessionFileBytes`, 32 MiB, one
+  matching `ErrFileTooLarge`; both still unwrap to the `*latere.Error`.
+- Package `agents`: `EventFilesKept`, whose payload `FilesKept` names the
+  pictures and files an answer showed or linked that the session kept,
+  each a `KeptFile` with the digest `ReadBlob` takes, and those it did not
+  keep, each with a `SkipReason`.
+- Package `agents`: the labels the platform writes on a session's
+  sandbox, `LabelSession`, `LabelAgent`, `LabelAgentVersion`,
+  `LabelTrigger` and `LabelTriggerFiresOn`, and the annotation
+  `AnnotationAgentName`, for a program that serves sessions on a person's
+  computer.
+- Package `account`: `RenameDevice` renames one of the person's computers,
+  sent again after a failure since it only sets the name, with the bound
+  `MaxDeviceName`. `RemoveDevice` removes one; removing a computer the
+  person no longer holds succeeds, so a removal is safe to repeat.
+- Package `account`: `GetEnvironmentsContext` reads the labels a create in
+  Environments must carry in the token's context, and `LabelKind` with
+  `KindDevice` is the label that marks a computer's environment.
+- The core `latere`: `ReadUnverifiedClaims` reads the audiences, subject,
+  expiry and organization of a token the platform issued without
+  verifying it, for a program that is handed a token to present to the
+  API.
+
 ## [0.2.0] - 2026-10-20
 
 ### Added

@@ -19,7 +19,7 @@ they share. Import the ones you use:
 | Package | What it does |
 |---|---|
 | [`latere`](https://pkg.go.dev/latere.ai/x/sdk-go/latere) | The core: configuration, credentials, errors, retries, pagination |
-| [`agents`](https://pkg.go.dev/latere.ai/x/sdk-go/agents) | Sessions with agents: create, list, follow, answer, approve, end; triggers that start them |
+| [`agents`](https://pkg.go.dev/latere.ai/x/sdk-go/agents) | Sessions with agents: create, list, follow, answer, approve, end, read what they made; triggers that start them |
 | [`connections`](https://pkg.go.dev/latere.ai/x/sdk-go/connections) | The services a person connects once, such as a calendar or an MCP server, which agents then use |
 | [`storage`](https://pkg.go.dev/latere.ai/x/sdk-go/storage) | Files in Latere Storage: upload a file of any size, read, list, and link to it |
 | [`account`](https://pkg.go.dev/latere.ai/x/sdk-go/account) | Your Effort levels, wallet, preferences, pins and computers |
@@ -70,7 +70,7 @@ func main() {
 }
 ```
 
-More packages will follow the same pattern: storage, repos and
+More packages will follow the same pattern, such as repos and
 environments.
 
 ## Requirements
@@ -147,9 +147,53 @@ _, err = ag.ApplyTrigger(ctx, &agents.Trigger{
 })
 ```
 
-The package covers sessions, their events and triggers. Defining agents,
-searching sessions and a session's files are not covered yet; call them
+The package covers sessions, their events and files, and triggers.
+Defining agents and searching sessions are not covered yet; call them
 with `Config.Do` (see [Configuration](#configuration)).
+
+### What an agent made
+
+A session keeps a copy of each picture or file of its machine that an
+answer shows or links, and an `agents.EventFilesKept` after the answer
+names them. `ReadBlob` reads a copy by its digest, also after the session
+ended; `ReadSessionFile` reads any file of the session's working directory
+as it is now, while the session's machine runs:
+
+```go
+for e, err := range ag.ListEvents(ctx, s.ID, nil) {
+	if err != nil {
+		return err
+	}
+	if e.Type != agents.EventFilesKept {
+		continue
+	}
+	var kept agents.FilesKept
+	if err := e.Decode(&kept); err != nil {
+		return err
+	}
+	for _, f := range kept.Files {
+		r, err := ag.ReadBlob(ctx, s.ID, f.Blob)
+		if err != nil {
+			return err
+		}
+		show(f.Path, f.MediaType, r) // f.MediaType is the file's own type
+		r.Close()
+	}
+}
+
+r, err := ag.ReadSessionFile(ctx, s.ID, "report.md")
+if errors.Is(err, agents.ErrFileUnavailable) {
+	// the session's machine is not running; read it once the session runs again
+}
+```
+
+Each returns a reader that is yours to close. Its media type is the one the
+API answered: a copy that is no PNG, JPEG, GIF or WebP picture is answered
+as `application/octet-stream`, and its record names its own type. The
+`Config`'s timeout bounds the wait for the answer and nothing after it, so
+a large file reads for as long as `ctx` allows. `ReadSessionFile` refuses a
+file past `agents.MaxSessionFileBytes`, 32 MiB, with an error matching
+`agents.ErrFileTooLarge`.
 
 ## Account
 
@@ -157,8 +201,33 @@ with `Config.Do` (see [Configuration](#configuration)).
 acct := account.New(cfg)
 levels, err := acct.GetEffortLevels(ctx) // what each Effort level costs now
 devices, err := acct.ListDevices(ctx)    // the person's computers sessions can work on
+_, err = acct.RenameDevice(ctx, id, "Work laptop") // id is a Device's ID
+err = acct.RemoveDevice(ctx, id)
 _, err = acct.PinSession(ctx, s.ID)
 ```
+
+A person's computers are managed with their own sign-in; a key's token is
+refused with 403. Removing a computer the person no longer holds succeeds,
+so a removal is safe to repeat.
+
+### Serving sessions on a computer
+
+A program that connects a person's computer and serves sessions on it,
+such as one built on Cella's device engine, `latere.ai/x/cella/device`,
+takes the Latere values it needs from the SDK rather than writing them
+down:
+
+| What | Where |
+|---|---|
+| The labels a create in Environments carries in the token's context | `account.GetEnvironmentsContext` |
+| The label that marks a computer's environment | `account.LabelKind` = `account.KindDevice` |
+| The labels and annotation of a session's sandbox | `agents.LabelSession`, `LabelAgent`, `LabelAgentVersion`, `LabelTrigger`, `LabelTriggerFiresOn`, `AnnotationAgentName` |
+| The audience of an API token | `latere.DefaultAudience` |
+| Whom a handed token names, its context and its expiry | `latere.ReadUnverifiedClaims` |
+
+`ReadUnverifiedClaims` reads a token without verifying it: what it returns
+is as true as the source the token came from, and the API, which the token
+is presented to, verifies it.
 
 ## Apps
 
@@ -392,7 +461,10 @@ without the API's error envelope, such as a proxy's page, has the HTTP
 status text as its `Message` and its own text only in `Body`. When a
 refusal carries more than the error, `Body` holds that too; a trigger's
 failed firing is one, and `FireTrigger` returns it decoded along with the
-error. Include the request id when you report a problem.
+error. A refusal whose status alone does not tell it apart has an error
+of its package's that `errors.Is` matches beside the status's:
+`agents.ErrFileUnavailable` is a 409 that says the session's machine is
+not running. Include the request id when you report a problem.
 
 ## Retries
 

@@ -109,6 +109,15 @@ fails the call at once.
 `golang.org/x/oauth2` would cover part of this, but it is a dependency,
 and the API's token exchanges are small enough to write and test here.
 
+A program handed a token to present to the API, such as one that serves
+sessions on a person's computer, needs to know whom the token names and
+when it expires before it presents it. `ReadUnverifiedClaims` reads that
+from the token's payload and checks nothing; verifying a signature would
+need the issuer's keys and a JOSE library, and the API verifies the token
+anyway. "Unverified" is in the function's name and its result's type, so
+no caller reads it as a check and no value of it passes for a verified
+one.
+
 ## Requests and retries
 
 `Config.Do` sends a request, decodes a 2xx answer into the caller's value,
@@ -217,6 +226,24 @@ its start. `Body` also serves the few refusals that carry more than the
 error: a trigger whose firing failed to
 start its session answers 503 with the firing, and `FireTrigger` returns
 that firing decoded beside the error.
+
+A status names a class of refusal, and a few codes within one class are
+what a program branches on: a read of a session's working directory while
+its machine is not running answers 409 `file_unavailable`, which is no
+conflict of state. Such a code gets a sentinel of its package's,
+`agents.ErrFileUnavailable`, matched by the code rather than the status.
+The error that carries it wraps the `*Error`, so `errors.Is` holds for
+both the code's sentinel and the status's, and `errors.As` still finds
+the request id. The core keeps no table of codes: a code is its
+capability's, and its package decides which ones a caller needs.
+
+A `DELETE` is retried by its method, and a retry after a lost answer can
+meet a 404 for a delete that succeeded. Where the API answers the same
+404 for a resource removed before and one never held, as it does for a
+person's computer, `account.RemoveDevice` reports the API's own 404 as
+done: the person holds no computer of that id either way, and the call is
+then safe to repeat. A 404 without the API's envelope, such as a proxy's,
+stays an error.
 
 A call that fails before any request is sent, because the token source
 failed or the issuer refused the key, returns a `*TokenError` wrapping the

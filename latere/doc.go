@@ -8,7 +8,7 @@
 // The SDK has one package per capability of the Latere API. Import the ones
 // you use:
 //
-//	latere.ai/x/sdk-go/agents       sessions with agents, their events, and triggers
+//	latere.ai/x/sdk-go/agents       sessions with agents, their events and files, and triggers
 //	latere.ai/x/sdk-go/account      your Effort levels, wallet, preferences and computers
 //	latere.ai/x/sdk-go/apps         apps, their deploys, build logs and releases
 //	latere.ai/x/sdk-go/connections  the services a person connects for agents to use

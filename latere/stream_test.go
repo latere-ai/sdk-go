@@ -154,6 +154,71 @@ func TestStreamGivesUpWhenNothingArrives(t *testing.T) {
 	}
 }
 
+// A server that closes a quiet stream when the token it was opened with
+// expires, after only keepalives, is serving it: the stream connects again
+// with a fresh token and the last frame's id as often as that happens,
+// past the retry limit, until the end frame.
+func TestStreamFollowsAQuietStreamPastItsTokens(t *testing.T) {
+	const quiet = 2*DefaultMaxRetries + 2
+	var (
+		conns   atomic.Int32
+		resumes []string
+		bearers []string
+		minted  atomic.Int32
+	)
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		n := conns.Add(1)
+		resumes = append(resumes, r.Header.Get("Last-Event-ID"))
+		bearers = append(bearers, r.Header.Get("Authorization"))
+		w.Header().Set("Content-Type", "text/event-stream")
+		switch {
+		case n == 1:
+			fmt.Fprint(w, "id: 1\nevent: tick\ndata: {}\n\n")
+		case n <= 1+quiet:
+			// Nothing happened while this token lived: a keepalive, then
+			// the close at its expiry.
+			fmt.Fprint(w, ": keepalive\n\n")
+		default:
+			fmt.Fprint(w, "id: 2\nevent: end\ndata: {}\n\n")
+		}
+	}))
+	defer srv.Close()
+	tokens := TokenSourceFunc(func(context.Context) (Token, error) {
+		return Token{Value: "token-" + strconv.Itoa(int(minted.Add(1))), Expiry: time.Now().Add(5 * time.Minute)}, nil
+	})
+	c, waits := testConfig(t, srv, WithTokenSource(tokens))
+	var ids []string
+	for f, err := range c.Stream(t.Context(), &Request{Method: http.MethodGet, Path: "/v1/stream"}, func(f Frame) bool { return f.Event == "end" }) {
+		if err != nil {
+			t.Fatalf("the stream ended with %v after %d connections", err, conns.Load())
+		}
+		ids = append(ids, f.ID)
+	}
+	if strings.Join(ids, ",") != "1,2" {
+		t.Errorf("frames %v, want 1 and 2", ids)
+	}
+	if got := int(conns.Load()); got != quiet+2 {
+		t.Errorf("connected %d times, want %d", got, quiet+2)
+	}
+	for i, id := range resumes[1:] {
+		if id != "1" {
+			t.Errorf("connection %d resumed after %q, want 1", i+2, id)
+		}
+	}
+	seen := map[string]bool{}
+	for _, b := range bearers {
+		if seen[b] {
+			t.Errorf("bearer %q presented twice, want a fresh one per connection", b)
+		}
+		seen[b] = true
+	}
+	for i, d := range *waits {
+		if d > DefaultMinBackoff {
+			t.Errorf("wait %d = %v, want the first backoff after a served connection", i, d)
+		}
+	}
+}
+
 func TestStreamStopsWithTheLoop(t *testing.T) {
 	srv, resumes := eventServer(t, 5)
 	defer srv.Close()

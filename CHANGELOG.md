@@ -7,6 +7,18 @@ minor version may break code, and every such change is marked **Breaking**.
 
 ## [Unreleased]
 
+### Fixed
+
+- Package `latere`: `Config.Stream` follows a quiet stream for as long as
+  the server serves it. A connection that delivered only keepalive
+  comments, as a stream with no new events does until the API closes it
+  when its token expires, counted against the retry limit, so such a
+  stream ended with a "dropped" error after the configured retries, about
+  fifteen minutes with the default retries and the API's five-minute
+  tokens. Now any frame or comment the server sends resets the count, and
+  only connections on which the server sent nothing count toward the
+  limit.
+
 ## [0.3.0] - 2026-10-21
 
 ### Added

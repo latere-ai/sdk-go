@@ -31,7 +31,11 @@ type Frame struct {
 // frame as the stream's last, Stream connects again with the Last-Event-ID
 // header naming the last frame read, so no frame is lost or repeated. It
 // waits between attempts with the configured backoff, and gives up with an
-// error after the configured number of retries in a row that read no frame.
+// error after the configured number of retries in a row on which the
+// server sent nothing. A connection that delivered a frame, or only a
+// comment such as a keepalive, was being served: a server that closes a
+// quiet stream when the token it was opened with expires is followed for
+// as long as it keeps answering.
 //
 // The iteration ends after the frame done reports, when the loop stops,
 // when ctx ends, or with an error. A frame longer than sse.MaxLine ends it
@@ -53,7 +57,7 @@ func (c *Config) Stream(ctx context.Context, r *Request, done func(Frame) bool) 
 				yield(Frame{}, err)
 				return
 			}
-			lastID, read, finished, stopped, readErr := c.readFrames(resp, done, yield)
+			lastID, heard, finished, stopped, readErr := c.readFrames(resp, done, yield)
 			closeStream(resp)
 			if finished || stopped {
 				return
@@ -69,7 +73,7 @@ func (c *Config) Stream(ctx context.Context, r *Request, done func(Frame) bool) 
 			if lastID != "" {
 				req.Header.Set("Last-Event-ID", lastID)
 			}
-			if read > 0 {
+			if heard {
 				failures = 0
 			}
 			if failures >= c.maxRetries {
@@ -86,10 +90,10 @@ func (c *Config) Stream(ctx context.Context, r *Request, done func(Frame) bool) 
 }
 
 // readFrames yields the frames of one connection. It returns the id of the
-// last frame with one, how many frames it read, whether done reported the
-// last frame, whether the loop stopped, and the error that ended the
-// connection otherwise.
-func (c *Config) readFrames(resp *http.Response, done func(Frame) bool, yield func(Frame, error) bool) (lastID string, read int, finished, stopped bool, err error) {
+// last frame with one, whether the server sent anything on the connection,
+// whether done reported the last frame, whether the loop stopped, and the
+// error that ended the connection otherwise.
+func (c *Config) readFrames(resp *http.Response, done func(Frame) bool, yield func(Frame, error) bool) (lastID string, heard, finished, stopped bool, err error) {
 	r := sse.NewReader(resp.Body)
 	for {
 		f, err := r.Next()
@@ -97,18 +101,17 @@ func (c *Config) readFrames(resp *http.Response, done func(Frame) bool, yield fu
 			if errors.Is(err, io.EOF) {
 				err = io.ErrUnexpectedEOF
 			}
-			return lastID, read, false, false, err
+			return lastID, r.Heard(), false, false, err
 		}
-		read++
 		frame := Frame{ID: f.ID, Event: f.Event, Data: f.Data}
 		if frame.ID != "" {
 			lastID = frame.ID
 		}
 		if !yield(frame, nil) {
-			return lastID, read, false, true, nil
+			return lastID, true, false, true, nil
 		}
 		if done != nil && done(frame) {
-			return lastID, read, true, false, nil
+			return lastID, true, true, false, nil
 		}
 	}
 }

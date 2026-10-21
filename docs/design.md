@@ -299,9 +299,15 @@ A session's events are a log with sequence numbers, served as server-sent
 events whose `id` is the sequence. `Config.Stream` reads the frames, and
 when the connection drops it reconnects with `Last-Event-ID` set to the
 last frame it delivered, so the caller sees every event once, in order,
-without writing reconnect code. A reconnect that reads no frame counts
-against the retry limit; one that reads frames resets the count, so a long
-stream survives many drops spread over hours. When the caller stops the
+without writing reconnect code. A connection on which the server sent
+nothing counts against the retry limit; one on which it sent a frame, or
+only a comment such as a keepalive, resets the count, so a long stream
+survives many drops spread over hours. The keepalive matters for a quiet
+stream: the API closes a stream when the token it was opened with expires,
+and a stream with no events for that long has sent only keepalives, yet it
+was being served, and connects again with a fresh token. A server that
+answers and closes without a byte, connection after connection, is the
+failure the limit is for. When the caller stops the
 loop, the stream's body is closed without reading what is left, since a
 live stream never ends on its own: draining it would wait for the next
 keepalive, or forever, and hold one of the streams the API allows a

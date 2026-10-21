@@ -56,3 +56,23 @@ func TestReaderEndsCleanlyAfterAComment(t *testing.T) {
 		t.Errorf("a stream of a comment: %v, want io.EOF", err)
 	}
 }
+
+func TestReaderHearsAKeepalive(t *testing.T) {
+	silent := NewReader(strings.NewReader(""))
+	if _, err := silent.Next(); !errors.Is(err, io.EOF) {
+		t.Fatalf("an empty stream: %v, want io.EOF", err)
+	}
+	if silent.Heard() {
+		t.Error("an empty stream was heard")
+	}
+	quiet := NewReader(strings.NewReader(": keepalive\n\n"))
+	if quiet.Heard() {
+		t.Error("heard before reading")
+	}
+	if _, err := quiet.Next(); !errors.Is(err, io.EOF) {
+		t.Fatalf("a stream of a keepalive: %v, want io.EOF", err)
+	}
+	if !quiet.Heard() {
+		t.Error("a keepalive was not heard")
+	}
+}

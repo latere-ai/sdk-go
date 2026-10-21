@@ -33,6 +33,8 @@ const MaxLine = 16 << 20
 // A Reader reads frames from a stream.
 type Reader struct {
 	s *bufio.Scanner
+	// heard reports that the stream sent at least one line.
+	heard bool
 }
 
 // NewReader returns a Reader over r.
@@ -41,6 +43,11 @@ func NewReader(r io.Reader) *Reader {
 	s.Buffer(make([]byte, 0, 64<<10), MaxLine)
 	return &Reader{s: s}
 }
+
+// Heard reports whether the stream has sent anything yet: a frame, a
+// comment such as a keepalive, or a blank line. A server that sends a
+// keepalive is serving the stream even when it has no event to send.
+func (r *Reader) Heard() bool { return r.heard }
 
 // Next returns the next frame that carries data or an id. It returns
 // io.EOF when the stream ends cleanly between frames, io.ErrUnexpectedEOF
@@ -54,6 +61,7 @@ func (r *Reader) Next() (Frame, error) {
 		hasData bool
 	)
 	for r.s.Scan() {
+		r.heard = true
 		line := r.s.Text()
 		if line == "" {
 			if hasData || f.ID != "" {

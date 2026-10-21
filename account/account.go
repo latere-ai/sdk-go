@@ -4,7 +4,7 @@
 // Package account reads what the Latere API knows about the person a
 // request acts for, and that no single capability owns: the Effort levels a
 // session can run at, the wallet turns are paid from, preferences, pins,
-// and the person's computers.
+// the person's computers, and the labels a create in Environments carries.
 //
 //	cfg, err := latere.NewConfig() // the key in LATERE_KEY
 //	if err != nil {
@@ -28,6 +28,7 @@ import (
 	"errors"
 	"net/http"
 	"net/url"
+	"strings"
 	"time"
 
 	"latere.ai/x/sdk-go/latere"
@@ -609,4 +610,134 @@ type DeviceNetwork struct {
 	Mode string `json:"mode"`
 	// Hosts are the hosts an "allowlist" names.
 	Hosts []string `json:"hosts"`
+}
+
+// MaxDeviceName is the most characters a computer's name holds, once
+// trimmed.
+const MaxDeviceName = 64
+
+// errNoDevice is returned before any request when a device id is empty.
+var errNoDevice = errors.New("account: the device id is empty")
+
+// devicePath is the path of one of the person's computers.
+func devicePath(id string) string { return "/v1/account/devices/" + url.PathEscape(id) }
+
+// RenameDevice gives one of the person's computers a new name and returns
+// the computer. The API trims the name and refuses one that is empty, is
+// longer than MaxDeviceName characters, or holds a character that does
+// not print, with 400 and the code "invalid_name". An id the person holds
+// no computer by returns an error matching latere.ErrNotFound. Only a
+// person's own token may rename one; a key's is refused with 403.
+func (c *Client) RenameDevice(ctx context.Context, id, name string) (*Device, error) {
+	if id == "" {
+		return nil, errNoDevice
+	}
+	if strings.TrimSpace(name) == "" {
+		return nil, errors.New("account: RenameDevice: the name is empty")
+	}
+	var out Device
+	// A rename sets a value, so sending it again has the effect of sending
+	// it once, and it is retried.
+	req := &latere.Request{Method: http.MethodPatch, Path: devicePath(id), Body: map[string]string{"name": name}, Retry: latere.RetryAlways}
+	if err := c.cfg.Do(ctx, req, &out); err != nil {
+		return nil, err
+	}
+	return &out, nil
+}
+
+// RemoveDevice removes one of the person's computers for good: its keys
+// are revoked, its connection is closed, and the work of sessions on it
+// ends. Connecting the computer again makes a new device. Only a person's
+// own token may remove one; a key's is refused with 403.
+//
+// Removing a computer the person no longer holds succeeds, so a removal
+// is safe to repeat: the API answers 404 for an id it holds no computer
+// by, the same for one removed before and one that was never the
+// person's, and a removal the SDK sends again after a lost answer meets
+// that 404 although the first one removed the computer. A mistyped id
+// therefore returns nil too; ListDevices tells which computers remain.
+func (c *Client) RemoveDevice(ctx context.Context, id string) error {
+	if id == "" {
+		return errNoDevice
+	}
+	err := c.cfg.Do(ctx, &latere.Request{Method: http.MethodDelete, Path: devicePath(id)}, nil)
+	var apiErr *latere.Error
+	if errors.As(err, &apiErr) && apiErr.StatusCode == http.StatusNotFound && apiErr.Code == "not_found" {
+		// The API's own answer that it holds no such computer; a 404
+		// without its envelope, such as a proxy's, is still an error.
+		return nil
+	}
+	return err
+}
+
+// The label that marks an environment in Environments as one of a
+// person's computers. A program that connects a computer, by creating its
+// environment, writes LabelKind with the value KindDevice beside the
+// tenant labels GetEnvironmentsContext answers; the platform admits that
+// one pair on an environment and on nothing else.
+const (
+	// LabelKind is the key of the label.
+	LabelKind = "platform.latere.ai/kind"
+	// KindDevice is its value for a person's computer.
+	KindDevice = "device"
+)
+
+// GetEnvironmentsContext returns the labels that what a program creates in
+// Environments, such as a sandbox, a Secret or a computer's environment,
+// must carry in the token's context, and the environment a manifest that
+// names none runs in. Environments
+// refuses a create without these labels, or with another account's, with
+// 403. They change with the context and with nothing else, so one read
+// serves every create in a context. Any token of the API reads them, a
+// key's included. A deployment without Environments answers 503 with the
+// code "environments_unconfigured".
+func (c *Client) GetEnvironmentsContext(ctx context.Context) (*EnvironmentsContext, error) {
+	var out EnvironmentsContext
+	if err := c.get(ctx, "/v1/account/environments/context", &out); err != nil {
+		return nil, err
+	}
+	return &out, nil
+}
+
+// EnvironmentsContext is what a create in Environments carries in one
+// context.
+type EnvironmentsContext struct {
+	// Tenant is the account a create lands in.
+	Tenant Tenant `json:"tenant"`
+	// DefaultEnvironment is the environment a manifest that names none
+	// runs in; empty where the deployment names none.
+	DefaultEnvironment string `json:"default_environment"`
+
+	raw json.RawMessage
+}
+
+// RawJSON returns the JSON the API answered for the context, with every
+// field, including those this package does not model; nil for an
+// EnvironmentsContext the program built itself.
+func (e *EnvironmentsContext) RawJSON() json.RawMessage { return e.raw }
+
+// UnmarshalJSON decodes the context and keeps the JSON for RawJSON.
+func (e *EnvironmentsContext) UnmarshalJSON(b []byte) error {
+	type plain EnvironmentsContext
+	if err := json.Unmarshal(b, (*plain)(e)); err != nil {
+		return err
+	}
+	e.raw = keep(b)
+	return nil
+}
+
+// A Tenant is the account a create in Environments lands in.
+type Tenant struct {
+	// ID names the account: "p-" and 32 hexadecimal digits for a
+	// person's own, "o-" and 32 for an organization's.
+	ID string `json:"id"`
+	// Owner is who owns what is created: the issuer and the token's
+	// subject.
+	Owner string `json:"owner"`
+	// OrgID is the context's organization; empty in a person's own.
+	OrgID string `json:"org_id"`
+	// Labels are the labels to write, as they are, into the
+	// metadata.labels of every manifest created, beside labels of one's
+	// own.
+	Labels map[string]string `json:"labels"`
 }

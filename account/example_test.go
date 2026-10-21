@@ -7,6 +7,7 @@ import (
 	"context"
 	"fmt"
 	"log"
+	"maps"
 
 	"latere.ai/x/sdk-go/account"
 	"latere.ai/x/sdk-go/latere"
@@ -75,4 +76,34 @@ func ExampleClient_ApplyManagedAgent() {
 		log.Fatal(err)
 	}
 	fmt.Println(applied.ID, applied.Version)
+}
+
+// Renaming one of the person's computers, as a settings page does.
+func ExampleClient_RenameDevice() {
+	d, err := client().RenameDevice(context.Background(), "dev-q7v3k9m2abcdefgh", "Work laptop")
+	if err != nil {
+		log.Fatal(err)
+	}
+	fmt.Println(d.ID, "is now", d.Name)
+}
+
+// Removing a computer the person no longer uses. Removing it again, or
+// after another program removed it, succeeds too.
+func ExampleClient_RemoveDevice() {
+	if err := client().RemoveDevice(context.Background(), "dev-q7v3k9m2abcdefgh"); err != nil {
+		log.Fatal(err)
+	}
+}
+
+// The labels the environment of a computer being connected carries: the
+// tenant's, which Environments admits a create by, and the mark of a
+// person's computer.
+func ExampleClient_GetEnvironmentsContext() {
+	where, err := client().GetEnvironmentsContext(context.Background())
+	if err != nil {
+		log.Fatal(err)
+	}
+	labels := map[string]string{account.LabelKind: account.KindDevice}
+	maps.Copy(labels, where.Tenant.Labels)
+	fmt.Println(labels)
 }

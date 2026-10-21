@@ -82,28 +82,30 @@ func TestModelsMatchTheSchemas(t *testing.T) {
 		model  any
 		schema *schema
 	}{
-		"AppliedAgent":    {account.AppliedAgent{}, s["AppliedAgent"]},
-		"EffortLevels":    {account.EffortLevels{}, s["EffortLevels"]},
-		"EffortLevel":     {account.EffortLevel{}, s["EffortLevel"]},
-		"EffortAuto":      {account.EffortAuto{}, s["EffortAuto"]},
-		"EffortModel":     {account.EffortModel{}, s["EffortModel"]},
-		"NextTurn":        {account.NextTurn{}, s["NextTurn"]},
-		"Price":           {account.Price{}, s["Price"]},
-		"FreeTurns":       {account.FreeTurns{}, s["FreeTurns"]},
-		"Wallet":          {account.Wallet{}, s["Wallet"]},
-		"NextGrant":       {account.NextGrant{}, s["NextGrant"]},
-		"TopUp":           {account.TopUp{}, s["TopUp"]},
-		"Preferences":     {account.Preferences{}, s["Preferences"]},
-		"Network":         {account.Network{}, s["Network"]},
-		"Sharing":         {account.Sharing{}, s["Sharing"]},
-		"Profile":         {account.Profile{}, s["Profile"]},
-		"Instructions":    {account.Instructions{}, s["Instructions"]},
-		"Pins":            {account.Pins{}, s["Pins"]},
-		"Bookmarks":       {account.Bookmarks{}, s["Bookmarks"]},
-		"DataPreferences": {account.DataPreferences{}, s["DataPreferences"]},
-		"Device":          {account.Device{}, device},
-		"DeviceFolder":    {account.DeviceFolder{}, device.Properties["folders"].Items},
-		"DeviceNetwork":   {account.DeviceNetwork{}, device.Properties["network"]},
+		"AppliedAgent":        {account.AppliedAgent{}, s["AppliedAgent"]},
+		"EffortLevels":        {account.EffortLevels{}, s["EffortLevels"]},
+		"EffortLevel":         {account.EffortLevel{}, s["EffortLevel"]},
+		"EffortAuto":          {account.EffortAuto{}, s["EffortAuto"]},
+		"EffortModel":         {account.EffortModel{}, s["EffortModel"]},
+		"NextTurn":            {account.NextTurn{}, s["NextTurn"]},
+		"Price":               {account.Price{}, s["Price"]},
+		"FreeTurns":           {account.FreeTurns{}, s["FreeTurns"]},
+		"Wallet":              {account.Wallet{}, s["Wallet"]},
+		"NextGrant":           {account.NextGrant{}, s["NextGrant"]},
+		"TopUp":               {account.TopUp{}, s["TopUp"]},
+		"Preferences":         {account.Preferences{}, s["Preferences"]},
+		"Network":             {account.Network{}, s["Network"]},
+		"Sharing":             {account.Sharing{}, s["Sharing"]},
+		"Profile":             {account.Profile{}, s["Profile"]},
+		"Instructions":        {account.Instructions{}, s["Instructions"]},
+		"Pins":                {account.Pins{}, s["Pins"]},
+		"Bookmarks":           {account.Bookmarks{}, s["Bookmarks"]},
+		"DataPreferences":     {account.DataPreferences{}, s["DataPreferences"]},
+		"Device":              {account.Device{}, device},
+		"DeviceFolder":        {account.DeviceFolder{}, device.Properties["folders"].Items},
+		"DeviceNetwork":       {account.DeviceNetwork{}, device.Properties["network"]},
+		"EnvironmentsContext": {account.EnvironmentsContext{}, s["EnvironmentsContext"]},
+		"Tenant":              {account.Tenant{}, s["EnvironmentsContext"].Properties["tenant"]},
 	}
 	for name, c := range cases {
 		if c.schema == nil {
@@ -142,9 +144,14 @@ func TestModelsReadEveryField(t *testing.T) {
 	for name, model := range map[string]any{
 		"EffortLevel": account.EffortLevel{}, "Wallet": account.Wallet{}, "Preferences": account.Preferences{},
 		"Device": account.Device{}, "Pins": account.Pins{}, "Network": account.Network{}, "Price": account.Price{},
+		"EnvironmentsContext": account.EnvironmentsContext{}, "EnvironmentsContext.tenant": account.Tenant{},
 	} {
 		fields := jsonFields(reflect.TypeOf(model))
-		for prop := range s[name].Properties {
+		sch := s[name]
+		if parent, prop, nested := strings.Cut(name, "."); nested {
+			sch = s[parent].Properties[prop]
+		}
+		for prop := range sch.Properties {
 			if !slices.Contains(fields, prop) && leftOut[name+"."+prop] == "" {
 				t.Errorf("%s does not read %s; model it or add it to leftOut with a reason", name, prop)
 			}
@@ -162,9 +169,40 @@ func TestEndpointsAreInTheDocument(t *testing.T) {
 		{"put", "/v1/account/preferences/pins/{session_id}"},
 		{"delete", "/v1/account/preferences/pins/{session_id}"},
 		{"get", "/v1/account/devices"},
+		{"patch", "/v1/account/devices/{id}"},
+		{"delete", "/v1/account/devices/{id}"},
+		{"get", "/v1/account/environments/context"},
 	} {
 		if _, ok := d.Paths[e.path][e.method]; !ok {
 			t.Errorf("%s %s is not in the document", strings.ToUpper(e.method), e.path)
 		}
+	}
+}
+
+// TestTheRenameFitsItsSchema: the body RenameDevice sends is the one the
+// route takes, which allows no other member, and its name's bound is
+// MaxDeviceName.
+func TestTheRenameFitsItsSchema(t *testing.T) {
+	d := loadDocument(t)
+	var op struct {
+		RequestBody struct {
+			Content map[string]struct {
+				Schema struct {
+					Properties map[string]struct {
+						MaxLength int `json:"maxLength"`
+					} `json:"properties"`
+					Required             []string `json:"required"`
+					AdditionalProperties *bool    `json:"additionalProperties"`
+				} `json:"schema"`
+			} `json:"content"`
+		} `json:"requestBody"`
+	}
+	if err := json.Unmarshal(d.Paths["/v1/account/devices/{id}"]["patch"], &op); err != nil {
+		t.Fatal(err)
+	}
+	body := op.RequestBody.Content["application/json"].Schema
+	if len(body.Properties) != 1 || body.Properties["name"].MaxLength != account.MaxDeviceName ||
+		!slices.Equal(body.Required, []string{"name"}) || body.AdditionalProperties == nil || *body.AdditionalProperties {
+		t.Errorf("the rename's body is %+v; RenameDevice sends {\"name\"} alone, of at most %d characters", body, account.MaxDeviceName)
 	}
 }

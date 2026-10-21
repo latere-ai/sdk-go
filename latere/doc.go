@@ -37,6 +37,11 @@
 // it for tokens addressed to the API; package signin obtains and refreshes
 // that sign-in.
 //
+// [ReadUnverifiedClaims] reads what a token the platform issued says of
+// itself, whom it names, its context and its expiry, without verifying
+// any of it, for a program that is handed a token to present to the API.
+// The API verifies a token; reading its claims does not.
+//
 // # Errors
 //
 // A call the API refused returns an [*Error] with the HTTP status, the API's

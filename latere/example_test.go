@@ -10,6 +10,7 @@ import (
 	"log"
 	"net/http"
 	"os"
+	"slices"
 	"time"
 
 	"latere.ai/x/sdk-go/latere"
@@ -138,4 +139,24 @@ func ExampleItems() {
 		}
 		fmt.Println(tr.ID)
 	}
+}
+
+// A program that serves a person's computer is handed the person's token
+// by the app they signed in to, and presents it to the API, which
+// verifies it. Before that, it reads whom the token names and when it
+// needs a new one; what the token says is as true as the app that handed
+// it over.
+func ExampleReadUnverifiedClaims() {
+	handed := os.Getenv("MY_APP_HANDED_TOKEN")
+	claims, err := latere.ReadUnverifiedClaims(handed)
+	if err != nil {
+		log.Fatal(err)
+	}
+	if !slices.Contains(claims.Audiences, latere.DefaultAudience) {
+		log.Fatal("the token is not addressed to the API")
+	}
+	if claims.OrgID != "" {
+		log.Fatal("a computer is connected in the person's own context, not an organization's")
+	}
+	fmt.Println(claims.Subject, "until", claims.Expiry.Format(time.RFC3339))
 }

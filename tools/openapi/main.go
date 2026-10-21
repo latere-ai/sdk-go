@@ -21,6 +21,7 @@ import (
 	"os"
 	"path/filepath"
 	"sort"
+	"strings"
 	"time"
 
 	"go.yaml.in/yaml/v3"
@@ -44,24 +45,44 @@ type source struct {
 
 func main() {
 	dir := flag.String("dir", "openapi", "the directory the documents are written to")
+	local := map[string]string{}
+	flag.Func("local", "name=path: read the document of name from a file, such as a core's branch, in place of the public reference, to check the models against a change before it is published; the next run without it fetches the published document again", func(v string) error {
+		name, path, ok := strings.Cut(v, "=")
+		if _, known := documents[name]; !ok || !known || path == "" {
+			return fmt.Errorf("%q is not name=path for a document of %v", v, documentNames())
+		}
+		local[name] = path
+		return nil
+	})
 	flag.Parse()
-	if err := run(*dir); err != nil {
+	if err := run(*dir, local); err != nil {
 		fmt.Fprintln(os.Stderr, "openapi:", err)
 		os.Exit(1)
 	}
 }
 
-func run(dir string) error {
-	client := &http.Client{Timeout: time.Minute}
+// documentNames is the names of the documents, sorted.
+func documentNames() []string {
 	names := make([]string, 0, len(documents))
 	for name := range documents {
 		names = append(names, name)
 	}
 	sort.Strings(names)
+	return names
+}
+
+func run(dir string, local map[string]string) error {
+	client := &http.Client{Timeout: time.Minute}
 	sources := map[string]source{}
-	for _, name := range names {
+	for _, name := range documentNames() {
 		url := documents[name]
-		raw, err := fetch(client, url)
+		var raw []byte
+		var err error
+		if path, ok := local[name]; ok {
+			raw, err = os.ReadFile(path)
+		} else {
+			raw, err = fetch(client, url)
+		}
 		if err != nil {
 			return fmt.Errorf("%s: %w", name, err)
 		}

@@ -292,24 +292,28 @@ do not move the resume point, because the server does not replay them.
 
 ## Models
 
-The request and response types are written by hand. The agents API's
-document describes its answers by examples rather than schemas, which
-leaves a generator nothing to generate from, and hand-written types let the
-docs say what each field means to a caller rather than repeat the schema.
+The request and response types are written by hand. Hand-written types
+let the docs say what each field means to a caller rather than repeat the
+schema, give each value a program branches on a named type, and keep the
+parameters of a call to what a caller sets, which a generator would not.
 
 The tests hold the types to the API's documents, vendored as JSON in
-`openapi/`: a field a model reads must appear in the document's examples or
-schema, a field the schema requires must be in the model, and every
-endpoint a package calls must exist. A field left out on purpose is listed,
-with its reason, in the package's `spec_test.go`, and a field the schema
-marks as a date-time must be a `time.Time`. The program that fetches
-and converts the documents lives in its own module under `tools/`, so the
-YAML parser it needs never reaches the SDK's `go.mod`. A weekly workflow
-fetches the documents and fails when they changed, which is the signal to
-update the models. The storage document names every route but gives the
-answers of its file and upload routes no schema, so `storage`'s types
-follow the API's reference pages, and its tests hold the routes it calls,
-and the one list shape the document does define, to the document.
+`openapi/`: a field a model reads must be in its schema, a field the schema
+marks as a date-time must be a `time.Time`, and every endpoint a package
+calls must exist. Where a package holds a model to its whole schema, the
+model reads every field the schema requires or has, and a field left out
+on purpose is listed, with its reason, in the package's `spec_test.go`.
+The `agents` tests also send each request the client makes, the fullest
+and the least, and check its body against the schema of its route, and
+check that each status, stop reason and event type the package declares
+is one the document lists. The program that fetches and converts the
+documents lives in its own module under `tools/`, so the YAML parser it
+needs never reaches the SDK's `go.mod`. A weekly workflow fetches the
+documents and fails when they changed, which is the signal to update the
+models. The storage document names every route but gives the answers of
+its file and upload routes no schema, so `storage`'s types follow the
+API's reference pages, and its tests hold the routes it calls, and the one
+list shape the document does define, to the document.
 
 Every resource a package returns, a session, an event, a trigger, a wallet,
 a pin, a device, an app, a connection, a file, an upload or a finished sign-in, keeps the bytes it was decoded from, returned by

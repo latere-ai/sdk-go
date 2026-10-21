@@ -390,9 +390,23 @@ them. It is one rule for every package rather than a choice per package,
 so a program never has to know which parts of the API it may relay as
 they came. Parts of a resource, such as a session's budget, keep nothing:
 the resource's JSON already holds them. A model a program builds itself
-has none. The `llm` types are the exception: they are the Lux dialect's
+has none. The one part that keeps its JSON is a tool result's
+`ToolMeta`: its shape is each tool's own, and the package models only
+what the file tools and publishing record, so the rest, such as a todo
+list, is read from its `RawJSON` without decoding the event's payload a
+second time. The document leaves that meta any JSON value and names the
+meta of a few tools in schemas of their own, so a test holds `ToolMeta`
+to those and lists, with its reason, each field it reads beyond them. The `llm` types are the exception: they are the Lux dialect's
 own definition, shared with the gateway's codec, so they never lag what
 the API sends.
+
+## Gaps in the API
+
+Two gaps in what a program can learn of a session's files are the API's
+to close, and the SDK does not work around them:
+
+- `ReadBlob` answers a file that is no PNG, JPEG, GIF or WebP picture as `application/octet-stream`, and with a size of -1 for a session that keeps no folder, so a program reads the file's type and size from its record.
+- The API lists no session's working directory, so a program learns which files a session made from its log alone: its kept files and the `ToolMeta` of its writes and edits.
 
 ## Observability
 

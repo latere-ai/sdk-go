@@ -246,6 +246,37 @@ a large file reads for as long as `ctx` allows. `ReadSessionFile` refuses a
 file past `agents.MaxSessionFileBytes`, 32 MiB, with an error matching
 `agents.ErrFileTooLarge`.
 
+The results of the agent's tool calls record what else it made. A
+`ToolResult`'s `Meta` names the file a write or an edit left, with its
+`Size`, and a publish's `PublishRecord`: the app, its address, the
+preview, the deploy and its `PublishStatus`. An
+`agents.EventSessionMachine` names the machine's working directory, which
+those files are inside:
+
+```go
+switch e.Type {
+case agents.EventSessionMachine:
+	var m agents.SessionMachine
+	if err := e.Decode(&m); err != nil {
+		return err
+	}
+	workdir = m.Machine.Workdir
+case agents.EventToolResult:
+	var r agents.ToolResult
+	if err := e.Decode(&r); err != nil {
+		return err
+	}
+	if r.Meta != nil && r.Meta.Size != nil {
+		fmt.Println("made", strings.TrimPrefix(r.Meta.Path, workdir+"/"), *r.Meta.Size, "bytes")
+	}
+}
+```
+
+A session that keeps its files in Storage names the folder in
+`Session.Folder`. A kept file whose `Ref` is set is at
+`Folder.Path + "/" + Ref` in the `Folder.Owner` space, where package
+`storage` reads it with its own media type and size.
+
 ## Account
 
 ```go

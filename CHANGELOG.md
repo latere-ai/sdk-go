@@ -7,6 +7,22 @@ minor version may break code, and every such change is marked **Breaking**.
 
 ## [Unreleased]
 
+### Added
+
+- Package `agents`: `ToolResult.Meta`, a `*ToolMeta` with what a tool
+  call recorded beside its result: the file a read, a write or an edit
+  touched, with the `Size` a write or an edit left, and a publish's
+  `PublishRecord` of the app, its address, the preview, the deploy, the
+  `PublishStatus` and the visibility. `ToolMeta.RawJSON` keeps the rest,
+  such as a todo call's list.
+- Package `agents`: `EventSessionMachine`, whose payload `SessionMachine`
+  names the machine a session's commands run on from that event on, an
+  `AttachedMachine` with its working directory, and the `MachineReason`
+  the session has it for.
+- Package `agents`: `Session.Folder`, the session's folder of files in
+  Storage by its owner and path, so a kept file's `Ref` names a file
+  package `storage` reads, in the person's space or an organization's.
+
 ## [0.4.0] - 2026-10-21
 
 ### Added

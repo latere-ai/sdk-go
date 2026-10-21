@@ -43,6 +43,14 @@
 // a file of the session's working directory as it is now, while the
 // session's machine runs.
 //
+// The results of the agent's tool calls record what else it made: a
+// ToolResult's Meta names the file a write or an edit left, with its
+// size, and what a publish put up, as a PublishRecord. An
+// EventSessionMachine names the machine's working directory, which those
+// files are inside. A session that keeps its files in Storage names its
+// folder there in Session.Folder, and a kept file's Ref is its place in
+// that folder.
+//
 // # Routines
 //
 // A routine is an instruction a person hands an agent once, which runs

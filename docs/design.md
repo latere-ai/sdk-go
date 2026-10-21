@@ -141,9 +141,10 @@ session or send a message twice. The calls a key cannot make safe carry
 - `apps.CreateApp` and `apps.Invite`: the apps part takes no key yet, so a
   repeat could create a second app, or answer an invite's people as
   already invited and count them twice against the day's invitations.
-- `agents.FireTrigger`: the API forgets a firing's key when it answers
-  with a server error, so a repeat fires the trigger again. The caller may
-  fire again with the same key.
+- `agents.FireTrigger` and `agents.RunRoutine`, which fires a routine's
+  trigger: the API forgets a firing's key when it answers with a server
+  error, so a repeat fires the trigger again. The caller may fire again
+  with the same key.
 - `connections.ConfirmConnection`: a finished sign-in answers a repeat
   with 410, which would hide that the first confirmation succeeded.
 - `connections.ReconnectConnection`: a person signs in once at a time, and
@@ -292,6 +293,37 @@ its architecture admits no identity library. `wire` imports the standard
 library alone. `llm` names each type as an alias and each constant again,
 so a program imports one package, and a test fails when `wire` exports a
 name `llm` does not.
+
+## Routines
+
+A routine is not a resource of the API: it is a trigger written in one
+shape, which two clients of the platform, Latere Chat and Latere Studio,
+both write and read. Each wrote the shape itself until it moved here, and
+two copies of it drift. So the SDK holds the one definition, as a layer
+over the trigger endpoints, the way `storage.UploadFile` is a layer over
+the upload endpoints: the label and the name a routine's trigger carries,
+the name made from a create's key, the manifest's fields, reading a
+trigger back as a routine, and the checks a routine's name, instruction
+and schedule must pass. The checks return sentinel errors rather than
+sentences: what a person reads is the client's to word, in the person's
+language.
+
+A routine names its agent rather than assuming Latere Chat's, so a
+program can keep routines of an agent of its own in the same shape.
+
+A change reads the trigger and writes it back, since the trigger
+endpoints replace a whole manifest. It writes over the trigger's JSON as
+the API answered it, decoded as a JSON object with its numbers kept as
+written, rather than over the `Trigger` model, which would drop a field
+this version of the SDK does not model and undo something set another
+way. Only the routine's own paths are written, and the status is left
+out. The API takes no precondition on an apply, so a change made
+elsewhere between the read and the write is replaced; the docs say so.
+
+The agent a routine names must exist before its trigger is applied. The
+`agents` package does not reach into `account` to make it exist: which
+agent, and when to bring it to its live version, is the program's
+choice, and the docs name `account.ApplyManagedAgent`.
 
 ## Streams
 

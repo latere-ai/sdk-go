@@ -147,9 +147,60 @@ _, err = ag.ApplyTrigger(ctx, &agents.Trigger{
 })
 ```
 
-The package covers sessions, their events and files, and triggers.
-Defining agents and searching sessions are not covered yet; call them
-with `Config.Do` (see [Configuration](#configuration)).
+### Routines
+
+A routine is an instruction a person hands an agent once, which runs again
+and again with nobody waiting: on a schedule, or each time another app
+sends to its private link or an email reaches its address. It is a trigger
+written in one shape, so every program that shows a person's routines reads
+and changes the same ones; Latere Chat's are those of its managed agent,
+`latere-chat`.
+
+```go
+r, err := ag.CreateRoutine(ctx, &agents.CreateRoutineParams{
+	Agent:          "latere-chat",
+	Title:          "Weekly news",
+	Instruction:    "Summarize this week's news on climate policy.",
+	Schedule:       &agents.RoutineSchedule{Days: []time.Weekday{time.Monday, time.Thursday}, Hour: 9, Zone: "Europe/Berlin"},
+	IdempotencyKey: key, // the same key never makes a second routine
+})
+if errors.Is(err, agents.ErrRoutineTitleMissing) {
+	// say so to the person; nothing was sent
+}
+
+paused := true
+_, err = ag.ChangeRoutine(ctx, "latere-chat", r.Name, &agents.ChangeRoutineParams{Paused: &paused})
+```
+
+`ListRoutines` lists them, `GetRoutine` reads one, `DeleteRoutine` deletes
+one and `RunRoutine` runs one now. A change reads the trigger and writes
+back every field it does not name as the API answered it, those this SDK
+does not model included. The name, the instruction and the schedule are
+checked before anything is sent, each refusal an error to match with
+`errors.Is`, such as `agents.ErrRoutineInstructionTooLong`; a name that
+names no routine matches `latere.ErrNotFound`. The agent must exist in the
+caller's context first: a program signed in as a person makes a managed
+agent exist with `account.ApplyManagedAgent`. A routine's runs are the
+sessions `ListSessions` lists with `Trigger: r.TriggerID`.
+
+### Searching
+
+`SearchSessions` finds the sessions whose messages, answers and answers to
+questions hold every word of a query, each with its newest matching events
+and an excerpt whose matched words are marked:
+
+```go
+for found, err := range ag.SearchSessions(ctx, &agents.SearchSessionsParams{Query: "release notes", Agent: "latere-chat"}) {
+	if err != nil {
+		return err
+	}
+	fmt.Println(found.Session.Title, found.Matches[0].Excerpt)
+}
+```
+
+The package covers sessions, their events and files, triggers and
+routines. Defining agents and counting sessions are not covered yet; call
+them with `Config.Do` (see [Configuration](#configuration)).
 
 ### What an agent made
 
@@ -481,6 +532,7 @@ two. These calls are sent once instead, never again after a failure:
 | Call | Why |
 |---|---|
 | `agents.FireTrigger` | the API forgets a firing's key when it answers with a server error |
+| `agents.RunRoutine` | a routine's run is a firing of its trigger, sent as `FireTrigger` sends it |
 | `apps.CreateApp`, `apps.Invite` | the apps API takes no key yet |
 | `connections.ConfirmConnection` | a finished sign-in answers 410 to a repeat |
 | `connections.ReconnectConnection` | a repeat replaces the sign-in the first one started |

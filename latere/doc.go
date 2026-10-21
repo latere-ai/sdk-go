@@ -76,6 +76,7 @@
 // instead, never again after a failure:
 //
 //	agents.FireTrigger               the API forgets a firing's key on a server error
+//	agents.RunRoutine                a routine's run is a firing of its trigger
 //	apps.CreateApp, apps.Invite      the apps API takes no key yet
 //	connections.ConfirmConnection    a finished sign-in answers 410 to a repeat
 //	connections.ReconnectConnection  a repeat replaces the sign-in it started

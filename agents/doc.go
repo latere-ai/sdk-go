@@ -43,15 +43,42 @@
 // a file of the session's working directory as it is now, while the
 // session's machine runs.
 //
+// # Routines
+//
+// A routine is an instruction a person hands an agent once, which runs
+// again and again with nobody waiting: on a schedule, or each time another
+// app sends to its private link or an email reaches its address. It is a
+// trigger written in one shape, labeled RoutineLabel with its agent's name
+// and named RoutinePrefix and 20 hexadecimal digits, so every program that
+// shows a person's routines reads and changes the same ones: Latere Chat's
+// routines are those of its managed agent, "latere-chat", which Latere
+// Studio lists too.
+//
+//	r, err := ag.CreateRoutine(ctx, &agents.CreateRoutineParams{
+//		Agent:          "latere-chat",
+//		Title:          "Weekly news",
+//		Instruction:    "Summarize this week's news on climate policy.",
+//		Schedule:       &agents.RoutineSchedule{Days: []time.Weekday{time.Monday}, Hour: 9, Zone: "Europe/Berlin"},
+//		IdempotencyKey: key,
+//	})
+//
+// Client.ListRoutines, Client.GetRoutine, Client.ChangeRoutine,
+// Client.DeleteRoutine and Client.RunRoutine read and change them; a
+// change keeps every field of the trigger it does not name. The agent must
+// exist in the caller's context first: a program signed in as a person
+// makes a managed agent exist with account.ApplyManagedAgent. A routine's
+// runs are the sessions whose TriggerID is its TriggerID.
+//
 // # Scope
 //
-// The package covers sessions and their events: listing, reading,
-// creating, changing, forking, archiving, resuming, ending and deleting
-// sessions, reading and following their logs, sending messages,
+// The package covers sessions and their events: listing, searching,
+// reading, creating, changing, forking, archiving, resuming, ending and
+// deleting sessions, reading and following their logs, sending messages,
 // interrupts, answers, approvals and tool results, and reading a
 // session's files. It also covers triggers, which start sessions on a
 // schedule or when an event arrives: applying, listing, reading, firing
-// and deleting them, and listing their firings. It does not cover yet
-// defining agents and their versions, searching and counting sessions, or
-// redacting an event. Call those with latere.Config.Do until it does.
+// and deleting them, and listing their firings, and the routines written
+// as triggers. It does not cover yet defining agents and their versions,
+// counting sessions, or redacting an event. Call those with
+// latere.Config.Do until it does.
 package agents

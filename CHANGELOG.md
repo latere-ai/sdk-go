@@ -7,6 +7,26 @@ minor version may break code, and every such change is marked **Breaking**.
 
 ## [Unreleased]
 
+### Added
+
+- Package `agents`: routines, an instruction an agent carries out again
+  and again on a schedule or when something arrives from a link or an
+  email, written as a trigger in the one shape Latere Chat and Latere
+  Studio both read. `CreateRoutine`, `ListRoutines`, `GetRoutine`,
+  `ChangeRoutine`, `DeleteRoutine` and `RunRoutine` make, read, change,
+  delete and run them; `RoutineOf` reads a trigger as one and
+  `RoutineName` names the trigger a create's key makes, so the same key
+  never makes a second routine. A change keeps every field of the trigger
+  it does not name, those this version does not model included. The
+  name, the instruction and the schedule are checked before anything is
+  sent, each refusal a sentinel error such as `ErrRoutineTitleMissing`;
+  a name that names no routine matches `ErrNotRoutine` and
+  `latere.ErrNotFound`. `RunRoutine` is sent once, as `FireTrigger` is.
+- Package `agents`: `SearchSessions` and `SearchSessionsPage` search what
+  was said in the sessions the list would list, each `SessionMatch` with
+  its newest matching events and an excerpt whose matched words are
+  marked, within `MaxSearchQuery` and `MaxSearchLimit`.
+
 ### Fixed
 
 - Package `latere`: `Config.Stream` follows a quiet stream for as long as

@@ -10,6 +10,7 @@ import (
 	"go/parser"
 	"go/token"
 	"io"
+	"maps"
 	"net/http"
 	"net/http/httptest"
 	"os"
@@ -42,6 +43,7 @@ type document struct {
 // schema is the part of a JSON Schema these tests read.
 type schema struct {
 	Ref                  string             `json:"$ref"`
+	Type                 string             `json:"type"`
 	Format               string             `json:"format"`
 	Properties           map[string]*schema `json:"properties"`
 	Required             []string           `json:"required"`
@@ -113,6 +115,14 @@ func (d *document) payload(typ string) *schema {
 	return variant.Properties["payload"]
 }
 
+// anyValue reports a schema that allows any JSON value, as the document
+// writes a field whose shape it leaves open: no type, no properties and
+// nothing else to check a model against.
+func (s *schema) anyValue() bool {
+	return s.Ref == "" && s.Type == "" && s.Format == "" && s.Properties == nil && s.Items == nil && len(s.AllOf) == 0 &&
+		len(s.AnyOf) == 0 && len(s.OneOf) == 0 && len(s.Enum) == 0 && s.Const == nil
+}
+
 // sent is the schema of the payload a person sends for type typ.
 func (d *document) sent(typ string) *schema {
 	variant := d.resolve(d.Components.Schemas["SendEvent."+typ])
@@ -159,7 +169,9 @@ func (d *document) checkModel(t *testing.T, name string, typ reflect.Type, s *sc
 	default:
 		return
 	}
-	if typ == timeType {
+	if typ == timeType || s.anyValue() {
+		// A field the document leaves any JSON value is held to the
+		// document by a test of its own, as ToolMeta is.
 		return
 	}
 	read := map[string]bool{}
@@ -215,6 +227,7 @@ func TestModelsMatchTheSchemas(t *testing.T) {
 		{[]string{"tool.result", "user.tool_result"}, reflect.TypeFor[ToolResult]()},
 		{[]string{"session.error"}, reflect.TypeFor[SessionError]()},
 		{[]string{"user.message"}, reflect.TypeFor[UserMessage]()},
+		{[]string{"session.machine"}, reflect.TypeFor[SessionMachine]()},
 	} {
 		union := &schema{Properties: map[string]*schema{}}
 		for _, typ := range p.types {
@@ -234,6 +247,43 @@ func TestModelsMatchTheSchemas(t *testing.T) {
 	d.checkModel(t, "files.kept", reflect.TypeFor[FilesKept](), d.payload("files.kept"), true)
 	d.checkModel(t, "KeptFile", reflect.TypeFor[KeptFile](), s["KeptFile"], true)
 	d.checkModel(t, "SkippedFile", reflect.TypeFor[SkippedFile](), s["SkippedFile"], true)
+}
+
+// metaOutsideTheDocument is the fields ToolMeta reads that none of the
+// document's meta schemas names, each with its reason. A field ToolMeta
+// reads that is neither in one of them nor here fails
+// TestToolMetaFollowsTheDocument.
+var metaOutsideTheDocument = map[string]string{
+	"size":    "the size a write or an edit left, which the document names no meta schema for",
+	"publish": "a publish call's record, which the document names no meta schema for",
+}
+
+// TestToolMetaFollowsTheDocument: the document leaves a tool result's
+// meta any JSON value and describes the meta of some tools in schemas of
+// their own. Every field ToolMeta reads is in one of them, with its type,
+// or is listed in metaOutsideTheDocument.
+func TestToolMetaFollowsTheDocument(t *testing.T) {
+	d, _ := loadDocument(t)
+	s := d.Components.Schemas
+	if meta := d.resolve(d.payload("tool.result")).Properties["meta"]; meta == nil || !d.resolve(meta).anyValue() {
+		t.Fatal("the document now gives tool.result's meta a schema; hold ToolMeta to it in TestModelsMatchTheSchemas")
+	}
+	union := &schema{Properties: map[string]*schema{}}
+	for _, name := range []string{"ReadResultMeta", "QuestionResultMeta", "WebSearchResultMeta"} {
+		m := d.resolve(s[name])
+		if m == nil {
+			t.Errorf("the document has no %s", name)
+			continue
+		}
+		maps.Copy(union.Properties, m.Properties)
+	}
+	for field, reason := range metaOutsideTheDocument {
+		if _, ok := union.Properties[field]; ok {
+			t.Errorf("the document now names meta.%s; check ToolMeta against it and take it out of metaOutsideTheDocument (%s)", field, reason)
+		}
+		union.Properties[field] = &schema{}
+	}
+	d.checkModel(t, "ToolMeta", reflect.TypeFor[ToolMeta](), union, false)
 }
 
 // TestEnumsAreTheDocuments: every value a model's enum declares is one

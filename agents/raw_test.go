@@ -44,6 +44,7 @@ func TestEveryResourceKeepsItsJSON(t *testing.T) {
 		"trigger": {trigger, &agents.Trigger{}},
 		"firing":  {firing, &agents.Firing{}},
 		"match":   {match, &agents.SessionMatch{}},
+		"meta":    {`{"path":"/workspace/a.md","size":1,"exit_code":0}`, &agents.ToolMeta{}},
 	} {
 		if err := json.Unmarshal([]byte(tc.raw), tc.v); err != nil {
 			t.Fatalf("%s: %v", name, err)
@@ -64,6 +65,7 @@ func TestAResourceRefusesJSONOfTheWrongShape(t *testing.T) {
 		&agents.Trigger{},
 		&agents.Firing{},
 		&agents.SessionMatch{},
+		&agents.ToolMeta{},
 	} {
 		if err := json.Unmarshal([]byte(`[]`), v); err == nil {
 			t.Errorf("%T decoded an array", v)

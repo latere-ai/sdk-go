@@ -11,6 +11,7 @@ import (
 	"log"
 	"os"
 	"path/filepath"
+	"strings"
 
 	"latere.ai/x/sdk-go/agents"
 	"latere.ai/x/sdk-go/latere"
@@ -326,5 +327,84 @@ func ExampleClient_ReadSessionFile() {
 	defer r.Close()
 	if _, err := io.Copy(os.Stdout, r); err != nil {
 		log.Fatal(err)
+	}
+}
+
+// Listing the files the agent wrote or changed and the apps it released,
+// from what its tool calls recorded, each file by its place in the
+// session's working directory.
+func ExampleToolMeta() {
+	ctx := context.Background()
+	workdir := ""
+	for e, err := range client().ListEvents(ctx, "ses_01M34G2JF01B91B8399CD1G6YP", nil) {
+		if err != nil {
+			log.Fatal(err)
+		}
+		switch e.Type {
+		case agents.EventSessionMachine:
+			var m agents.SessionMachine
+			if err := e.Decode(&m); err != nil {
+				log.Fatal(err)
+			}
+			workdir = m.Machine.Workdir
+		case agents.EventToolResult:
+			var r agents.ToolResult
+			if err := e.Decode(&r); err != nil {
+				log.Fatal(err)
+			}
+			if r.Meta == nil {
+				continue
+			}
+			switch {
+			case r.Meta.Size != nil:
+				fmt.Println("made", strings.TrimPrefix(r.Meta.Path, workdir+"/"), *r.Meta.Size, "bytes")
+			case r.Meta.Publish != nil && r.Meta.Publish.Status == agents.PublishReleased:
+				fmt.Println("released", r.Meta.Publish.Name, "at", r.Meta.Publish.URL)
+			}
+		}
+	}
+}
+
+// Finding in Storage the files a session's answers linked, for a session
+// that keeps its files in a folder there. Storage answers each file's own
+// media type and size.
+func ExampleFolder() {
+	ctx := context.Background()
+	cfg, err := latere.NewConfig() // the key in LATERE_KEY
+	if err != nil {
+		log.Fatal(err)
+	}
+	ag, st := agents.New(cfg), storage.New(cfg)
+	id := "ses_01M34G2JF01B91B8399CD1G6YP"
+	s, err := ag.GetSession(ctx, id)
+	if err != nil {
+		log.Fatal(err)
+	}
+	if s.Folder == nil {
+		fmt.Println("the session keeps its files as blobs, which ReadBlob reads")
+		return
+	}
+	for e, err := range ag.ListEvents(ctx, id, nil) {
+		if err != nil {
+			log.Fatal(err)
+		}
+		if e.Type != agents.EventFilesKept {
+			continue
+		}
+		var kept agents.FilesKept
+		if err := e.Decode(&kept); err != nil {
+			log.Fatal(err)
+		}
+		for _, f := range kept.Files {
+			if f.Ref == "" {
+				continue
+			}
+			path := s.Folder.Path + "/" + f.Ref
+			info, err := st.StatFile(ctx, s.Folder.Owner, path)
+			if err != nil {
+				log.Fatal(err)
+			}
+			fmt.Println(f.Path, "is", path, "in Storage,", info.ContentType, info.Size, "bytes")
+		}
 	}
 }

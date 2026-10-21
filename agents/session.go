@@ -107,6 +107,11 @@ type Session struct {
 	TriggerID string `json:"trigger_id,omitempty"`
 	// Budget is what the session has spent.
 	Budget *Budget `json:"budget,omitempty"`
+	// Folder is the session's folder of files in Storage, where it keeps
+	// the files its messages carried and those its answers showed or
+	// linked, each at the Ref its record names. Nil for a session that
+	// keeps them as blobs alone, and until it stored its first file there.
+	Folder *Folder `json:"folder,omitempty"`
 	// CreatedAt is when the session was created.
 	CreatedAt time.Time `json:"created_at"`
 	// UpdatedAt is when the session last changed.
@@ -259,6 +264,20 @@ type Parent struct {
 	SessionID string `json:"session_id"`
 	// Seq is the sequence of the last event it shares with that session.
 	Seq int64 `json:"seq"`
+}
+
+// A Folder is a session's folder of files in Storage: the space it is in,
+// and its path there. A file the session kept, an Attachment or a
+// KeptFile whose Ref is set, is at Path + "/" + Ref in Owner's space,
+// where package storage reads it.
+type Folder struct {
+	// Owner is the space the folder is in, named as package storage names
+	// an owner: the subject of the person who started the session, for a
+	// session of their own, or of the organization it runs in.
+	Owner string `json:"owner"`
+	// Path is the folder's path in the space, such as
+	// "files/conversations/ses_01M34G2JF01B91B8399CD1G6YP".
+	Path string `json:"path"`
 }
 
 // Budget is what a session has spent.

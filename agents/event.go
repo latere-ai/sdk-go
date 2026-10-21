@@ -51,6 +51,12 @@ const (
 	EventApprovalDecided EventType = "approval.decided"
 	// EventMachineWaiting is a session waiting for the computer it works on.
 	EventMachineWaiting EventType = "session.machine_waiting"
+	// EventSessionMachine is the machine the session's commands run on
+	// from this event on: its first, one it moved to, a new one in place
+	// of one that was lost, or its own restarted. Its payload is a
+	// SessionMachine, whose working directory holds the files later events
+	// name.
+	EventSessionMachine EventType = "session.machine"
 	// EventFilesKept follows an EventAgentMessage that shows pictures or
 	// links files of the session's machine, and records the copies the
 	// session kept of them; its payload is a FilesKept.
@@ -216,10 +222,137 @@ type ToolResult struct {
 	// Sender is who sent an EventUserToolResult; nil for a result the
 	// platform recorded.
 	Sender *Sender `json:"sender,omitempty"`
+	// Meta is what the tool recorded beside the result, such as the file a
+	// write left or what a publish put up; nil for a result that records
+	// nothing, such as every EventUserToolResult.
+	Meta *ToolMeta `json:"meta,omitempty"`
 }
 
 // Text returns the result's text, its text blocks joined.
 func (r *ToolResult) Text() string { return textOf(r.Content) }
+
+// ToolMeta is what a tool call recorded beside its result, the Meta of a
+// ToolResult. Its shape is the tool's own: a file tool's names the file,
+// and a publish's what it published. The fields are those a client reads
+// to show what a session made; RawJSON holds the whole record, with the
+// parts of other tools this package does not model, such as the todo list
+// a todo call leaves.
+type ToolMeta struct {
+	// Path is the file a read, a write or an edit touched, as its path on
+	// the session's machine, such as "/workspace/report.md": a path the
+	// agent named relative to the working directory is recorded as the
+	// absolute path it names there. Empty on the results of other tools.
+	Path string `json:"path,omitempty"`
+	// SHA256 is the hex SHA-256 of the file's content at the read or the
+	// write; empty for a read of a file that does not exist.
+	SHA256 string `json:"sha256,omitempty"`
+	// Size is the length in bytes of the file a write or an edit left.
+	// Only a write or an edit that succeeded sets it, so a result with
+	// Size set names a file the agent made or changed, and one with Path
+	// and no Size a file it read.
+	Size *int64 `json:"size,omitempty"`
+	// Publish is what a publish call recorded; nil on the results of other
+	// tools.
+	Publish *PublishRecord `json:"publish,omitempty"`
+
+	raw json.RawMessage
+}
+
+// RawJSON returns the JSON the result recorded as its meta, with every
+// field, including those this package does not model; nil for a ToolMeta
+// the program built itself.
+func (m *ToolMeta) RawJSON() json.RawMessage { return m.raw }
+
+// UnmarshalJSON decodes the meta and keeps the JSON for RawJSON.
+func (m *ToolMeta) UnmarshalJSON(b []byte) error {
+	type plain ToolMeta
+	if err := json.Unmarshal(b, (*plain)(m)); err != nil {
+		return err
+	}
+	m.raw = keep(b)
+	return nil
+}
+
+// A PublishRecord is what a publish call recorded in its result's Meta:
+// the app it published to, the addresses of the app and of the version
+// the call put up, and where that version stands. A call that only
+// changed who can open the app records the app, its address and its
+// Visibility, with no Deploy and no Status.
+//
+// The record is the tool's report of the app's answer at the time of the
+// call. A client that reads the app as it is now does so with package
+// apps, and one that shows an address checks first that it is an http or
+// https URL.
+type PublishRecord struct {
+	// App is the app's slug, its name in its address, which changes when
+	// the app is renamed.
+	App string `json:"app"`
+	// AppID is the app's id, which a rename keeps: two records name the
+	// same app when their AppIDs match, or, where one has none, their
+	// Apps. Empty where the call learned no id.
+	AppID string `json:"app_id,omitempty"`
+	// Name is the app's name for a person.
+	Name string `json:"name,omitempty"`
+	// URL is the app's own address, where its released version is served.
+	URL string `json:"url,omitempty"`
+	// Preview is the address of the version the call put up, once the
+	// build named one.
+	Preview string `json:"preview,omitempty"`
+	// Deploy is the id of the deploy that carries the version.
+	Deploy string `json:"deploy,omitempty"`
+	// Commit is the commit the call published or released.
+	Commit string `json:"commit,omitempty"`
+	// Release is the tag of a release.
+	Release string `json:"release,omitempty"`
+	// Status is where the version stands; empty for a call that only
+	// changed who can open the app.
+	Status PublishStatus `json:"status,omitempty"`
+	// Visibility is who may open the app after the call: "private",
+	// "unlisted" or "public", the values of apps.Visibility. Empty where
+	// the call learned none.
+	Visibility string `json:"visibility,omitempty"`
+	// Error is the reason the app refused the call: a build or a release
+	// that failed, was canceled or was refused, or a change of who can
+	// open the app that was refused. Nil otherwise.
+	Error *PublishError `json:"error,omitempty"`
+}
+
+// PublishStatus is where the version a publish call put up stands.
+type PublishStatus string
+
+// The statuses of a PublishRecord. A preview is building, ready, failed
+// or canceled; a release is pending, released or refused.
+const (
+	// PublishBuilding is a preview whose build had not finished when the
+	// call returned.
+	PublishBuilding PublishStatus = "building"
+	// PublishReady is a preview that built, served at the record's Preview.
+	PublishReady PublishStatus = "ready"
+	// PublishFailed is a preview whose build failed.
+	PublishFailed PublishStatus = "failed"
+	// PublishCanceled is a preview whose build was canceled.
+	PublishCanceled PublishStatus = "canceled"
+	// PublishPending is a release that was not yet live when the call
+	// returned.
+	PublishPending PublishStatus = "pending"
+	// PublishReleased is a release served at the app's URL.
+	PublishReleased PublishStatus = "released"
+	// PublishRefused is a release the app refused, such as one whose
+	// commit does not hold the commit the app serves.
+	PublishRefused PublishStatus = "refused"
+)
+
+// PublishError is why an app refused a publish call.
+type PublishError struct {
+	// Code identifies the refusal, such as "behind_live".
+	Code string `json:"code"`
+	// Reason narrows the code, when the refusal names one, such as
+	// "role_insufficient" for a change of who can open an organization's
+	// app that the caller's role does not reach.
+	Reason string `json:"reason,omitempty"`
+	// Message says what happened, in words for a person.
+	Message string `json:"message,omitempty"`
+}
 
 // A SessionError is the payload of an EventSessionError event: something
 // went wrong in the session, such as a model that is busy or a machine
@@ -234,6 +367,65 @@ type SessionError struct {
 	// Detail adds what a developer needs, when there is more to say.
 	Detail string `json:"detail,omitempty"`
 }
+
+// SessionMachine is the payload of an EventSessionMachine event: the
+// machine the session's commands run on from this event on, and why the
+// session has it. A client that places the paths a session's later
+// events name, such as a ToolMeta's Path or a link in an answer, reads
+// the working directory of the last one before them.
+type SessionMachine struct {
+	// Machine is the machine.
+	Machine AttachedMachine `json:"machine"`
+	// Reason is why the session has it.
+	Reason MachineReason `json:"reason"`
+	// Cause is why a MachineRestarted machine had stopped, when its
+	// provider says, such as "out_of_memory".
+	Cause string `json:"cause,omitempty"`
+}
+
+// An AttachedMachine is a machine a session's commands run on, as the
+// session recorded it.
+type AttachedMachine struct {
+	// Kind is the machine's kind.
+	Kind MachineKind `json:"kind"`
+	// ID identifies the machine at its provider, such as a sandbox's id.
+	ID string `json:"id,omitempty"`
+	// Environment is the environment the machine runs in: for a
+	// MachineDevice, the computer's id, from account.Device.
+	Environment string `json:"environment,omitempty"`
+	// Workdir is the absolute path of the directory the session works in.
+	// A path the agent names relative to it, in a tool call or a link of
+	// an answer, is a file inside it.
+	Workdir string `json:"workdir,omitempty"`
+	// OS and Arch are the machine's operating system and architecture as
+	// Go names them, such as "linux" and "arm64", when the machine said.
+	OS   string `json:"os,omitempty"`
+	Arch string `json:"arch,omitempty"`
+}
+
+// MachineReason is why a session has the machine an EventSessionMachine
+// names.
+type MachineReason string
+
+// The reasons of a SessionMachine.
+const (
+	// MachineAttached is the session's first machine, or the first of a
+	// fork.
+	MachineAttached MachineReason = "attached"
+	// MachineHandoff is a machine other than the one the session had,
+	// which the session moved to.
+	MachineHandoff MachineReason = "handoff"
+	// MachineRestored is a new machine given back the files of the
+	// session's working directory.
+	MachineRestored MachineReason = "restored"
+	// MachineReplaced is a new, empty machine in the place of one that was
+	// lost: the files of the working directory are gone.
+	MachineReplaced MachineReason = "replaced"
+	// MachineRestarted is the machine the session had, running again after
+	// it stopped on a failure: the files of its working directory are
+	// kept, and the processes that ran on it are gone.
+	MachineRestarted MachineReason = "restarted"
+)
 
 // A UserMessage is the payload of an EventUserMessage event.
 type UserMessage struct {
@@ -261,8 +453,9 @@ type Attachment struct {
 	// Path is where the agent finds the file, relative to the session's
 	// working directory.
 	Path string `json:"path"`
-	// Ref is where the file is in the session's folder of files, for a
-	// session that keeps one; empty otherwise.
+	// Ref is where the file is in the session's folder of files, its path
+	// inside the Session's Folder, for a session that keeps one; empty
+	// otherwise.
 	Ref string `json:"ref,omitempty"`
 	// Source is the file of the sender's Storage the bytes were read
 	// from, for a file the message named by its source; nil otherwise.
@@ -309,8 +502,9 @@ type KeptFile struct {
 	// linked file, whatever its bytes are.
 	Width  int `json:"width"`
 	Height int `json:"height"`
-	// Ref is where the copy is in the session's folder of files, for a
-	// session that keeps one; empty otherwise.
+	// Ref is where the copy is in the session's folder of files, its path
+	// inside the Session's Folder, for a session that keeps one; empty
+	// otherwise.
 	Ref string `json:"ref,omitempty"`
 }
 

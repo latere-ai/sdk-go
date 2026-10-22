@@ -5,10 +5,11 @@
 // standard OAuth 2.0 and OpenID Connect: in their browser from a desktop
 // app (Browser), or with a code they enter on another device from a
 // terminal (Device). It then keeps the sign-in fresh (TokenSource), says
-// who signed in (UserInfo), and ends it (Revoke). With the same sign-in it
-// reads the sign-in service's own records: the organizations the person
-// belongs to (ListOrganizations) and the handle another person claimed
-// (GetHandle).
+// who signed in (UserInfo), moves it to another organization
+// (SwitchOrganization), and ends it (Revoke). With the same sign-in it
+// reads and writes the sign-in service's own records: the organizations
+// the person belongs to (ListOrganizations), the handle another person
+// claimed (GetHandle), and the person's keys (CreateKey, RevokeKey).
 //
 // A sign-in's token opens the sign-in service only. To call the API as the
 // person, exchange it for API tokens with latere.NewActorTokens:
@@ -118,6 +119,10 @@ type Error struct {
 	Code string
 	// Description explains the error, when the service did.
 	Description string
+	// Detail is the developer detail the service's own records answer
+	// beside the description, such as the grant a key's create refused;
+	// empty when the service gave none.
+	Detail string
 }
 
 // Error returns the code and the description.
@@ -232,10 +237,11 @@ func send(hc *http.Client, req *http.Request, out any) error {
 			Error       string `json:"error"`
 			Description string `json:"error_description"`
 			Message     string `json:"message"`
+			Detail      string `json:"detail"`
 		}
 		e := &Error{StatusCode: resp.StatusCode}
 		if json.Unmarshal(body, &oe) == nil && oe.Error != "" {
-			e.Code, e.Description = oe.Error, oe.Description
+			e.Code, e.Description, e.Detail = oe.Error, oe.Description, oe.Detail
 			if e.Description == "" {
 				e.Description = oe.Message
 			}
@@ -308,6 +314,36 @@ func (c *Config) Refresh(ctx context.Context, refreshToken string) (*Token, erro
 	}
 	if t.RefreshToken == "" {
 		// A service that does not rotate keeps the refresh token valid.
+		t.RefreshToken = refreshToken
+	}
+	return t, nil
+}
+
+// SwitchOrganization exchanges a refresh token for tokens that act in the
+// organization orgID, one the person belongs to, or in their personal
+// account when orgID is empty; UserInfo.OrgID names it from then on. It
+// spends the refresh token as Refresh does: keep the one it returns, and
+// replace a TokenSource built on the old one with one built on it, since
+// the service ends the whole sign-in when a spent refresh token is
+// presented again.
+//
+// A refresh token no longer accepted returns an error matching
+// ErrInvalidGrant. So does an orgID the person is not a member of, which
+// the service refuses with the same code although the sign-in stays valid
+// and the refresh token unspent: ListOrganizations names the organizations
+// a switch may move to.
+func (c *Config) SwitchOrganization(ctx context.Context, refreshToken, orgID string) (*Token, error) {
+	if refreshToken == "" {
+		return nil, errors.New("signin: the refresh token is empty")
+	}
+	// The service switches on the parameter's presence, so an empty org_id
+	// is sent: it names the personal account, where an absent one keeps
+	// the organization the sign-in acts in.
+	t, err := c.token(ctx, url.Values{"grant_type": {"refresh_token"}, "refresh_token": {refreshToken}, "org_id": {orgID}})
+	if err != nil {
+		return nil, err
+	}
+	if t.RefreshToken == "" {
 		t.RefreshToken = refreshToken
 	}
 	return t, nil

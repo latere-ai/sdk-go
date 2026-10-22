@@ -411,3 +411,67 @@ func TestDefaults(t *testing.T) {
 		t.Error("the fields are not used")
 	}
 }
+
+func TestSwitchOrganization(t *testing.T) {
+	var forms []url.Values
+	var mu sync.Mutex
+	mux := http.NewServeMux()
+	var srv *httptest.Server
+	mux.HandleFunc("GET /.well-known/openid-configuration", func(w http.ResponseWriter, _ *http.Request) {
+		writeJSON(w, map[string]string{"authorization_endpoint": srv.URL + "/authorize", "token_endpoint": srv.URL + "/token"})
+	})
+	mux.HandleFunc("POST /token", func(w http.ResponseWriter, r *http.Request) {
+		if err := r.ParseForm(); err != nil {
+			t.Error(err)
+		}
+		mu.Lock()
+		forms = append(forms, r.PostForm)
+		mu.Unlock()
+		switch r.PostForm.Get("refresh_token") {
+		case "spent":
+			oauthError(w, http.StatusBadRequest, "invalid_grant", "spent")
+		case "not_rotated":
+			writeJSON(w, map[string]any{"access_token": "access_org", "expires_in": 600})
+		default:
+			if r.PostForm.Get("org_id") == "org_9" {
+				// The service refuses a membership it does not find as it
+				// refuses a spent token.
+				oauthError(w, http.StatusBadRequest, "invalid_grant", "not a member of org org_9")
+				return
+			}
+			writeJSON(w, map[string]any{"access_token": "access_org", "refresh_token": "refresh_next", "expires_in": 600})
+		}
+	})
+	srv = httptest.NewServer(mux)
+	defer srv.Close()
+	c := &Config{ClientID: "my-app", Issuer: srv.URL}
+
+	tok, err := c.SwitchOrganization(t.Context(), "refresh_1", "org_1")
+	if err != nil || tok.AccessToken != "access_org" || tok.RefreshToken != "refresh_next" || tok.Expiry.IsZero() {
+		t.Fatalf("SwitchOrganization = %+v, %v", tok, err)
+	}
+	if f := forms[0]; f.Get("grant_type") != "refresh_token" || f.Get("refresh_token") != "refresh_1" || f.Get("org_id") != "org_1" || f.Get("client_id") != "my-app" {
+		t.Errorf("the switch sent %v", f)
+	}
+	// The personal account is an org_id sent empty, not one left out.
+	if tok, err := c.SwitchOrganization(t.Context(), "not_rotated", ""); err != nil || tok.RefreshToken != "not_rotated" {
+		t.Errorf("a switch to the personal account = %+v, %v", tok, err)
+	}
+	if v, ok := forms[1]["org_id"]; !ok || len(v) != 1 || v[0] != "" {
+		t.Errorf("a switch to the personal account sent org_id %q, present %v", v, ok)
+	}
+	if _, err := c.SwitchOrganization(t.Context(), "spent", "org_1"); !errors.Is(err, ErrInvalidGrant) {
+		t.Errorf("a spent refresh token: %v", err)
+	}
+	var oe *Error
+	if _, err := c.SwitchOrganization(t.Context(), "refresh_1", "org_9"); !errors.As(err, &oe) || oe.Description != "not a member of org org_9" || !errors.Is(err, ErrInvalidGrant) {
+		t.Errorf("an organization the person is not in: %v", err)
+	}
+	sent := len(forms)
+	if _, err := c.SwitchOrganization(t.Context(), "", "org_1"); err == nil {
+		t.Error("an empty refresh token was accepted")
+	}
+	if len(forms) != sent {
+		t.Error("a switch with an empty refresh token was sent")
+	}
+}

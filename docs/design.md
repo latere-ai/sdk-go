@@ -30,6 +30,7 @@ flowchart TD
     llm --> latere
     llm --> wire[llm/wire]
     agents --> routine[agents/routine]
+    web --> latere
     signin --> latere
     latere --> sse[internal/sse]
     app[your program] --> agents
@@ -38,6 +39,7 @@ flowchart TD
     app --> connections
     app --> storage
     app --> llm
+    app --> web
     app -. a person's sign-in .-> signin
     gateway[the Lux gateway's codec] --> wire
     server[a server that applies routines] --> routine
@@ -45,7 +47,7 @@ flowchart TD
 
 `latere` is the core: configuration, credentials, the error type, the
 request loop, pagination and streams. A capability package (`agents`,
-`account`, `apps`, `connections`, `llm`, `storage`, and those to come) holds typed
+`account`, `apps`, `connections`, `llm`, `storage`, `web`, and those to come) holds typed
 models and one method per endpoint, and calls the API only through
 `Config.Do`, `Config.Open`, `Config.Stream` and `latere.Items`. `signin` is separate
 because most programs, those that run with a key, never sign a person in;
@@ -107,6 +109,13 @@ it drops its token, and the request is sent once more with a new one. A
 any method. A source's own failure is retried only when it may pass, on
 the network or at an issuer that is down; a credential the issuer refuses
 fails the call at once.
+
+A route that reads no credential is sent with `Request.Anonymous`, which
+fetches no token and sends none: a site's icon is the site's and no one's,
+so `web.GetIcon` sends nothing that would tie the sites a person reads to
+them, as Latere Chat reads icons, and it works whether or not the
+credentials do. A 401 to such a request is answered as it is, since no
+token was sent to renew.
 
 `golang.org/x/oauth2` would cover part of this, but it is a dependency,
 and the API's token exchanges are small enough to write and test here.
@@ -410,15 +419,34 @@ second time. The document leaves that meta any JSON value and names the
 meta of a few tools in schemas of their own, so a test holds `ToolMeta`
 to those and lists, with its reason, each field it reads beyond them. The `llm` types are the exception: they are the Lux dialect's
 own definition, shared with the gateway's codec, so they never lag what
-the API sends.
+the API sends. A `web.Icon` is a picture's bytes, not JSON, and keeps
+nothing, as a `FileReader` keeps nothing.
+
+## Site icons
+
+The platform answers a site's icon re-encoded as a PNG of 32 or 64 pixels,
+404 `icon_not_found` for a site without one, and 400 `invalid_host` for a
+host no public website has, such as localhost or an IP address. A site
+without an icon is the common case, not a failure, so `GetIcon` answers it
+as nil with no error; only the platform's own envelope counts, and a 404
+without it, such as a proxy's, stays an error, as `account.RemoveDevice`
+reads its 404. A refused host is an error matching `ErrInvalidHost`, which
+still unwraps to the API's `*Error`, so a caller can remember it as having no icon
+without mistaking a mistyped address for a site that has none. The icon is
+read whole, up to `MaxIconBytes`, four times the largest PNG the platform
+encodes, since a caller draws it at once and never streams it.
 
 ## Gaps in the API
 
-Two gaps in what a program can learn of a session's files are the API's
-to close, and the SDK does not work around them:
+These gaps are the API's to close, and the SDK does not work around
+them. Two are in what a program can learn of a session's files:
 
 - `ReadBlob` answers a file that is no PNG, JPEG, GIF or WebP picture as `application/octet-stream`, and with a size of -1 for a session that keeps no folder, so a program reads the file's type and size from its record.
 - The API lists no session's working directory, so a program learns which files a session made from its log alone: its kept files and the `ToolMeta` of its writes and edits.
+
+The web part has no reference document yet, so `web`'s tests hold the
+client to the answers the platform's icon route gives rather than to a
+schema, and `make openapi` fetches nothing for it.
 
 ## Observability
 

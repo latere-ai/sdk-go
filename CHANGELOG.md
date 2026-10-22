@@ -17,6 +17,17 @@ minor version may break code, and every such change is marked **Breaking**.
   and the `Check` functions hold the bounds, and `Cron` and
   `ParseSchedule` write and read the schedule. `agents` writes and reads
   routines through it, so the shape is defined once.
+- Package `web`: `GetIcon` reads a site's icon through the platform, a
+  PNG of `IconSmall`, 32 pixels a side, or `IconLarge`, 64, to draw beside
+  a link to the site, as Latere Chat does. A site without an icon answers
+  nil and no error; a host the platform reads no icon for, such as
+  localhost or an IP address, returns an error matching `ErrInvalidHost`,
+  and an answer past `MaxIconBytes`, 64 KiB, one matching
+  `ErrIconTooLarge`. The request carries no credential, since the route
+  reads none.
+- Package `latere`: `Request.Anonymous` sends a request without the
+  `Config`'s credential, for a route that reads none: no token is fetched
+  for it, and a 401 is not answered by renewing one.
 
 ### Changed
 

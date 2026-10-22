@@ -27,6 +27,7 @@ they share. Import the ones you use:
 | [`apps`](https://pkg.go.dev/latere.ai/x/sdk-go/apps) | Apps: create, list, change, delete; their deploys, build logs, releases and who may open them |
 | [`llm`](https://pkg.go.dev/latere.ai/x/sdk-go/llm) | Calling models in the Lux dialect: generate, stream, count tokens, list models |
 | [`llm/wire`](https://pkg.go.dev/latere.ai/x/sdk-go/llm/wire) | The Lux dialect's types alone, for code that reads or writes the format without calling the API |
+| [`web`](https://pkg.go.dev/latere.ai/x/sdk-go/web) | What the platform reads from the web for a program that shows an answer: a site's icon |
 | [`signin`](https://pkg.go.dev/latere.ai/x/sdk-go/signin) | Signing a person in, for apps Latere registers |
 
 Create a key under **Keys** in the
@@ -460,6 +461,35 @@ Programs built on the OpenAI or Anthropic SDKs reach the same models with
 the same key through the models capability's compatible endpoints; see
 [Providers and doors](https://platform.latere.ai/docs/models/providers).
 
+## Site icons
+
+A program that shows an answer draws each link with its site's icon, as
+Latere Chat does. Package `web` reads the icon through the platform, which
+fetches it from the site on its own outbound path, so the site never sees
+the reader, and answers it as a small PNG:
+
+```go
+icon, err := web.New(cfg).GetIcon(ctx, "techcrunch.com", web.IconSmall)
+switch {
+case errors.Is(err, web.ErrInvalidHost):
+	// an IP address, localhost or another name no public site has
+case err != nil:
+	return err
+case icon == nil:
+	// the site has no icon: draw the link alone
+default:
+	draw(icon.Data, icon.MediaType)
+}
+```
+
+`IconSmall` is 32 pixels a side, for an icon beside a link's words;
+`IconLarge` is 64. An icon is the site's and no one's, so the request
+carries no credential. An answer past `web.MaxIconBytes`, 64 KiB, is
+refused with an error matching `web.ErrIconTooLarge`. The platform keeps
+an icon for a week and a site without one for a day, so a program that
+keeps what it read need not ask sooner. Pictures of the web an answer
+shows are not covered yet; read them with `Config.Open`.
+
 ## The API's own answer
 
 Every resource the `agents`, `account`, `apps`, `connections` and `storage`
@@ -478,6 +508,7 @@ os.Stdout.Write(s.RawJSON())
 
 A resource your program builds itself has no JSON, and `RawJSON` returns
 nil. The `llm` types need none: they are the Lux dialect's own definition.
+A `web.Icon` is a picture's bytes, not JSON, and has none either.
 
 ## Streaming
 
@@ -612,7 +643,9 @@ exchanges of a key or a sign-in go through the same client and hooks. The
 SDK keeps no global state: build as many configurations as you need.
 
 To call an endpoint the packages do not cover yet, use `Config.Do` with a
-`latere.Request`; it signs, retries and decodes as the packages do.
+`latere.Request`; it signs, retries and decodes as the packages do. A
+route that reads no credential takes `Request.Anonymous`, which sends the
+request without one.
 
 ## Signing a person in
 

@@ -232,7 +232,8 @@ if err != nil {
 fmt.Println(page.Share.Title, len(page.Events))
 ```
 
-A link for the members of an organization answers a member's token alone.
+The read sends the `Config`'s credential when it has one, which a share
+whose audience is an organization's members would read.
 
 The package covers sessions, their events and files, shared
 conversations, triggers and routines. Defining agents is not covered yet;
@@ -417,7 +418,7 @@ take its slug.
 `ReadThumbnail` opens a deploy's picture as a stream, with its media type,
 length and how a cache may keep it, for a program that passes it on to a
 browser. `ListAppSessions` lists the sessions whose publishes built an
-app, `GetVisits` its daily page loads and visitors, `GetDeployByID` and
+app, `GetAppVisits` its daily page loads and visitors, `GetDeployByID` and
 `GetDeployApp` read a deploy by its ID alone and the app it belongs to,
 and `GetListing`, `RequestListing` and `WithdrawListing` handle its place
 in the gallery. `CreateFramePass` answers the address that shows a private
@@ -793,7 +794,10 @@ request without one. A program that holds no credential at all builds its
 `Config` with `WithoutCredentials`, which sends none on any request: the
 API's public reads, a shared conversation, an app anyone may open and its
 pictures, and a site's icon, answer it, and every other call is refused
-with 401.
+with 401. Those reads are limited per client address; a server that reads
+for its visitors forwards each one's address in `X-Real-IP` from a
+`WithHooks` `BeforeRequest`, which sees the call's context, where the
+installation takes that header from the server.
 
 ## Signing a person in
 

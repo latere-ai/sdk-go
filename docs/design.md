@@ -285,11 +285,11 @@ meet a 404 for a delete that succeeded. Where the API answers the same
 404 for a resource removed before and one never held, as it does for a
 person's computer, `account.RemoveDevice` reports the API's own 404 as
 done: the person holds no computer of that id either way, and the call is
-then safe to repeat. `account.DeleteProject` does the same with the API's
-`project_not_found`. A file's delete does not: a path that never held a
-file is a mistake a caller wants told, so `storage.DeleteFile` returns
-the 404, and its docs say a retry can meet the 404 of a delete that
-succeeded. A 404 without the API's envelope, such as a proxy's,
+then safe to repeat. Other deletes do not: the API answers a project's
+404 also for a project of another context than the token's, and a path
+that never held a file is a mistake a caller wants told, so
+`account.DeleteProject` and `storage.DeleteFile` return the 404, and their
+docs say a retry can meet the 404 of a delete that succeeded. A 404 without the API's envelope, such as a proxy's,
 stays an error.
 
 A call that fails before any request is sent, because the token source
@@ -307,7 +307,10 @@ that fetches pages while the loop asks for items, and `ListPage` returns
 one page for a caller that keeps the cursor itself, between requests of a
 web app for instance. The iterator stops at an empty cursor and also at a
 cursor equal to the last one, so a server answering the same page forever
-cannot hang a loop.
+cannot hang a loop. A shared conversation's page carries the share
+beside its events, so its one-page form is `agents.GetSharedPage`, which
+answers both, and its iterator `ListSharedEvents` walks the events
+alone.
 
 ## The models capability
 
@@ -437,7 +440,8 @@ API's reference pages, and its tests hold the routes it calls, and the one
 list shape the document does define, to the document.
 
 Every resource a package returns, a session, an event, a session summary,
-a shared page, a trigger, a wallet, a pin, a share link, a checkout, the
+a shared page, a trigger, a wallet, a pin, a context's network section
+and its bookmarks, a share link, a checkout, the
 data places and terms, a project, a trigger's link or address, a device,
 an app, a deploy, an app's sessions and visits, a listing, a frame pass,
 a connection, an Evals definition, experiment, cell or comparison, a
@@ -451,8 +455,11 @@ them. It is one rule for every package rather than a choice per package,
 so a program never has to know which parts of the API it may relay as
 they came. Parts of a resource, such as a session's budget, keep nothing:
 the resource's JSON already holds them. A model a program builds itself
-has none. The one part that keeps its JSON is a tool result's
-`ToolMeta`: its shape is each tool's own, and the package models only
+has none. A part the API also answers on its own keeps its JSON for that
+answer: preferences hold the network section and the bookmarks, and
+`AddSite` and `BookmarkTurn` answer each alone, so `account.Network` and
+`account.Bookmarks` keep theirs. The one other part that keeps its JSON
+is a tool result's `ToolMeta`: its shape is each tool's own, and the package models only
 what the file tools and publishing record, so the rest, such as a todo
 list, is read from its `RawJSON` without decoding the event's payload a
 second time. The document leaves that meta any JSON value and names the
@@ -465,9 +472,12 @@ nothing, as a `FileReader` keeps nothing.
 The Evals document describes its resources but not the events of an
 experiment's stream, which it leaves of any type and any data, so
 `evals`' event payloads follow what the stream sends and its tests hold
-them, as `storage`'s do for its schema-less routes. A comparison's
-figures are left to its `RawJSON`, since their shape is named by the
-comparison's analysis version rather than fixed by the document.
+them, as `storage`'s do for its schema-less routes. A stream's event is
+a frame rather than a resource, so `evals.StreamEvent` holds its data as
+`Data`, read with `Decode`, as `agents.Event` holds its `Payload`. A
+comparison's figures are left to its `RawJSON`, since their shape is
+named by the comparison's analysis version rather than fixed by the
+document.
 
 ## Readers
 
@@ -475,10 +485,13 @@ A route that answers bytes rather than JSON, a session's kept file, a
 shared conversation's, a deploy's picture or a picture of the web, is
 opened as a reader: `agents.FileReader`, `apps.ThumbnailReader` and
 `web.ImageReader` stream the body and say its media type and length, and
-the picture readers also how a cache may keep it, as the API answered.
-A program that relays the bytes to a browser, as Latere Chat does for
-every picture it shows, copies the reader to its response with those
-headers. The relay itself, an HTTP handler with the client's own routes,
+how a cache may keep it, its entity tag and, for a session's file,
+whether it is shown in place or saved, as the API answered. A program
+that relays the bytes to a browser, as Latere Chat does for every
+picture it shows, copies the reader to its response with those headers,
+and sets its own origin's guards for bytes it did not write, such as
+`X-Content-Type-Options: nosniff` and a sandboxing
+`Content-Security-Policy`, as the platform sets them on its own origin. The relay itself, an HTTP handler with the client's own routes,
 cookies and caching, stays in the program: the SDK's part is to make the
 call and hand back what the program passes on, not to serve HTTP. Each
 package keeps its own reader type, since a package imports no other

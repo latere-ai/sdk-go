@@ -23,6 +23,9 @@ minor version may break code, and every such change is marked **Breaking**.
   `GetSharedPage`, a page of the events a reader sees with the `Share`'s
   title and bound, `ListSharedEvents`, every event, and `ReadSharedBlob`,
   a file it kept as a `FileReader`.
+- Package `agents`: `FileReader.CacheControl`, `ETag` and
+  `ContentDisposition`, the answer's headers a program that passes a
+  file on to a browser sends with it.
 - Package `account`: links that share a conversation, `CreateShare`,
   `ListShares` and `ListSharesPage`, `UpdateShare`, which moves a link to
   the last finished turn, and `DeleteShare`, with the `Share` model and its
@@ -50,7 +53,7 @@ minor version may break code, and every such change is marked **Breaking**.
   trigger a link another app posts to, and `IssueTriggerAddress` and
   `RemoveTriggerAddress` an email address, with `ErrMailNotEnabled`.
 - Package `apps`: `ListAppSessions` and `ListAppSessionsPage`, the
-  sessions whose publishes built an app, and `GetVisits`, its daily page
+  sessions whose publishes built an app, and `GetAppVisits`, its daily page
   loads and visitors with their totals.
 - Package `apps`: `GetDeployByID`, a deploy by its ID alone, and
   `GetDeployApp`, the app a deploy belongs to as an `OpenApp`.

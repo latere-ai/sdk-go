@@ -7,6 +7,8 @@ minor version may break code, and every such change is marked **Breaking**.
 
 ## [Unreleased]
 
+## [0.8.0] - 2026-10-22
+
 ### Added
 
 - Package `signin`: `UserInfo.OrgID`, the organization a sign-in acts in,

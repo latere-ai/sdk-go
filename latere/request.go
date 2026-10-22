@@ -262,6 +262,8 @@ func (c *Config) send(ctx context.Context, r *Request) (*http.Response, error) {
 		return nil, fmt.Errorf("latere: %s %s goes to a signed URL, which takes no credential, and also sets SendKey", r.Method, where)
 	case r.Anonymous && r.SendKey:
 		return nil, fmt.Errorf("latere: %s %s is sent without a credential and also sets SendKey", r.Method, where)
+	case c.noCredentials && r.SendKey:
+		return nil, fmt.Errorf("latere: %s %s sends the key, and the Config was built WithoutCredentials", r.Method, where)
 	case r.Content != nil && r.Body != nil:
 		return nil, fmt.Errorf("latere: %s %s sets both Body and Content; it sends one body", r.Method, where)
 	case r.Content != nil && r.ContentLength < 0:
@@ -429,7 +431,7 @@ func (c *Config) key(r *Request) (string, bool) {
 // attempt sends r once.
 func (c *Config) attempt(ctx context.Context, r *Request, target string, body []byte) (*http.Response, error) {
 	bearer, sentKey := c.key(r)
-	if !sentKey && r.SignedURL == "" && !r.Anonymous {
+	if !sentKey && r.SignedURL == "" && !r.Anonymous && !c.noCredentials {
 		token, err := c.tokens.Token(ctx)
 		if err != nil {
 			return nil, &TokenError{Err: err}

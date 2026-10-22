@@ -52,8 +52,9 @@ const (
 )
 
 // ErrNoCredentials is returned by NewConfig when no credentials were given
-// and LATERE_KEY is not set.
-var ErrNoCredentials = errors.New("latere: no credentials: use WithKey or WithTokenSource, or set " + EnvKey)
+// and LATERE_KEY is not set. A program that reads only the API's public
+// routes builds its Config WithoutCredentials instead.
+var ErrNoCredentials = errors.New("latere: no credentials: use WithKey or WithTokenSource, or set " + EnvKey + "; WithoutCredentials reads the public routes alone")
 
 // errNotBuilt is returned by a call on a nil Config or one not built with
 // NewConfig, which has no address or credentials to send with.
@@ -81,6 +82,9 @@ type Config struct {
 	// environment is read only when it did not.
 	baseURLSet bool
 	tokensSet  bool
+	// noCredentials is set by WithoutCredentials: tokens is nil, and no
+	// request carries a credential.
+	noCredentials bool
 }
 
 // Hooks are called around every HTTP attempt, the token exchanges of
@@ -110,10 +114,11 @@ type Option func(*Config) error
 
 // NewConfig returns a Config with the options applied over the defaults:
 // DefaultBaseURL, http.DefaultClient, DefaultMaxRetries, the backoff bounds
-// and DefaultTimeout. Without WithKey or WithTokenSource it uses the key in
-// LATERE_KEY, and without WithBaseURL the address in LATERE_BASE_URL. It
-// returns ErrNoCredentials when there are no credentials at all, and an
-// error naming the option when an option's value is invalid.
+// and DefaultTimeout. Without WithKey, WithTokenSource or
+// WithoutCredentials it uses the key in LATERE_KEY, and without WithBaseURL
+// the address in LATERE_BASE_URL. It returns ErrNoCredentials when there
+// are no credentials at all, and an error naming the option when an
+// option's value is invalid.
 func NewConfig(opts ...Option) (*Config, error) {
 	c := &Config{
 		httpClient: http.DefaultClient,
@@ -168,7 +173,7 @@ func WithKey(key string) Option {
 		if err != nil {
 			return fmt.Errorf("latere: WithKey: %w", err)
 		}
-		c.tokens, c.tokensSet = kt, true
+		c.tokens, c.tokensSet, c.noCredentials = kt, true, false
 		return nil
 	}
 }
@@ -181,7 +186,22 @@ func WithTokenSource(ts TokenSource) Option {
 		if ts == nil {
 			return errors.New("latere: WithTokenSource: the token source is nil")
 		}
-		c.tokens, c.tokensSet = ts, true
+		c.tokens, c.tokensSet, c.noCredentials = ts, true, false
+		return nil
+	}
+}
+
+// WithoutCredentials sends every request with no credential at all, for a
+// program that holds none, such as a server that shows a shared
+// conversation to a visitor who has not signed in. Only the API's public
+// reads answer such a request: a conversation's share that anyone may
+// read, a site anyone may open and its pictures, a site's icon. Any other
+// call is refused with 401, an error matching ErrUnauthorized. It takes
+// the place of WithKey, WithTokenSource and LATERE_KEY, whichever came
+// last wins, and a request that sets SendKey is refused before it is sent.
+func WithoutCredentials() Option {
+	return func(c *Config) error {
+		c.tokens, c.tokensSet, c.noCredentials = nil, true, true
 		return nil
 	}
 }
@@ -287,7 +307,7 @@ func (c *Config) BaseURL() string {
 
 // built returns errNotBuilt when c cannot send a request.
 func (c *Config) built() error {
-	if c == nil || c.baseURL == nil || c.tokens == nil || c.httpClient == nil || c.sleep == nil {
+	if c == nil || c.baseURL == nil || (c.tokens == nil && !c.noCredentials) || c.httpClient == nil || c.sleep == nil {
 		return errNotBuilt
 	}
 	return nil

@@ -30,6 +30,9 @@ minor version may break code, and every such change is marked **Breaking**.
 - Package `latere`: `Request.Anonymous` sends a request without the
   `Config`'s credential, for a route that reads none: no token is fetched
   for it, and a 401 is not answered by renewing one.
+- Package `account`: `DeviceNetwork.Blocked`, the hosts a computer on the
+  `open` network blocks, and the `open` mode in `DeviceNetwork.Mode`'s
+  docs.
 
 ### Changed
 

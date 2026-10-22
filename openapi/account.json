@@ -920,8 +920,15 @@
             "type": "string"
           },
           "network": {
-            "description": "The network the computer allows a session: `none`, or `allowlist` and the hosts it names.",
+            "description": "The network the computer allows a session: `none`; `allowlist` and the hosts it names; or `open`, any public host but those `blocked` names, where `hosts` are the ports beyond 443 and 80 it admits, each as `host:port`. Under `open`, anything a session can read in the computer's folders can be sent to any public host.",
             "properties": {
+              "blocked": {
+                "description": "The hosts a computer on `open` blocks: a host, an address, or `*.example.com` for the names below it, alone or as `host:port`. Empty under the other modes.",
+                "items": {
+                  "type": "string"
+                },
+                "type": "array"
+              },
               "hosts": {
                 "items": {
                   "type": "string"
@@ -931,14 +938,16 @@
               "mode": {
                 "enum": [
                   "none",
-                  "allowlist"
+                  "allowlist",
+                  "open"
                 ],
                 "type": "string"
               }
             },
             "required": [
               "mode",
-              "hosts"
+              "hosts",
+              "blocked"
             ],
             "type": "object"
           },
@@ -2680,6 +2689,100 @@
         "summary": "Remove a person's access",
         "tags": [
           "apps"
+        ]
+      }
+    },
+    "/v1/account/arrival": {
+      "put": {
+        "description": "A product where a person signs in records the website that referred them and the page they first landed on, once. `source_host` is a host name and `landing_path` a path on the product, with no query and no fragment; a value of any other form is dropped, and either may be empty. The person's record is written only when they have none, so the first sign-in that carried a source is the one kept, and the answer is 204 whatever was kept. The platform shows it only when it was written within ten minutes of the account's creation. Only a person's own sign-in records an arrival: a hosted agent's, a service account's and a key's token are refused.",
+        "operationId": "recordArrival",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "example": {
+                "landing_path": "/blog/why-latere",
+                "source_host": "news.ycombinator.com"
+              },
+              "schema": {
+                "additionalProperties": false,
+                "properties": {
+                  "landing_path": {
+                    "maxLength": 200,
+                    "type": "string"
+                  },
+                  "source_host": {
+                    "maxLength": 253,
+                    "type": "string"
+                  }
+                },
+                "type": "object"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "204": {
+            "description": "Received; the record is written when the person has none."
+          },
+          "400": {
+            "content": {
+              "application/json": {
+                "example": {
+                  "error": {
+                    "code": "invalid_request",
+                    "message": "The request could not be read."
+                  }
+                },
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            },
+            "description": "invalid_request: the body is not one object of the two fields."
+          },
+          "401": {
+            "$ref": "#/components/responses/unauthorized"
+          },
+          "403": {
+            "content": {
+              "application/json": {
+                "example": {
+                  "error": {
+                    "code": "forbidden",
+                    "message": "Only a person records how they arrived."
+                  }
+                },
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            },
+            "description": "forbidden: the token is a hosted agent's, a service account's or a key's."
+          },
+          "429": {
+            "$ref": "#/components/responses/rate_limited"
+          },
+          "503": {
+            "content": {
+              "application/json": {
+                "example": {
+                  "error": {
+                    "code": "unavailable",
+                    "message": "The service is temporarily unavailable."
+                  }
+                },
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            },
+            "description": "unavailable: the record cannot be written right now."
+          }
+        },
+        "summary": "Record a person's arrival",
+        "tags": [
+          "arrival"
         ]
       }
     },
@@ -5709,6 +5812,10 @@
     {
       "description": "The person's own computers, connected as environments the sessions they start work on.",
       "name": "devices"
+    },
+    {
+      "description": "What brought a person to Latere, which a product records at their first sign-in there.",
+      "name": "arrival"
     }
   ]
 }

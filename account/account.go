@@ -606,10 +606,18 @@ type DeviceFolder struct {
 
 // DeviceNetwork is the network a computer allows a session.
 type DeviceNetwork struct {
-	// Mode is "none" or "allowlist".
+	// Mode is "none", "allowlist" or "open": no network, the hosts Hosts
+	// names, or any public host but those Blocked names. Under "open",
+	// anything a session can read in the computer's folders can be sent
+	// to any public host.
 	Mode string `json:"mode"`
-	// Hosts are the hosts an "allowlist" names.
+	// Hosts are the hosts an "allowlist" names, or under "open" the ports
+	// beyond 443 and 80 it admits, each as "host:port".
 	Hosts []string `json:"hosts"`
+	// Blocked are the hosts a computer on "open" blocks: a host, an
+	// address, or "*.example.com" for the names below it, alone or as
+	// "host:port". Empty under the other modes.
+	Blocked []string `json:"blocked"`
 }
 
 // MaxDeviceName is the most characters a computer's name holds, once

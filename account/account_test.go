@@ -57,7 +57,7 @@ func TestReads(t *testing.T) {
 		"PUT /v1/account/preferences/pins/ses_1":    `{"sessions":["ses_1"],"apps":[],"projects":[],"max_sessions":20,"max_apps":20,"max_projects":20}`,
 		"DELETE /v1/account/preferences/pins/ses_1": "",
 		"GET /v1/account/devices": `{"items":[{"id":"dev_1","name":"MacBook","status":"online","online":true,"os":"darwin","arch":"arm64","isolation":"process",
-			"folders":[{"path":"/Users/al/code","write":true}],"network":{"mode":"allowlist","hosts":["github.com"]},"created_at":"2026-10-19T10:00:00Z"}],"limit":5}`,
+			"folders":[{"path":"/Users/al/code","write":true}],"network":{"mode":"allowlist","hosts":["github.com"],"blocked":["ads.example.com"]},"created_at":"2026-10-19T10:00:00Z"}],"limit":5}`,
 	})
 	applied, err := c.ApplyManagedAgent(t.Context(), "latere-chat")
 	if err != nil || applied.Agent.ID != "agent_1" || applied.Model != "tier/quick" {
@@ -85,7 +85,7 @@ func TestReads(t *testing.T) {
 		t.Errorf("UnpinSession: %v", err)
 	}
 	d, err := c.ListDevices(t.Context())
-	if err != nil || d.Limit != 5 || d.Items[0].Folders[0].Path != "/Users/al/code" || d.Items[0].Network.Hosts[0] != "github.com" ||
+	if err != nil || d.Limit != 5 || d.Items[0].Folders[0].Path != "/Users/al/code" || d.Items[0].Network.Hosts[0] != "github.com" || d.Items[0].Network.Blocked[0] != "ads.example.com" ||
 		d.Items[0].Status != account.DeviceOnline || d.Items[0].CreatedAt.IsZero() || !d.Items[0].LastSeen.IsZero() {
 		t.Errorf("Devices: %+v, %v", d, err)
 	}

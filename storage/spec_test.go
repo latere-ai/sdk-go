@@ -58,21 +58,23 @@ func jsonFields(t reflect.Type) []string {
 }
 
 // A listing is the API's one list shape, with the folders and the space's
-// usage added for a folder.
+// usage added for a folder; a page of shares is the shape alone.
 func TestFilesPageReadsTheListShape(t *testing.T) {
 	page := loadDocument(t).Components.Schemas["Page"]
 	if page == nil {
 		t.Fatal("the document has no Page schema")
 	}
-	fields := jsonFields(reflect.TypeFor[storage.FilesPage]())
-	for prop := range page.Properties {
-		if !slices.Contains(fields, prop) {
-			t.Errorf("FilesPage does not read %s", prop)
+	for _, typ := range []reflect.Type{reflect.TypeFor[storage.FilesPage](), reflect.TypeFor[storage.GrantsPage]()} {
+		fields := jsonFields(typ)
+		for prop := range page.Properties {
+			if !slices.Contains(fields, prop) {
+				t.Errorf("%s does not read %s", typ.Name(), prop)
+			}
 		}
-	}
-	for _, r := range page.Required {
-		if !slices.Contains(fields, r) {
-			t.Errorf("FilesPage does not read %s, which the schema requires", r)
+		for _, r := range page.Required {
+			if !slices.Contains(fields, r) {
+				t.Errorf("%s does not read %s, which the schema requires", typ.Name(), r)
+			}
 		}
 	}
 }
@@ -83,6 +85,9 @@ func TestEndpointsAreInTheDocument(t *testing.T) {
 		{"get", "/v1/storage/files/{owner}/{path}"},
 		{"head", "/v1/storage/files/{owner}/{path}"},
 		{"put", "/v1/storage/files/{owner}/{path}"},
+		{"post", "/v1/storage/files/{owner}/{path}"},
+		{"delete", "/v1/storage/files/{owner}/{path}"},
+		{"get", "/v1/storage/shares/with-me"},
 		{"post", "/v1/storage/uploads"},
 		{"post", "/v1/storage/uploads/{id}/complete"},
 		{"delete", "/v1/storage/uploads/{id}"},

@@ -39,6 +39,12 @@
 // storage for a large file, and GetDownloadURL answers a short-lived link
 // that serves them without a credential, for a browser or another program.
 //
+// MoveFile and MoveFolder rename a file, or a folder with everything under
+// it, without copying a byte, and DeleteFile and DeleteFolder move them to
+// the space's trash or remove them for good. ListSharedWithMe lists what
+// other people shared with you, each share naming the space and the path
+// by which ReadFile and ListFiles reach it.
+//
 // The steps of an upload in parts, StartUpload, PutPart, CompleteUpload and
 // AbortUpload, are there for a program that spreads the parts over several
 // machines or resumes an upload across runs; UploadFile does all of them.

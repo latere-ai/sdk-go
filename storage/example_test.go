@@ -95,3 +95,34 @@ func ExampleClient_GetDownloadURL() {
 	}
 	fmt.Println(link)
 }
+
+// Renaming a folder, with every file under it, in one change.
+func ExampleClient_MoveFolder() {
+	moved, err := client().MoveFolder(context.Background(), storage.Me, "files/drafts", "files/talks/2026")
+	if err != nil {
+		log.Fatal(err)
+	}
+	fmt.Println("moved", moved.Files, "files to", moved.Path)
+}
+
+// Moving a file to the trash, from which it can be restored.
+func ExampleClient_DeleteFile() {
+	if err := client().DeleteFile(context.Background(), storage.Me, "files/notes/old.md", nil); err != nil {
+		log.Fatal(err)
+	}
+}
+
+// Listing what other people shared with you, and reading a shared file.
+func ExampleClient_ListSharedWithMe() {
+	ctx := context.Background()
+	c := client()
+	for g, err := range c.ListSharedWithMe(ctx, nil) {
+		if err != nil {
+			log.Fatal(err)
+		}
+		fmt.Println(g.Owner, g.PathPrefix, g.Permission)
+		if info, err := c.StatFile(ctx, g.Owner, g.PathPrefix); err == nil {
+			fmt.Println("a file of", info.Size, "bytes")
+		}
+	}
+}

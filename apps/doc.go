@@ -31,8 +31,8 @@
 //
 // A few reads also answer without a credential, as anyone with an app's
 // address reads it: GetApp, GetDeployApp and ReadThumbnail, through a
-// Config that sends none, answer a public or unlisted app that is
-// published, and nothing of any other.
+// Config built with latere.WithoutCredentials, answer a public or unlisted
+// app that is published, and nothing of any other.
 //
 // A deploy's picture is bytes, not JSON: ReadThumbnail returns a
 // ThumbnailReader with its media type, its length and how a cache may

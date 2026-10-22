@@ -99,11 +99,11 @@ var thumbnailCodes = map[string]error{"thumbnail_not_found": ErrNoThumbnail}
 // Deploy returns both from its URL. The caller closes the reader.
 //
 // With a credential it is any read of the app, so the owner reads the
-// picture of a private or unpublished app. With a Config that sends no
-// credential it answers only while the address the deploy serves is
-// public or unlisted and the app is published, and such reads are limited
-// to 120 a minute from one address, past which it returns an error
-// matching latere.ErrRateLimited once its retries are spent.
+// picture of a private or unpublished app. With a Config built with
+// latere.WithoutCredentials it answers only while the address the deploy
+// serves is public or unlisted and the app is published, and such reads
+// are limited to 120 a minute from one address, past which it returns an
+// error matching latere.ErrRateLimited once its retries are spent.
 //
 // An app the caller may not read, or without a credential one that is
 // private or unpublished, returns an error matching latere.ErrNotFound. A

@@ -260,7 +260,7 @@ func (c *Client) GetDeployByID(ctx context.Context, id string) (*Deploy, error) 
 
 // OpenApp is an app as anyone may read it: its ID, its slug, its name and
 // its address now. GetDeployApp answers it, and GetApp answers an App with
-// these fields alone to a Config that sends no credential.
+// these fields alone to a Config built with latere.WithoutCredentials.
 type OpenApp struct {
 	// ID never changes.
 	ID string `json:"id"`
@@ -294,10 +294,10 @@ func (a *OpenApp) UnmarshalJSON(b []byte) error {
 // reads the app's current address by it after a rename.
 //
 // With a credential it answers a deploy of an app the caller may read.
-// With a Config that sends no credential it answers only a deploy of an
-// app anyone with its address may open, public or unlisted and published,
-// among every account's apps; such reads are limited to 120 a minute from
-// one address, past which it returns an error matching
+// With a Config built with latere.WithoutCredentials it answers only a
+// deploy of an app anyone with its address may open, public or unlisted
+// and published, among every account's apps; such reads are limited to 120
+// a minute from one address, past which it returns an error matching
 // latere.ErrRateLimited once its retries are spent. Any other deploy, or
 // none, returns an error matching latere.ErrNotFound, the same for each,
 // so it tells no one that a private app exists.

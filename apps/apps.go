@@ -307,11 +307,11 @@ func (c *Client) CreateApp(ctx context.Context, params *CreateAppParams) (*App, 
 // returns an error matching latere.ErrNotFound when the caller has no
 // such app.
 //
-// With a Config that sends no credential it reads an app as anyone does:
-// it answers only an app anyone with its address may open, public or
-// unlisted and published, among every account's apps, and only its ID,
-// Slug, Name and URL, as an OpenApp holds them; every other field is
-// zero. Any other app returns an error matching latere.ErrNotFound, and
+// With a Config built with latere.WithoutCredentials it reads an app as
+// anyone does: it answers only an app anyone with its address may open,
+// public or unlisted and published, among every account's apps, and only
+// its ID, Slug, Name and URL, as an OpenApp holds them; every other field
+// is zero. Any other app returns an error matching latere.ErrNotFound, and
 // such reads are limited to 120 a minute from one address, past which it
 // returns an error matching latere.ErrRateLimited once its retries are
 // spent.

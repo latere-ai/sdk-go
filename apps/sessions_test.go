@@ -62,24 +62,24 @@ const visitsJSON = `{"counted_since":"2026-10-13","days":[{"day":"2026-11-11","f
 	"today":"2026-11-12","totals":{"last_30_days":{"visitors":230,"visits":512},"last_7_days":{"visitors":61,"visits":140},
 	"today":{"visitors":5,"visits":12}}}`
 
-func TestGetVisits(t *testing.T) {
+func TestGetAppVisits(t *testing.T) {
 	c, f := newFake(t, 0, map[string]http.HandlerFunc{
 		"GET /v1/apps/apps/kornhaus/visits": answer(http.StatusOK, visitsJSON),
 	})
-	v, err := c.GetVisits(t.Context(), "kornhaus", 7)
+	v, err := c.GetAppVisits(t.Context(), "kornhaus", 7)
 	if err != nil {
 		t.Fatal(err)
 	}
 	if v.Slug != "kornhaus" || v.Today != "2026-11-12" || v.TimeZone != "UTC" || v.CountedSince != "2026-10-13" ||
 		v.Totals.Last30Days.Visits != 512 || v.Totals.Last7Days.Visitors != 61 || v.Totals.Today.Visits != 12 ||
 		len(v.Days) != 2 || !v.Days[0].Final || v.Days[1].Final || v.Days[1].Visitors != 5 || len(v.RawJSON()) == 0 {
-		t.Errorf("GetVisits = %+v", v)
+		t.Errorf("GetAppVisits = %+v", v)
 	}
-	if _, err := c.GetVisits(t.Context(), "kornhaus", 0); err != nil {
+	if _, err := c.GetAppVisits(t.Context(), "kornhaus", 0); err != nil {
 		t.Fatal(err)
 	}
 	for _, days := range []int{-1, apps.MaxVisitDays + 1} {
-		if _, err := c.GetVisits(t.Context(), "kornhaus", days); err == nil {
+		if _, err := c.GetAppVisits(t.Context(), "kornhaus", days); err == nil {
 			t.Errorf("days %d was sent", days)
 		}
 	}

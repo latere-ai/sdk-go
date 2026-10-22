@@ -102,8 +102,8 @@ func ExampleClient_ListAppSessions() {
 }
 
 // Reading how often a site was opened over the last week.
-func ExampleClient_GetVisits() {
-	v, err := client().GetVisits(context.Background(), "tide-tables", 7)
+func ExampleClient_GetAppVisits() {
+	v, err := client().GetAppVisits(context.Background(), "tide-tables", 7)
 	if err != nil {
 		log.Fatal(err)
 	}

@@ -41,7 +41,7 @@ func TestRefusalsAndMalformedAnswers(t *testing.T) {
 
 	for name, err := range map[string]error{
 		"ListAppSessionsPage": func() error { _, err := c.ListAppSessionsPage(ctx, "gone", nil); return err }(),
-		"GetVisits":           func() error { _, err := c.GetVisits(ctx, "gone", 0); return err }(),
+		"GetAppVisits":        func() error { _, err := c.GetAppVisits(ctx, "gone", 0); return err }(),
 		"GetListing":          func() error { _, err := c.GetListing(ctx, "gone"); return err }(),
 		"WithdrawListing":     c.WithdrawListing(ctx, "gone"),
 	} {
@@ -64,7 +64,7 @@ func TestRefusalsAndMalformedAnswers(t *testing.T) {
 
 	for name, err := range map[string]error{
 		"ListAppSessionsPage": func() error { _, err := c.ListAppSessionsPage(ctx, "bad", nil); return err }(),
-		"GetVisits":           func() error { _, err := c.GetVisits(ctx, "bad", 0); return err }(),
+		"GetAppVisits":        func() error { _, err := c.GetAppVisits(ctx, "bad", 0); return err }(),
 		"GetListing":          func() error { _, err := c.GetListing(ctx, "bad"); return err }(),
 		"RequestListing":      func() error { _, err := c.RequestListing(ctx, "bad", card); return err }(),
 		"GetDeployByID":       func() error { _, err := c.GetDeployByID(ctx, "bad"); return err }(),
@@ -78,8 +78,8 @@ func TestRefusalsAndMalformedAnswers(t *testing.T) {
 	if _, err := c.GetListing(ctx, ""); err == nil {
 		t.Error("GetListing sent an empty slug")
 	}
-	if _, err := c.GetVisits(ctx, "", 0); err == nil {
-		t.Error("GetVisits sent an empty slug")
+	if _, err := c.GetAppVisits(ctx, "", 0); err == nil {
+		t.Error("GetAppVisits sent an empty slug")
 	}
 	if _, err := c.RequestListing(ctx, "", card); err == nil {
 		t.Error("RequestListing sent an empty slug")

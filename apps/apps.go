@@ -312,7 +312,8 @@ func (c *Client) CreateApp(ctx context.Context, params *CreateAppParams) (*App, 
 // public or unlisted and published, among every account's apps, and only
 // its ID, Slug, Name and URL, as an OpenApp holds them; every other field
 // is zero. Any other app returns an error matching latere.ErrNotFound, and
-// such reads are limited to 120 a minute from one address, past which it
+// such reads are limited to 120 a minute from one client address, as
+// latere.WithoutCredentials says of a server's visitors, past which it
 // returns an error matching latere.ErrRateLimited once its retries are
 // spent.
 func (c *Client) GetApp(ctx context.Context, slug string) (*App, error) {

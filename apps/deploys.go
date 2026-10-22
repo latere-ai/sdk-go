@@ -242,11 +242,11 @@ func deployPath(id string, rest ...string) string {
 }
 
 // GetDeployByID returns a deploy by its ID in full, without its app's
-// slug, when the app is the caller's to read, as a conversation that kept
-// a deploy's ID reads it. An ID that is not a UUID, that names no deploy,
-// or that names one of an app the caller may not read returns an error
-// matching latere.ErrNotFound; the answers are the same, so it tells the
-// caller nothing of an app it may not read.
+// slug, when the app is of the token's context and the caller's to read,
+// as a conversation that kept a deploy's ID reads it. An ID that is not a
+// UUID, that names no deploy, or that names one of an app the caller may
+// not read returns an error matching latere.ErrNotFound; the answers are
+// the same, so it tells the caller nothing of an app it may not read.
 func (c *Client) GetDeployByID(ctx context.Context, id string) (*Deploy, error) {
 	if id == "" {
 		return nil, errNoDeploy
@@ -293,12 +293,16 @@ func (a *OpenApp) UnmarshalJSON(b []byte) error {
 // deploy and the slug its app had then, such as a shared conversation's,
 // reads the app's current address by it after a rename.
 //
-// With a credential it answers a deploy of an app the caller may read.
-// With a Config built with latere.WithoutCredentials it answers only a
-// deploy of an app anyone with its address may open, public or unlisted
-// and published, among every account's apps; such reads are limited to 120
-// a minute from one address, past which it returns an error matching
-// latere.ErrRateLimited once its retries are spent. Any other deploy, or
+// With a credential it answers a deploy of an app of the token's context
+// the caller may read, and nothing of another account's app, an open one
+// included. With a Config built with latere.WithoutCredentials it answers
+// only a deploy of an app anyone with its address may open, public or
+// unlisted and published, among every account's apps, so a program reads
+// another account's open app that way; such reads are limited to 120 a
+// minute from one client address, past which it returns an error matching
+// latere.ErrRateLimited once its retries are spent. A server reading for
+// its visitors is that one address unless it forwards each visitor's, as
+// latere.WithoutCredentials says. Any other deploy, or
 // none, returns an error matching latere.ErrNotFound, the same for each,
 // so it tells no one that a private app exists.
 func (c *Client) GetDeployApp(ctx context.Context, id string) (*OpenApp, error) {

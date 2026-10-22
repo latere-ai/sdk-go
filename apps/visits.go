@@ -14,7 +14,7 @@ import (
 	"latere.ai/x/sdk-go/latere"
 )
 
-// MaxVisitDays is the most days GetVisits lists, and how long the API
+// MaxVisitDays is the most days GetAppVisits lists, and how long the API
 // keeps an app's counts.
 const MaxVisitDays = 400
 
@@ -95,18 +95,18 @@ type VisitDay struct {
 	Final bool `json:"final"`
 }
 
-// GetVisits returns how often the released site of the app slug names was
-// opened over the last days days, today included: 30 when days is zero,
-// at most MaxVisitDays. slug may also be the app's ID. The owner of a
-// personal app, every member of an organization that owns one, and an
+// GetAppVisits returns how often the released site of the app slug names
+// was opened over the last days days, today included: 30 when days is
+// zero, at most MaxVisitDays. slug may also be the app's ID. The owner of
+// a personal app, every member of an organization that owns one, and an
 // agent's session acting for its person may read them; an app the caller
 // may not read returns an error matching latere.ErrNotFound.
-func (c *Client) GetVisits(ctx context.Context, slug string, days int) (*Visits, error) {
+func (c *Client) GetAppVisits(ctx context.Context, slug string, days int) (*Visits, error) {
 	if slug == "" {
 		return nil, errNoSlug
 	}
 	if days < 0 || days > MaxVisitDays {
-		return nil, errors.New("apps: GetVisits: days is from 1 to MaxVisitDays, or zero for 30")
+		return nil, errors.New("apps: GetAppVisits: days is from 1 to MaxVisitDays, or zero for 30")
 	}
 	q := url.Values{}
 	if days > 0 {

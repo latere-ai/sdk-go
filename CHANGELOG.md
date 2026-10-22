@@ -89,6 +89,11 @@ minor version may break code, and every such change is marked **Breaking**.
   streams it with its media type, length and Cache-Control. An address
   the platform shows no picture for returns an error matching
   `ErrNoImage`.
+- Package `agents`: `ToolUse.Offer` reads an agent's offer of a routine,
+  a held call of its `trigger` tool (`ToolTrigger`): the routine's name,
+  what each run asks, the agent's sentence of why, and its schedule read
+  into a `RoutineSchedule`. Answer it with `ConfirmTool`; only the person
+  who started the session may.
 
 ## [0.6.0] - 2026-10-22
 

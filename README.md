@@ -130,6 +130,12 @@ to wait for a tool your program runs, is idle with `StopReason`
 `SendToolResult`. End a session whose work is done with `EndSession`, or
 remove it for good with `DeleteSession`.
 
+An agent may offer the person a routine: a held call of its `trigger`
+tool, whose `ToolUse.Offer` reads the routine's name, its ask, the
+agent's sentence of why and its schedule. Only the person who started the
+session answers it, with `ConfirmTool`: `DecisionAllow` makes the routine
+as theirs, and `DecisionDeny` with a `Note` declines it in their words.
+
 Change a session's model, reasoning, approval mode, title or labels with
 `UpdateSession`; an `agents.ModelChange` changes the model, its reasoning
 level, or both, and `AgentReasoning` returns to the level the agent sets.

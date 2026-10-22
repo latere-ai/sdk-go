@@ -32,7 +32,10 @@
 // A session that stops to ask something, to have a tool call approved, or
 // to wait for a tool your program runs, is idle with StopReason
 // StopQuestion, StopToolConfirmation or StopToolResult; answer it with
-// Client.AnswerQuestion, Client.ConfirmTool or Client.SendToolResult.
+// Client.AnswerQuestion, Client.ConfirmTool or Client.SendToolResult. A
+// held call of the trigger tool is an agent's offer of a routine, which
+// ToolUse.Offer reads, and which only the person who started the session
+// answers.
 //
 // # Files
 //

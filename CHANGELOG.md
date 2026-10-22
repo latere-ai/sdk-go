@@ -33,6 +33,20 @@ minor version may break code, and every such change is marked **Breaking**.
   its own; and `Attachments`, the files of the fork's first message.
 - Package `web`: `Icon.CacheControl` and `Icon.ETag`, the answer's cache
   policy and entity tag, for a server that passes the icon on.
+- Package `signin`: a person's keys, `CreateKey`, which answers the
+  `Key` with its value once, takes a sign-in through a first-party client
+  and is sent once, `ListKeys`, every key or those of one organization or
+  of the personal account, and `RevokeKey`, with `ErrNoKey` for an id that
+  names no key of the person, and the `KeyStatus` of a key. Each takes the
+  sign-in's access token and never follows a redirect.
+- Package `signin`: `Error.Detail`, the developer detail the sign-in
+  service's own records answer beside the message.
+- Package `signin`: `SwitchOrganization`, a refresh that moves the
+  sign-in to an organization the person belongs to, or to their personal
+  account.
+- Packages `evals`, `apps` and `llm`: `BasePath`, the path the API serves
+  the capability under, for a program that takes a capability's address
+  as one URL with that path and cuts it off to name the base URL.
 
 ## [0.7.0] - 2026-10-22
 

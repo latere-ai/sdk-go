@@ -845,6 +845,15 @@ person claimed, by the id the sign-in service names them by. These two read
 the sign-in service's own records and need no client id; a token for the
 API is refused there with 401.
 
+`SwitchOrganization` moves the sign-in to another organization the person
+belongs to, or to their personal account, as a refresh that answers new
+tokens. `CreateKey` creates a key for the person, which a program presents
+with `latere.WithKey` to call the API as them without their sign-in, and
+answers its value this once; it takes a sign-in through a client Latere
+registers as first party. `ListKeys` lists the person's keys and
+`RevokeKey` revokes one. `CreateKey` is sent once, since the sign-in
+service takes no idempotency key and a repeat would create a second key.
+
 This needs a client id that Latere registers for your program;
 registration is not self-service yet. To ask for one, write to
 [contact@latere.ai](mailto:contact@latere.ai) with your program's name,

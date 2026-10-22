@@ -558,6 +558,15 @@ service alone. The service answers its records' refusals as
 `{"error", "message"}` rather than OAuth's `error_description`, and
 `Error` reads both.
 
+A person's keys are records of the same service: `CreateKey`, `ListKeys`
+and `RevokeKey` reach them through the helper the organizations and
+handles are read with, with the same token and the same refusal of a
+redirect. A key's grants stay JSON, as the service stores and mints them,
+rather than a type of their own, so a grant a newer vocabulary adds passes
+through. `SwitchOrganization` is the refresh grant with the service's
+`org_id` parameter, which it reads by its presence, so the personal
+account is an empty value rather than an absent one.
+
 Both flows need a client that Latere registers, with the API among its
 audiences, until registration is self-service; the package documentation
 says how to ask for one and what to register.

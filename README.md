@@ -19,15 +19,16 @@ they share. Import the ones you use:
 | Package | What it does |
 |---|---|
 | [`latere`](https://pkg.go.dev/latere.ai/x/sdk-go/latere) | The core: configuration, credentials, errors, retries, pagination |
-| [`agents`](https://pkg.go.dev/latere.ai/x/sdk-go/agents) | Sessions with agents: create, list, follow, answer, approve, end, read what they made; triggers that start them |
+| [`agents`](https://pkg.go.dev/latere.ai/x/sdk-go/agents) | Sessions with agents: create, list, count, follow, answer, approve, end, read what they made; shared conversations; triggers that start them |
 | [`agents/routine`](https://pkg.go.dev/latere.ai/x/sdk-go/agents/routine) | A routine's trigger shape alone, for code that writes or reads a routine without calling the API |
 | [`connections`](https://pkg.go.dev/latere.ai/x/sdk-go/connections) | The services a person connects once, such as a calendar or an MCP server, which agents then use |
-| [`storage`](https://pkg.go.dev/latere.ai/x/sdk-go/storage) | Files in Latere Storage: upload a file of any size, read, list, and link to it |
-| [`account`](https://pkg.go.dev/latere.ai/x/sdk-go/account) | Your Effort levels, wallet, preferences, pins and computers |
-| [`apps`](https://pkg.go.dev/latere.ai/x/sdk-go/apps) | Apps: create, list, change, delete; their deploys, build logs, releases and who may open them |
+| [`storage`](https://pkg.go.dev/latere.ai/x/sdk-go/storage) | Files in Latere Storage: upload a file of any size, read, list, move, delete, and link to it; what others shared with you |
+| [`account`](https://pkg.go.dev/latere.ai/x/sdk-go/account) | Your Effort levels, wallet and payment pages, preferences, pins and bookmarks, share links, projects, trigger links and addresses, and computers |
+| [`apps`](https://pkg.go.dev/latere.ai/x/sdk-go/apps) | Apps: create, list, change, delete; their deploys, build logs, pictures, releases, visits, gallery listing and who may open them |
+| [`evals`](https://pkg.go.dev/latere.ai/x/sdk-go/evals) | Evals: the definitions, experiments, cells and comparisons of experiments on agents, and an experiment followed as it runs |
 | [`llm`](https://pkg.go.dev/latere.ai/x/sdk-go/llm) | Calling models in the Lux dialect: generate, stream, count tokens, list models |
 | [`llm/wire`](https://pkg.go.dev/latere.ai/x/sdk-go/llm/wire) | The Lux dialect's types alone, for code that reads or writes the format without calling the API |
-| [`web`](https://pkg.go.dev/latere.ai/x/sdk-go/web) | What the platform reads from the web for a program that shows an answer: a site's icon |
+| [`web`](https://pkg.go.dev/latere.ai/x/sdk-go/web) | What the platform reads from the web for a program that shows an answer: a site's icon and the pictures an answer shows |
 | [`signin`](https://pkg.go.dev/latere.ai/x/sdk-go/signin) | Signing a person in, for apps Latere registers |
 
 Create a key under **Keys** in the
@@ -513,6 +514,40 @@ _, err = ag.SendMessage(ctx, id, &agents.SendMessageParams{
 })
 ```
 
+## Evals
+
+Package `evals` reads Evals, the platform's experiments on agents and on
+programs built on models. An experiment runs a suite's tasks for each of
+its candidates and compares them; its definitions, metrics, graders,
+tasks, suites and candidates, are each kept in versions named by the
+digest of their content, and a name reads the current one:
+
+```go
+ev := evals.New(cfg)
+suite, err := ev.GetSuite(ctx, "fix-flaky-tests")
+if err != nil {
+	return err
+}
+for e, err := range ev.ListExperiments(ctx, &evals.ListExperimentsParams{Suite: suite.Digest}) {
+	if err != nil {
+		return err
+	}
+	fmt.Println(e.ID, e.State)
+}
+for event, err := range ev.StreamEvents(ctx, experimentID, nil) {
+	if err != nil {
+		return err
+	}
+	fmt.Println(event.Type) // a snapshot first, then cells, trials, gradings and comparisons
+}
+```
+
+`StreamEvents` follows an experiment to its end, connecting again after a
+dropped connection from the last event it delivered. `Version.Ref` gives
+the name@digest that names one version exactly. The package reads;
+applying definitions and creating, canceling and closing experiments are
+not covered yet, and a comparison's figures are read from its `RawJSON`.
+
 ## Models
 
 Package `llm` calls models in the Lux dialect, one request, response and
@@ -593,8 +628,8 @@ _, err = io.Copy(w, img)
 
 ## The API's own answer
 
-Every resource the `agents`, `account`, `apps`, `connections` and `storage`
-packages return keeps the JSON the API sent. `RawJSON` returns it with every field,
+Every resource the `agents`, `account`, `apps`, `connections`, `evals` and
+`storage` packages return keeps the JSON the API sent. `RawJSON` returns it with every field,
 including fields the API added after your version of the SDK, for a program
 that shows or passes on the answer as it came, such as a command line's
 `--json` output:

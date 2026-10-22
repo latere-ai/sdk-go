@@ -26,6 +26,7 @@ flowchart TD
     account --> latere
     apps --> latere
     connections --> latere
+    evals --> latere
     storage --> latere
     llm --> latere
     llm --> wire[llm/wire]
@@ -37,6 +38,7 @@ flowchart TD
     app --> account
     app --> apps
     app --> connections
+    app --> evals
     app --> storage
     app --> llm
     app --> web
@@ -47,7 +49,7 @@ flowchart TD
 
 `latere` is the core: configuration, credentials, the error type, the
 request loop, pagination and streams. A capability package (`agents`,
-`account`, `apps`, `connections`, `llm`, `storage`, `web`, and those to come) holds typed
+`account`, `apps`, `connections`, `evals`, `llm`, `storage`, `web`, and those to come) holds typed
 models and one method per endpoint, and calls the API only through
 `Config.Do`, `Config.Open`, `Config.Stream` and `latere.Items`. `signin` is separate
 because most programs, those that run with a key, never sign a person in;
@@ -438,8 +440,9 @@ Every resource a package returns, a session, an event, a session summary,
 a shared page, a trigger, a wallet, a pin, a share link, a checkout, the
 data places and terms, a project, a trigger's link or address, a device,
 an app, a deploy, an app's sessions and visits, a listing, a frame pass,
-a connection, a file, a moved folder, a grant, an upload or a finished
-sign-in, keeps the bytes it was decoded from, returned by
+a connection, an Evals definition, experiment, cell or comparison, a
+file, a moved folder, a grant, an upload or a finished sign-in, keeps the
+bytes it was decoded from, returned by
 `RawJSON`, as Stainless-generated SDKs and stripe-go do. A program that
 shows or stores the API's answer, a command line's `--json` output or a
 server that passes answers on, gets every field, including those added
@@ -458,6 +461,13 @@ to those and lists, with its reason, each field it reads beyond them. The `llm` 
 own definition, shared with the gateway's codec, so they never lag what
 the API sends. A `web.Icon` is a picture's bytes, not JSON, and keeps
 nothing, as a `FileReader` keeps nothing.
+
+The Evals document describes its resources but not the events of an
+experiment's stream, which it leaves of any type and any data, so
+`evals`' event payloads follow what the stream sends and its tests hold
+them, as `storage`'s do for its schema-less routes. A comparison's
+figures are left to its `RawJSON`, since their shape is named by the
+comparison's analysis version rather than fixed by the document.
 
 ## Readers
 

@@ -73,6 +73,12 @@ minor version may break code, and every such change is marked **Breaking**.
   `DeleteOptions.Permanent` for good; and `ListSharedWithMe` and
   `ListSharedWithMePage`, the shares other people gave you, as `Grant`s
   with their `Permission`, `GranteeKind` and `GrantStatus`.
+- Package `evals`, new: reads Evals, the platform's experiments on agents
+  and programs. The five definitions, `Metric`, `Grader`, `Task`, `Suite`
+  and `Candidate`, are each listed, read by a ref, a name, name@digest, a
+  digest or an id, and listed by version; experiments are listed and read
+  with their cells and comparisons, and `StreamEvents` follows one to its
+  end, connecting again after a drop.
 - Package `web`: `ReadImage` and `ReadSharedImage`, a picture of the web
   an answer shows, read through the platform as the person or as a share
   link's reader, at `ImageSmall` or `ImageLarge`, as an `ImageReader` that

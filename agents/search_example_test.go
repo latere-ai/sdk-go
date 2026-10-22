@@ -32,3 +32,14 @@ func ExampleClient_SearchSessions() {
 		}
 	}
 }
+
+// Counting Latere Chat's sessions by what each is doing, as a list's
+// header shows them.
+func ExampleClient_GetSessionSummary() {
+	ctx := context.Background()
+	s, err := client().GetSessionSummary(ctx, &agents.SessionSummaryParams{Agent: "latere-chat"})
+	if err != nil {
+		log.Fatal(err)
+	}
+	fmt.Printf("%d running, %d waiting for approval, %d idle\n", s.Sessions.Running, s.Sessions.WaitingForApproval, s.Sessions.Idle)
+}

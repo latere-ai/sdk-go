@@ -594,6 +594,7 @@ func TestEndpointsAreInTheDocument(t *testing.T) {
 		{"get", "/sessions/{id}/blobs/{digest}"},
 		{"get", "/sessions/{id}/files"},
 		{"get", "/sessions/search"},
+		{"get", "/sessions/summary"},
 	} {
 		if _, ok := d.Paths[e.path][e.method]; !ok {
 			t.Errorf("%s %s is not in the document", strings.ToUpper(e.method), e.path)

@@ -4,10 +4,12 @@
 package signin
 
 import (
+	"bytes"
 	"context"
 	"encoding/json"
 	"errors"
 	"fmt"
+	"io"
 	"net/http"
 	"net/url"
 	"time"
@@ -99,29 +101,41 @@ func (c *Config) held() *http.Client {
 	return &held
 }
 
-// record sends a read of the service's own records at path, with query,
-// as the bearer of accessToken, and decodes its answer into out. A
-// redirect is answered as an *Error and never followed.
-func (c *Config) record(ctx context.Context, accessToken, path string, query url.Values, out any) error {
+// record sends a request of method to the service's own records at path,
+// with query and, when body is not nil, body as JSON, as the bearer of
+// accessToken, and decodes its answer into out. A redirect is answered as
+// an *Error and never followed.
+func (c *Config) record(ctx context.Context, method, accessToken, path string, query url.Values, body, out any) error {
 	if accessToken == "" {
-		return fmt.Errorf("signin: GET %s: the access token is empty", path)
+		return fmt.Errorf("signin: %s %s: the access token is empty", method, path)
 	}
 	target := c.issuer() + path
 	if len(query) > 0 {
 		target += "?" + query.Encode()
 	}
-	req, err := http.NewRequestWithContext(ctx, http.MethodGet, target, nil)
+	var content io.Reader
+	if body != nil {
+		b, err := json.Marshal(body)
+		if err != nil {
+			return fmt.Errorf("signin: %s %s: %w", method, path, err)
+		}
+		content = bytes.NewReader(b)
+	}
+	req, err := http.NewRequestWithContext(ctx, method, target, content)
 	if err != nil {
-		return fmt.Errorf("signin: GET %s: %w", path, err)
+		return fmt.Errorf("signin: %s %s: %w", method, path, err)
 	}
 	req.Header.Set("Authorization", "Bearer "+accessToken)
 	req.Header.Set("Accept", "application/json")
+	if body != nil {
+		req.Header.Set("Content-Type", "application/json")
+	}
 	err = send(c.held(), req, out)
 	var refused *Error
 	if err != nil && !errors.As(err, &refused) {
 		// A refusal names itself; a failure to reach or read the service
 		// is named by the call it failed.
-		return fmt.Errorf("signin: GET %s: %w", path, err)
+		return fmt.Errorf("signin: %s %s: %w", method, path, err)
 	}
 	return err
 }
@@ -132,7 +146,7 @@ func (c *Config) record(ctx context.Context, accessToken, path string, query url
 // not a sign-in's, returns an *Error.
 func (c *Config) ListOrganizations(ctx context.Context, accessToken string) ([]*Organization, error) {
 	var out []*Organization
-	if err := c.record(ctx, accessToken, "/me/orgs", nil, &out); err != nil {
+	if err := c.record(ctx, http.MethodGet, accessToken, "/me/orgs", nil, nil, &out); err != nil {
 		return nil, err
 	}
 	if out == nil {
@@ -155,7 +169,7 @@ func (c *Config) GetHandle(ctx context.Context, accessToken, id string) (string,
 	var answer struct {
 		Handle string `json:"handle"`
 	}
-	err := c.record(ctx, accessToken, "/handles", url.Values{"principal_id": {id}}, &answer)
+	err := c.record(ctx, http.MethodGet, accessToken, "/handles", url.Values{"principal_id": {id}}, nil, &answer)
 	var refused *Error
 	if errors.As(err, &refused) && refused.StatusCode == http.StatusNotFound {
 		return "", fmt.Errorf("%w: %w", ErrNoPerson, refused)

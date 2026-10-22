@@ -5,6 +5,7 @@ package signin_test
 
 import (
 	"context"
+	"encoding/json"
 	"errors"
 	"fmt"
 	"log"
@@ -86,5 +87,36 @@ func ExampleConfig_ListOrganizations() {
 		fmt.Println("they have claimed no handle")
 	default:
 		fmt.Println("@" + handle)
+	}
+}
+
+// Creating a key for the signed-in person, which a script then calls the
+// API with, and revoking it once it is no longer needed. Creating a key
+// takes a sign-in through a client Latere registers as first party.
+func ExampleConfig_CreateKey() {
+	signer := &signin.Config{ClientID: "my-cli"}
+	ctx := context.Background()
+	tok, err := signer.Device(ctx, func(c signin.DeviceCode) error {
+		fmt.Printf("Open %s and enter %s\n", c.VerificationURI, c.UserCode)
+		return nil
+	})
+	if err != nil {
+		log.Fatal(err)
+	}
+	key, err := signer.CreateKey(ctx, tok.AccessToken, &signin.CreateKeyParams{
+		Name:      "nightly report",
+		Grants:    json.RawMessage(`[{"type":"latere-authz","actions":["lux:model.use"],"datatypes":["Model"],"locations":["https://api.latere.ai"]}]`),
+		ExpiresAt: time.Now().AddDate(0, 3, 0),
+	})
+	if err != nil {
+		log.Fatal(err)
+	}
+	cfg, err := latere.NewConfig(latere.WithKey(key.Value))
+	if err != nil {
+		log.Fatal(err)
+	}
+	fmt.Println(cfg.BaseURL(), key.Prefix)
+	if err := signer.RevokeKey(ctx, tok.AccessToken, key.ID); err != nil && !errors.Is(err, signin.ErrNoKey) {
+		log.Fatal(err)
 	}
 }

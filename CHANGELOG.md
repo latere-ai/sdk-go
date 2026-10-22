@@ -31,6 +31,8 @@ minor version may break code, and every such change is marked **Breaking**.
   given turn; `Untitled`, a fork with no title where an empty `Title`
   gives it the parent's; `NewTree`, a fork that starts a conversation of
   its own; and `Attachments`, the files of the fork's first message.
+- Package `web`: `Icon.CacheControl` and `Icon.ETag`, the answer's cache
+  policy and entity tag, for a server that passes the icon on.
 
 ## [0.7.0] - 2026-10-22
 

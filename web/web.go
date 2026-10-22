@@ -100,6 +100,12 @@ type Icon struct {
 	// MediaType is the type the API answered the bytes as, "image/png"
 	// for every icon it encodes.
 	MediaType string
+	// CacheControl is the answer's Cache-Control, which says how long the
+	// icon may be kept and by whom; empty when the answer stated none. A
+	// program that passes the icon on to a browser sends it with the icon.
+	CacheControl string
+	// ETag is the answer's entity tag, empty when it stated none.
+	ETag string
 }
 
 // GetIcon reads the icon of host, a site's name such as "techcrunch.com",
@@ -177,7 +183,7 @@ func (c *Client) GetIcon(ctx context.Context, host string, size IconSize) (*Icon
 	if len(data) == 0 {
 		return nil, errors.New("web: GetIcon: the answer has no bytes")
 	}
-	return &Icon{Data: data, MediaType: media}, nil
+	return &Icon{Data: data, MediaType: media, CacheControl: resp.Header.Get("Cache-Control"), ETag: resp.Header.Get("ETag")}, nil
 }
 
 // codeError is an *latere.Error that also matches the sentinel of its

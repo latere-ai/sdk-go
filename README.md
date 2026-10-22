@@ -622,7 +622,9 @@ default:
 carries no credential. An answer past `web.MaxIconBytes`, 64 KiB, is
 refused with an error matching `web.ErrIconTooLarge`. The platform keeps
 an icon for a week and a site without one for a day, so a program that
-keeps what it read need not ask sooner.
+keeps what it read need not ask sooner. A server that passes the icon on
+to a browser sends it with `icon.CacheControl` and `icon.ETag`, the
+platform's own policy.
 
 A picture on another website that an answer shows is read through the
 platform too, encoded again at most `web.ImageSmall`, 800 pixels, or

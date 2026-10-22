@@ -467,7 +467,8 @@ meta of a few tools in schemas of their own, so a test holds `ToolMeta`
 to those and lists, with its reason, each field it reads beyond them. The `llm` types are the exception: they are the Lux dialect's
 own definition, shared with the gateway's codec, so they never lag what
 the API sends. A `web.Icon` is a picture's bytes, not JSON, and keeps
-nothing, as a `FileReader` keeps nothing.
+no JSON, as a `FileReader` keeps none; it keeps the answer's Cache-Control
+and entity tag, as a `FileReader` does, for a server that passes it on.
 
 The Evals document describes its resources but not the events of an
 experiment's stream, which it leaves of any type and any data, so

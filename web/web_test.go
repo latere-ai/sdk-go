@@ -70,6 +70,9 @@ func TestGetIcon(t *testing.T) {
 	if icon == nil || !bytes.Equal(icon.Data, png) || icon.MediaType != "image/png" {
 		t.Errorf("icon = %+v", icon)
 	}
+	if icon != nil && (icon.CacheControl != "public, max-age=604800, stale-while-revalidate=2592000" || icon.ETag != `"3f2a"`) {
+		t.Errorf("icon kept Cache-Control %q and ETag %q, want the answer's", icon.CacheControl, icon.ETag)
+	}
 	if path != "/v1/web/icons/techcrunch.com" || size != "32" || !strings.HasPrefix(accept, "image/") {
 		t.Errorf("sent %s?size=%s with Accept %q", path, size, accept)
 	}

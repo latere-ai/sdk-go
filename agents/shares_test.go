@@ -106,6 +106,9 @@ func TestReadSharedBlob(t *testing.T) {
 		}
 		w.Header().Set("Content-Type", "image/png")
 		w.Header().Set("Content-Length", strconv.Itoa(len(png)))
+		w.Header().Set("Content-Disposition", "inline")
+		w.Header().Set("Cache-Control", "public, max-age=86400, immutable")
+		w.Header().Set("ETag", `"`+digest+`"`)
 		_, _ = w.Write(png)
 	}, 0)
 	f, err := c.ReadSharedBlob(t.Context(), "tok_1", digest)
@@ -118,6 +121,9 @@ func TestReadSharedBlob(t *testing.T) {
 	}
 	if string(b) != string(png) || f.MediaType() != "image/png" || f.Size() != int64(len(png)) {
 		t.Errorf("read %q as %s of %d bytes", b, f.MediaType(), f.Size())
+	}
+	if f.ContentDisposition() != "inline" || f.CacheControl() != "public, max-age=86400, immutable" || f.ETag() != `"`+digest+`"` {
+		t.Errorf("the answer's headers read %q, %q, %q", f.ContentDisposition(), f.CacheControl(), f.ETag())
 	}
 	if _, err := c.ReadSharedBlob(t.Context(), "tok_1", "sha256:0000"); !errors.Is(err, latere.ErrNotFound) {
 		t.Errorf("a digest the share does not name: %v, want ErrNotFound", err)

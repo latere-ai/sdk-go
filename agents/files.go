@@ -79,14 +79,19 @@ var fileCodes = map[string]error{
 // it: its bytes, its media type and its length. Read it, then Close it;
 // a reader left open holds a connection.
 type FileReader struct {
-	body      io.ReadCloser
-	mediaType string
-	size      int64
+	body         io.ReadCloser
+	mediaType    string
+	size         int64
+	cacheControl string
+	etag         string
+	disposition  string
 }
 
 // newFileReader reads a file's answer.
 func newFileReader(resp *http.Response) *FileReader {
-	return &FileReader{body: resp.Body, mediaType: resp.Header.Get("Content-Type"), size: resp.ContentLength}
+	h := resp.Header
+	return &FileReader{body: resp.Body, mediaType: h.Get("Content-Type"), size: resp.ContentLength,
+		cacheControl: h.Get("Cache-Control"), etag: h.Get("ETag"), disposition: h.Get("Content-Disposition")}
 }
 
 // Read reads the next bytes of the file. A file whose answer was cut off
@@ -103,6 +108,24 @@ func (r *FileReader) MediaType() string { return r.mediaType }
 // Size returns the file's length in bytes, or -1 when the answer did not
 // say.
 func (r *FileReader) Size() int64 { return r.size }
+
+// CacheControl returns the answer's Cache-Control, which says how long the
+// bytes may be kept and by whom, such as "private, max-age=31536000,
+// immutable" for a file a session kept by its digest; empty when the
+// answer stated none. A program that passes the file on to a browser
+// sends it with the file.
+func (r *FileReader) CacheControl() string { return r.cacheControl }
+
+// ETag returns the answer's entity tag, empty when it stated none.
+func (r *FileReader) ETag() string { return r.etag }
+
+// ContentDisposition returns the answer's Content-Disposition, such as
+// "attachment" with the file's name made safe to save under for a file
+// that is no picture; empty when the answer stated none. A program that
+// passes the file on to a browser sends it with the file, so a file the
+// platform answers as a download is never shown in the program's own
+// page.
+func (r *FileReader) ContentDisposition() string { return r.disposition }
 
 // acceptAny asks for an answer of any media type: a file's bytes, which
 // the API answers an error to as JSON all the same.

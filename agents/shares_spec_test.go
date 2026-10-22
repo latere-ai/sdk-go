@@ -13,8 +13,7 @@ import (
 // routesOutsideTheDocuments are the routes the package calls that no
 // published document describes, each with what its models follow
 // instead. The read of a share is served beside the account part, on
-// the API's own prefix, so its document is the account one when it is
-// published.
+// the API's own prefix, so the account document is checked too.
 var routesOutsideTheDocuments = map[string]string{
 	"get /v1/shares/{token}":                "the platform's read of a share, whose page SharedPage and Share follow",
 	"get /v1/shares/{token}/blobs/{digest}": "the platform's read of a file a share names, whose bytes FileReader reads",

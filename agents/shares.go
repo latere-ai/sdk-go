@@ -60,7 +60,7 @@ type SharedPage struct {
 	// interrupts, the status and model changes, the compactions and the
 	// files kept, each with what of its payload a reader may see; a
 	// redacted event's payload is {"tombstone": true}. Decode them as the
-	// events of ListEvents.
+	// events of ListEvents; a shared event names no SessionID.
 	Events []*Event `json:"events"`
 	// NextCursor names the next page in SharedPageParams.Cursor; empty on
 	// the last.
@@ -94,11 +94,13 @@ type SharedPageParams struct {
 // by the link's token, the last part of its address. A nil params reads
 // the first page.
 //
-// A link anyone may read reads no credential, and answers the same to
-// every reader; a link for the members of an organization answers a
-// member's token alone. A program with no credential of its own, such
-// as a server rendering a link's page for a visitor, reads with a Config
-// built with latere.WithoutCredentials. A token that is no link's, a
+// A link anyone may read, the one kind of link the API makes, reads no
+// credential and answers the same to every reader. The read sends the
+// Config's credential all the same, since the share's audience, which
+// Share in package account names, may be an organization's members, whom
+// the read answers by their token alone. A program with no credential of
+// its own, such as a server rendering a link's page for a visitor, reads
+// with a Config built with latere.WithoutCredentials. A token that is no link's, a
 // link that was stopped, and a link the reader may not read all return
 // an error matching latere.ErrNotFound, so a link's existence is never
 // told to one who may not read it. Each client address and each link may
@@ -135,10 +137,13 @@ func (c *Client) ListSharedEvents(ctx context.Context, token string) iter.Seq2[*
 
 // ReadSharedBlob opens a file the shared conversation kept, by its
 // digest, as a KeptFile of a files.kept event the link shows names it;
-// the caller closes the reader. A picture an answer showed, a PNG, JPEG,
-// GIF or WebP of at most 5 MiB, is answered as its own media type, and
-// any other file as "application/octet-stream", whatever it is: the
-// KeptFile holds the file's own type, name and size.
+// the caller closes the reader. The file's leading bytes decide its
+// answer: a PNG, JPEG, GIF or WebP is answered as its own media type, to
+// show in place, and any other file, an SVG or a page included, as
+// "application/octet-stream" with a ContentDisposition of "attachment"
+// and the file's name made safe, to save; the KeptFile holds the file's
+// own type and size. A picture an answer showed is answered up to 5 MiB,
+// and a larger one as not found.
 //
 // A digest no event within the link's bound names returns an error
 // matching latere.ErrNotFound, as GetSharedPage's refusals do, and it

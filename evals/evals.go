@@ -15,8 +15,11 @@ import (
 	"latere.ai/x/sdk-go/latere"
 )
 
-// basePath is where the API serves Evals.
-const basePath = "/v1/evals"
+// BasePath is the path the API serves Evals under, below the base URL a
+// Config names: every request the package sends is under it. A program
+// that takes the address of Evals as one URL with this path, as a
+// command's flag may, cuts it off to name the base URL WithBaseURL takes.
+const BasePath = "/v1/evals"
 
 // The page sizes of every list of Evals.
 const (

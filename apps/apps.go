@@ -16,10 +16,17 @@ import (
 	"latere.ai/x/sdk-go/latere"
 )
 
-// basePath is where the API serves apps, their deploys and their releases.
-// The API serves the apps document's routes under /v1/apps, so the
+// BasePath is the path the API serves Apps under, below the base URL a
+// Config names: every request the package sends is under it, but for an
+// app's access, which the account capability serves. A program that takes
+// the address of Apps as one URL with this path, as a command's flag may,
+// cuts it off to name the base URL WithBaseURL takes.
+const BasePath = "/v1/apps"
+
+// appsPath is where the API serves apps, their deploys and their releases.
+// The API serves the apps document's routes under BasePath, so the
 // document's /v1/apps is /v1/apps/apps here.
-const basePath = "/v1/apps/apps"
+const appsPath = BasePath + "/apps"
 
 // errNoSlug is returned before any request when an app's slug is empty.
 var errNoSlug = errors.New("apps: the app's slug is empty")
@@ -27,7 +34,7 @@ var errNoSlug = errors.New("apps: the app's slug is empty")
 // appPath is the path of an app, or of one of its sub-resources: rest is
 // the segments after the app's, each escaped.
 func appPath(slug string, rest ...string) string {
-	p := basePath + "/" + url.PathEscape(slug)
+	p := appsPath + "/" + url.PathEscape(slug)
 	for _, r := range rest {
 		p += "/" + url.PathEscape(r)
 	}
@@ -297,7 +304,7 @@ func (c *Client) CreateApp(ctx context.Context, params *CreateAppParams) (*App, 
 		params = &CreateAppParams{}
 	}
 	var out App
-	if err := c.cfg.Do(ctx, &latere.Request{Method: http.MethodPost, Path: basePath, Body: params, Retry: latere.RetryNever}, &out); err != nil {
+	if err := c.cfg.Do(ctx, &latere.Request{Method: http.MethodPost, Path: appsPath, Body: params, Retry: latere.RetryNever}, &out); err != nil {
 		return nil, err
 	}
 	return &out, nil
@@ -393,7 +400,7 @@ func (c *Client) ListAppsPage(ctx context.Context, params *ListAppsParams) (*lat
 
 func (c *Client) listPage(ctx context.Context, params *ListAppsParams, cursor string) (*latere.Page[*App], error) {
 	var page latere.Page[*App]
-	if err := c.cfg.Do(ctx, &latere.Request{Method: http.MethodGet, Path: basePath, Query: params.query(cursor)}, &page); err != nil {
+	if err := c.cfg.Do(ctx, &latere.Request{Method: http.MethodGet, Path: appsPath, Query: params.query(cursor)}, &page); err != nil {
 		return nil, err
 	}
 	return &page, nil

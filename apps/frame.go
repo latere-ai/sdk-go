@@ -107,5 +107,5 @@ func (c *Client) CreateFramePass(ctx context.Context, slug, address string) (*Fr
 // minute. When the API's authorizer gives no answer, nothing is ended and
 // the call fails with 503 once its retries are spent; call it again.
 func (c *Client) EndGateSessions(ctx context.Context) error {
-	return c.cfg.Do(ctx, &latere.Request{Method: http.MethodDelete, Path: basePath + "/gate/sessions"}, nil)
+	return c.cfg.Do(ctx, &latere.Request{Method: http.MethodDelete, Path: appsPath + "/gate/sessions"}, nil)
 }

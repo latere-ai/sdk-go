@@ -14,7 +14,7 @@ import (
 )
 
 // experimentsPath is the collection of experiments.
-const experimentsPath = basePath + "/experiments"
+const experimentsPath = BasePath + "/experiments"
 
 // ExperimentState is where an experiment is in its life.
 type ExperimentState string

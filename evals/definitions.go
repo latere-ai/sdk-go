@@ -16,11 +16,11 @@ import (
 
 // The collections the five kinds of definition are kept in.
 const (
-	metricsPath    = basePath + "/metrics"
-	gradersPath    = basePath + "/graders"
-	tasksPath      = basePath + "/tasks"
-	suitesPath     = basePath + "/suites"
-	candidatesPath = basePath + "/candidates"
+	metricsPath    = BasePath + "/metrics"
+	gradersPath    = BasePath + "/graders"
+	tasksPath      = BasePath + "/tasks"
+	suitesPath     = BasePath + "/suites"
+	candidatesPath = BasePath + "/candidates"
 )
 
 // segment checks one path segment a caller gave, a ref, a name or an id,

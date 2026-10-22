@@ -234,7 +234,7 @@ func (c *Client) GetDeploy(ctx context.Context, slug, id string) (*Deploy, error
 // slug, or of one of its sub-resources. The apps document serves it at
 // /v1/deploys, which the API's origin serves under /v1/apps.
 func deployPath(id string, rest ...string) string {
-	p := "/v1/apps/deploys/" + url.PathEscape(id)
+	p := BasePath + "/deploys/" + url.PathEscape(id)
 	for _, r := range rest {
 		p += "/" + url.PathEscape(r)
 	}

@@ -18,11 +18,22 @@ import (
 	"latere.ai/x/sdk-go/latere"
 )
 
+// BasePath is the path the API serves the models capability under, below
+// the base URL a Config names. Under it the capability serves one door per
+// wire dialect: the Lux dialect's at /lux/v1, which this package calls, the
+// OpenAI dialect's at /openai/v1 and the Anthropic dialect's at
+// /anthropic, each the base URL a stock SDK of that dialect takes once the
+// base URL and BasePath stand in front of it. A program that takes the
+// capability's address as one URL with this path, as a command's flag may,
+// cuts it off to name the base URL WithBaseURL takes.
+const BasePath = "/v1/models"
+
 // The models capability's routes for the Lux dialect.
 const (
-	generatePath    = "/v1/models/lux/v1/generate"
-	countTokensPath = "/v1/models/lux/v1/count_tokens"
-	modelsPath      = "/v1/models/lux/v1/models"
+	luxPath         = BasePath + "/lux/v1"
+	generatePath    = luxPath + "/generate"
+	countTokensPath = luxPath + "/count_tokens"
+	modelsPath      = luxPath + "/models"
 )
 
 // The headers the models capability answers with.

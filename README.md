@@ -206,9 +206,36 @@ for found, err := range ag.SearchSessions(ctx, &agents.SearchSessionsParams{Quer
 }
 ```
 
-The package covers sessions, their events and files, triggers and
-routines. Defining agents and counting sessions are not covered yet; call
-them with `Config.Do` (see [Configuration](#configuration)).
+`GetSessionSummary` counts the sessions a list would page through, by what
+each is doing: running, waiting for a person's approval, idle, ended.
+
+### Shared conversations
+
+A person shares a conversation with a link, which `account.CreateShare`
+makes. Anyone holding the link reads what it shows by the link's token,
+the last part of its address: `GetSharedPage` reads a page of the events a
+reader sees with the share's title, `ListSharedEvents` walks them all, and
+`ReadSharedBlob` opens a file an answer kept. A program with no credential
+of its own, such as a server that renders a link's page for a visitor,
+builds its `Config` with `latere.WithoutCredentials`:
+
+```go
+cfg, err := latere.NewConfig(latere.WithoutCredentials())
+if err != nil {
+	return err
+}
+page, err := agents.New(cfg).GetSharedPage(ctx, token, nil)
+if err != nil {
+	return err // latere.ErrNotFound for a link that does not work
+}
+fmt.Println(page.Share.Title, len(page.Events))
+```
+
+A link for the members of an organization answers a member's token alone.
+
+The package covers sessions, their events and files, shared
+conversations, triggers and routines. Defining agents is not covered yet;
+call it with `Config.Do` (see [Configuration](#configuration)).
 
 ### What an agent made
 
@@ -300,6 +327,38 @@ A person's computers are managed with their own sign-in; a key's token is
 refused with 403. Removing a computer the person no longer holds succeeds,
 so a removal is safe to repeat.
 
+The package also keeps what a person's clients share:
+
+- **Links that share a conversation:** `CreateShare` makes one,
+  `ListShares` lists them, `UpdateShare` moves one to the last finished
+  turn and `DeleteShare` stops it. `CreateShare` is sent once.
+- **Projects**, which group conversations and hold the apps they work on:
+  `ListProjects`, `CreateProject`, `GetProject`, `UpdateProject`,
+  `DeleteProject`, `AddProjectApp` and `RemoveProjectApp`. `CreateProject`
+  is sent once.
+- **Preferences:** `UpdatePreferences` sends a merge patch, and the lists
+  inside them change one item at a time: `AddSite` and `RemoveSite` for
+  the network's sites, `BookmarkTurn` and `UnbookmarkTurn`, and `PinApp`,
+  `UnpinApp`, `PinProject` and `UnpinProject` beside `PinSession`.
+- **A routine's ways in from outside:** `ListTriggerInbound` lists the
+  links and email addresses the person's triggers have, and
+  `IssueTriggerHook` and `IssueTriggerAddress` give a trigger its own,
+  replacing the one it had, with `RemoveTriggerHook` and
+  `RemoveTriggerAddress` to turn them off.
+- **Money and data:** `StartCheckout` answers a payment page for credit,
+  sent once, `GetDataPlaces` where the installation keeps sessions and
+  runs their machines, and `GetModelDataTerms` the data terms of models.
+- `RecordArrival` records the site that referred a person and the page
+  they landed on.
+
+```go
+share, err := acct.CreateShare(ctx, s.ID)
+if err != nil {
+	return err
+}
+fmt.Println("anyone with", share.URL, "reads the conversation")
+```
+
 ### Serving sessions on a computer
 
 A program that connects a person's computer and serves sessions on it,
@@ -353,6 +412,20 @@ for ev, err := range ap.FollowDeployLog(ctx, a.Slug, deploys[0].ID, nil) {
 Deploying is a git push, which the package does not do. Calls about who
 may open a private app take the app's ID, which never changes; the others
 take its slug.
+
+`ReadThumbnail` opens a deploy's picture as a stream, with its media type,
+length and how a cache may keep it, for a program that passes it on to a
+browser. `ListAppSessions` lists the sessions whose publishes built an
+app, `GetVisits` its daily page loads and visitors, `GetDeployByID` and
+`GetDeployApp` read a deploy by its ID alone and the app it belongs to,
+and `GetListing`, `RequestListing` and `WithdrawListing` handle its place
+in the gallery. `CreateFramePass` answers the address that shows a private
+app in a frame of another site's page, and `EndGateSessions` ends the
+person's sign-ins at private apps as they sign out.
+
+`GetApp`, `GetDeployApp` and `ReadThumbnail` also answer a `Config` built
+with `latere.WithoutCredentials`, as anyone with an app's address reads
+it: a public or unlisted app that is published, and nothing of any other.
 
 ## Connections
 
@@ -413,6 +486,14 @@ for five minutes; a public file's link without `Attachment` does not
 expire. A link is a credential while it lasts, and the SDK never puts one
 in an error.
 
+`MoveFile` and `MoveFolder` rename a file, or a folder with everything
+under it in one change, without copying a byte; both are sent once, since
+a repeat would find nothing left to move. `DeleteFile` and `DeleteFolder`
+move them to the space's trash, or remove them with
+`DeleteOptions.Permanent`. `ListSharedWithMe` lists what other people
+shared with you, each share naming the space and the path by which
+`ReadFile` and `ListFiles` reach it.
+
 Sending a file's bytes takes as long as the network allows, so each
 attempt of a write or a part has the timeout and two minutes for every
 16 MiB, and an attempt cut off is sent again. An upload in parts that
@@ -461,7 +542,7 @@ Programs built on the OpenAI or Anthropic SDKs reach the same models with
 the same key through the models capability's compatible endpoints; see
 [Providers and doors](https://platform.latere.ai/docs/models/providers).
 
-## Site icons
+## Site icons and pictures of the web
 
 A program that shows an answer draws each link with its site's icon, as
 Latere Chat does. Package `web` reads the icon through the platform, which
@@ -487,8 +568,28 @@ default:
 carries no credential. An answer past `web.MaxIconBytes`, 64 KiB, is
 refused with an error matching `web.ErrIconTooLarge`. The platform keeps
 an icon for a week and a site without one for a day, so a program that
-keeps what it read need not ask sooner. Pictures of the web an answer
-shows are not covered yet; read them with `Config.Open`.
+keeps what it read need not ask sooner.
+
+A picture on another website that an answer shows is read through the
+platform too, encoded again at most `web.ImageSmall`, 800 pixels, or
+`web.ImageLarge`, 1600, wide. `ReadImage` reads it as the person the
+`Config` speaks for, and `ReadSharedImage` as the reader of a share link,
+for an address the shared answers name. Both answer an `ImageReader` that
+streams the picture, so a server passes it on to a browser as it reads it:
+
+```go
+img, err := web.New(cfg).ReadImage(ctx, address, web.ImageSmall)
+if errors.Is(err, web.ErrNoImage) {
+	return nil // the platform shows no picture there: draw a placeholder
+}
+if err != nil {
+	return err
+}
+defer img.Close()
+w.Header().Set("Content-Type", img.MediaType())
+w.Header().Set("Cache-Control", img.CacheControl())
+_, err = io.Copy(w, img)
+```
 
 ## The API's own answer
 
@@ -596,16 +697,24 @@ Only requests that are safe to repeat are retried: `GET`, `PUT` and
 `POST` that carries an idempotency key, which the API reads on `POST`
 alone. The methods that create or send something send a key, generated
 when you give none, so a retried `CreateSession` makes one session, not
-two. These calls are sent once instead, never again after a failure:
+two. A few `POST`s whose repeat leaves what one would are retried without
+a key: `account.IssueTriggerHook` and `IssueTriggerAddress`, whose repeat
+replaces the link a lost answer issued, and `apps.CreateFramePass`, whose
+unused pass lapses within a minute. These calls are sent once instead,
+never again after a failure:
 
 | Call | Why |
 |---|---|
 | `agents.FireTrigger` | the API forgets a firing's key when it answers with a server error |
 | `agents.RunRoutine` | a routine's run is a firing of its trigger, sent as `FireTrigger` sends it |
+| `account.CreateShare` | the account API takes no key on it; a repeat makes a second link |
+| `account.CreateProject` | the account API takes no key on it; a repeat makes a second project |
+| `account.StartCheckout` | a repeat opens a second payment page |
 | `apps.CreateApp`, `apps.Invite` | the apps API takes no key yet |
 | `connections.ConfirmConnection` | a finished sign-in answers 410 to a repeat |
 | `connections.ReconnectConnection` | a repeat replaces the sign-in the first one started |
 | `storage.StartUpload` | the storage API takes no key; an upload left open lapses by itself |
+| `storage.MoveFile`, `storage.MoveFolder` | the storage API takes no key; a repeat finds nothing left to move |
 | `llm.Generate`, `llm.Stream` | the model may have run and been billed |
 
 A repeat that reaches the API while the first request is still being
@@ -628,7 +737,7 @@ refuses, such as a revoked key, is not retried.
 
 | Option | Default |
 |---|---|
-| `WithKey`, `WithTokenSource` | the key in `LATERE_KEY` |
+| `WithKey`, `WithTokenSource`, `WithoutCredentials` | the key in `LATERE_KEY` |
 | `WithBaseURL` | `LATERE_BASE_URL`, else `https://api.latere.ai` |
 | `WithHTTPClient` | `http.DefaultClient` |
 | `WithMaxRetries` | 2 |
@@ -645,7 +754,11 @@ SDK keeps no global state: build as many configurations as you need.
 To call an endpoint the packages do not cover yet, use `Config.Do` with a
 `latere.Request`; it signs, retries and decodes as the packages do. A
 route that reads no credential takes `Request.Anonymous`, which sends the
-request without one.
+request without one. A program that holds no credential at all builds its
+`Config` with `WithoutCredentials`, which sends none on any request: the
+API's public reads, a shared conversation, an app anyone may open and its
+pictures, and a site's icon, answer it, and every other call is refused
+with 401.
 
 ## Signing a person in
 

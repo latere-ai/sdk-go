@@ -117,6 +117,18 @@ them, as Latere Chat reads icons, and it works whether or not the
 credentials do. A 401 to such a request is answered as it is, since no
 token was sent to renew.
 
+Other public reads take a credential when there is one: a conversation's
+share answers a member of an organization what a link for members shows,
+and an app's owner reads its private pictures. A method for those sends
+the `Config`'s credential as any other does, and a program that holds
+none, such as a server rendering a shared page for a visitor, builds its
+`Config` with `WithoutCredentials`, which sends none on any request. The
+two are kept apart rather than one inferred from the other: the route
+decides `Request.Anonymous`, the program decides `WithoutCredentials`,
+and one method serves both kinds of reader instead of a signed-out twin
+of each. A request that sends the key is refused before it is sent under
+either, since there is no key to send.
+
 `golang.org/x/oauth2` would cover part of this, but it is a dependency,
 and the API's token exchanges are small enough to write and test here.
 
@@ -165,6 +177,23 @@ session or send a message twice. The calls a key cannot make safe carry
 - `storage.StartUpload`: the storage part takes no key, so a repeat could
   open a second upload. An upload left open lapses by itself after a day,
   and `UploadFile` gives up one that failed.
+- `storage.MoveFile` and `storage.MoveFolder`: the storage part takes no
+  key, and a repeat after a lost answer would find nothing left at the
+  path and be refused with 404, though the move succeeded; `StatFile` or
+  `ListFilesPage` on the destination tells.
+- `account.CreateShare` and `account.CreateProject`: the account part
+  reads no key on either, so a repeat would make a second link or a
+  second project, counted against the person's bound.
+- `account.StartCheckout`: a repeat opens a second payment page. An
+  unpaid page adds nothing, so the caller may start another.
+
+A few `POST`s take no key and are still safe to repeat, so they carry
+`RetryAlways`: `account.IssueTriggerHook` and
+`account.IssueTriggerAddress` give a trigger a link or an address that
+replaces the one it had, so a repeat after a lost answer leaves the
+trigger with one that works, the one the caller is answered; and
+`apps.CreateFramePass` hands out a pass that lapses within a minute
+unused.
 
 `storage.CompleteUpload` carries `RetryAnswers`, a rule between the two:
 the storage part keeps an upload until it completes, so a completion it
@@ -254,7 +283,11 @@ meet a 404 for a delete that succeeded. Where the API answers the same
 404 for a resource removed before and one never held, as it does for a
 person's computer, `account.RemoveDevice` reports the API's own 404 as
 done: the person holds no computer of that id either way, and the call is
-then safe to repeat. A 404 without the API's envelope, such as a proxy's,
+then safe to repeat. `account.DeleteProject` does the same with the API's
+`project_not_found`. A file's delete does not: a path that never held a
+file is a mistake a caller wants told, so `storage.DeleteFile` returns
+the 404, and its docs say a retry can meet the 404 of a delete that
+succeeded. A 404 without the API's envelope, such as a proxy's,
 stays an error.
 
 A call that fails before any request is sent, because the token source
@@ -401,8 +434,12 @@ its file and upload routes no schema, so `storage`'s types follow the
 API's reference pages, and its tests hold the routes it calls, and the one
 list shape the document does define, to the document.
 
-Every resource a package returns, a session, an event, a trigger, a wallet,
-a pin, a device, an app, a connection, a file, an upload or a finished sign-in, keeps the bytes it was decoded from, returned by
+Every resource a package returns, a session, an event, a session summary,
+a shared page, a trigger, a wallet, a pin, a share link, a checkout, the
+data places and terms, a project, a trigger's link or address, a device,
+an app, a deploy, an app's sessions and visits, a listing, a frame pass,
+a connection, a file, a moved folder, a grant, an upload or a finished
+sign-in, keeps the bytes it was decoded from, returned by
 `RawJSON`, as Stainless-generated SDKs and stripe-go do. A program that
 shows or stores the API's answer, a command line's `--json` output or a
 server that passes answers on, gets every field, including those added
@@ -421,6 +458,21 @@ to those and lists, with its reason, each field it reads beyond them. The `llm` 
 own definition, shared with the gateway's codec, so they never lag what
 the API sends. A `web.Icon` is a picture's bytes, not JSON, and keeps
 nothing, as a `FileReader` keeps nothing.
+
+## Readers
+
+A route that answers bytes rather than JSON, a session's kept file, a
+shared conversation's, a deploy's picture or a picture of the web, is
+opened as a reader: `agents.FileReader`, `apps.ThumbnailReader` and
+`web.ImageReader` stream the body and say its media type and length, and
+the picture readers also how a cache may keep it, as the API answered.
+A program that relays the bytes to a browser, as Latere Chat does for
+every picture it shows, copies the reader to its response with those
+headers. The relay itself, an HTTP handler with the client's own routes,
+cookies and caching, stays in the program: the SDK's part is to make the
+call and hand back what the program passes on, not to serve HTTP. Each
+package keeps its own reader type, since a package imports no other
+capability's, and the three differ in what their answers say.
 
 ## Site icons
 
@@ -445,8 +497,12 @@ them. Two are in what a program can learn of a session's files:
 - The API lists no session's working directory, so a program learns which files a session made from its log alone: its kept files and the `ToolMeta` of its writes and edits.
 
 The web part has no reference document yet, so `web`'s tests hold the
-client to the answers the platform's icon route gives rather than to a
-schema, and `make openapi` fetches nothing for it.
+client to the answers the platform's icon and image routes give rather
+than to a schema, and `make openapi` fetches nothing for it. Nor has the
+read of a shared conversation, `/v1/shares/{token}`, whose models in
+`agents` follow the platform's answer; the `agents` tests list those
+routes and fail once a vendored document describes them, so their models
+are then held to it.
 
 ## Observability
 

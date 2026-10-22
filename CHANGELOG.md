@@ -33,6 +33,73 @@ minor version may break code, and every such change is marked **Breaking**.
 - Package `account`: `DeviceNetwork.Blocked`, the hosts a computer on the
   `open` network blocks, and the `open` mode in `DeviceNetwork.Mode`'s
   docs.
+- Package `latere`: `WithoutCredentials` builds a `Config` that sends no
+  credential on any request, for a program that holds none, such as a
+  server that shows a shared conversation to a visitor. The API's public
+  reads answer it; a request that sends the key is refused before it is
+  sent.
+- Package `agents`: `GetSessionSummary` counts the sessions a list would
+  page through, by running, waiting for approval, idle and ended.
+- Package `agents`: the read of a shared conversation by its link's token:
+  `GetSharedPage`, a page of the events a reader sees with the `Share`'s
+  title and bound, `ListSharedEvents`, every event, and `ReadSharedBlob`,
+  a file it kept as a `FileReader`.
+- Package `account`: links that share a conversation, `CreateShare`,
+  `ListShares` and `ListSharesPage`, `UpdateShare`, which moves a link to
+  the last finished turn, and `DeleteShare`, with the `Share` model and its
+  audience, state and reason types. `CreateShare` is sent once.
+- Package `account`: `StartCheckout`, a payment page for credit in the
+  wallet of the token's context, sent once.
+- Package `account`: `GetDataPlaces`, where the installation keeps
+  sessions and runs their machines, and `GetModelDataTerms`, the data
+  terms, display name and price of up to `MaxDataTermsModels` models.
+- Package `account`: `UpdatePreferences`, a merge patch of the
+  preferences, and the writes made one at a time: `AddSite` and
+  `RemoveSite`, `BookmarkTurn` and `UnbookmarkTurn`, and `PinApp`,
+  `UnpinApp`, `PinProject` and `UnpinProject`. `Network` and `Bookmarks`
+  keep their JSON behind `RawJSON`.
+- Package `account`: `RecordArrival`, the site that referred a person and
+  the page they landed on.
+- Package `account`: projects, which group a context's conversations and
+  hold the apps they work on: `ListProjects`, `ListProjectsPage`,
+  `CreateProject`, `GetProject`, `UpdateProject`, `DeleteProject`,
+  `AddProjectApp` and `RemoveProjectApp`, with `ErrProjectLimit` and
+  `ErrAppNotInContext`. `CreateProject` is sent once.
+- Package `account`: a routine's ways in from outside. `ListTriggerInbound`
+  lists the links and email addresses the caller's triggers have, and
+  whether email is on; `IssueTriggerHook` and `RemoveTriggerHook` give a
+  trigger a link another app posts to, and `IssueTriggerAddress` and
+  `RemoveTriggerAddress` an email address, with `ErrMailNotEnabled`.
+- Package `apps`: `ListAppSessions` and `ListAppSessionsPage`, the
+  sessions whose publishes built an app, and `GetVisits`, its daily page
+  loads and visitors with their totals.
+- Package `apps`: `GetDeployByID`, a deploy by its ID alone, and
+  `GetDeployApp`, the app a deploy belongs to as an `OpenApp`.
+- Package `apps`: `ReadThumbnail`, a deploy's picture as a
+  `ThumbnailReader` with its media type, size, ETag and Cache-Control, at
+  `ThumbnailLarge` or `ThumbnailSmall`, with `Thumbnail.Deploy` and
+  `ErrNoThumbnail`.
+- Package `apps`: `CreateFramePass`, the address that shows a private app
+  in a frame of another site, with `ErrFrameUnavailable`, and
+  `EndGateSessions`, which ends a person's sign-ins at private apps as
+  they sign out.
+- Package `apps`: `GetListing`, `RequestListing` and `WithdrawListing`, an
+  app's place in the gallery.
+- Package `apps`: `GetApp`, `GetDeployApp` and `ReadThumbnail` read a
+  public or unlisted app as anyone does with a `Config` built
+  `WithoutCredentials`.
+- Package `storage`: `MoveFile` and `MoveFolder`, a rename of a file, or
+  of a folder with everything under it in one change, each sent once;
+  `DeleteFile` and `DeleteFolder`, to the trash or with
+  `DeleteOptions.Permanent` for good; and `ListSharedWithMe` and
+  `ListSharedWithMePage`, the shares other people gave you, as `Grant`s
+  with their `Permission`, `GranteeKind` and `GrantStatus`.
+- Package `web`: `ReadImage` and `ReadSharedImage`, a picture of the web
+  an answer shows, read through the platform as the person or as a share
+  link's reader, at `ImageSmall` or `ImageLarge`, as an `ImageReader` that
+  streams it with its media type, length and Cache-Control. An address
+  the platform shows no picture for returns an error matching
+  `ErrNoImage`.
 
 ### Changed
 

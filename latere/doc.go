@@ -39,7 +39,11 @@
 // that sign-in.
 //
 // A route that reads no credential, such as a site's icon, is called with
-// [Request.Anonymous] set: no token is fetched for it, and none is sent.
+// [Request.Anonymous] set: no token is fetched for it, and none is sent. A
+// program that holds no credential at all, such as a server that shows a
+// shared conversation to a visitor, builds its Config with
+// [WithoutCredentials], which sends none on any request; the API's public
+// reads answer it, and every other call is refused with 401.
 //
 // [ReadUnverifiedClaims] reads what a token the platform issued says of
 // itself, whom it names, its context and its expiry, without verifying
@@ -75,17 +79,24 @@
 // [RetryRule] says: by default a GET, HEAD, PUT or DELETE request, and a
 // POST that carries an idempotency key, which the API reads on POST alone.
 // The capability packages send a key on the POSTs that create or send
-// something, and retry every PATCH that only sets values and
-// llm.CountTokens, which changes nothing. These calls are sent once
-// instead, never again after a failure:
+// something, and retry every PATCH that only sets values,
+// llm.CountTokens, which changes nothing, and the POSTs whose repeat
+// leaves what one would: account.IssueTriggerHook and
+// account.IssueTriggerAddress, whose repeat replaces the link a lost
+// answer issued, and apps.CreateFramePass, whose unused pass lapses.
+// These calls are sent once instead, never again after a failure:
 //
-//	agents.FireTrigger               the API forgets a firing's key on a server error
-//	agents.RunRoutine                a routine's run is a firing of its trigger
-//	apps.CreateApp, apps.Invite      the apps API takes no key yet
-//	connections.ConfirmConnection    a finished sign-in answers 410 to a repeat
-//	connections.ReconnectConnection  a repeat replaces the sign-in it started
-//	storage.StartUpload              the storage API takes no key; an open upload lapses
-//	llm.Generate, llm.Stream         the model may have run and been billed
+//	account.CreateShare               the account API takes no key on it
+//	account.CreateProject             the account API takes no key on it
+//	account.StartCheckout             a repeat opens a second payment page
+//	agents.FireTrigger                the API forgets a firing's key on a server error
+//	agents.RunRoutine                 a routine's run is a firing of its trigger
+//	apps.CreateApp, apps.Invite       the apps API takes no key yet
+//	connections.ConfirmConnection     a finished sign-in answers 410 to a repeat
+//	connections.ReconnectConnection   a repeat replaces the sign-in it started
+//	storage.StartUpload               the storage API takes no key; an open upload lapses
+//	storage.MoveFile, MoveFolder      a repeat finds nothing left to move
+//	llm.Generate, llm.Stream          the model may have run and been billed
 //
 // storage.CompleteUpload is sent again after an answer of a server error,
 // which leaves the upload open, but never after a failure on the network,

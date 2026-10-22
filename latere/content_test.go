@@ -5,6 +5,7 @@ package latere
 
 import (
 	"context"
+	"errors"
 	"io"
 	"net/http"
 	"net/http/httptest"
@@ -308,5 +309,60 @@ func TestRetryAnswers(t *testing.T) {
 	}
 	if calls.Load() != 1 {
 		t.Fatalf("sent %d times after a failure on the network, want once", calls.Load())
+	}
+}
+
+// An anonymous request goes to the API without the credential: no token
+// is fetched for it, so it is sent even while the credentials fail, and a
+// 401 is answered as it is rather than by renewing a token.
+func TestAnAnonymousRequestCarriesNoCredential(t *testing.T) {
+	var calls atomic.Int32
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		calls.Add(1)
+		if got := r.Header.Get("Authorization"); got != "" {
+			t.Errorf("Authorization = %q, want none", got)
+		}
+		if r.URL.Path == "/v1/refused" {
+			writeError(w, http.StatusUnauthorized, "unauthorized", "No.")
+			return
+		}
+		_, _ = io.WriteString(w, `{}`)
+	}))
+	defer srv.Close()
+	src := &resetSource{}
+	c, _ := testConfig(t, srv, WithTokenSource(src))
+	if err := c.Do(context.Background(), &Request{Method: http.MethodGet, Path: "/v1/web/icons/example.org", Anonymous: true}, nil); err != nil {
+		t.Fatal(err)
+	}
+	if err := c.Do(context.Background(), &Request{Method: http.MethodGet, Path: "/v1/refused", Anonymous: true}, nil); !errors.Is(err, ErrUnauthorized) {
+		t.Errorf("a refused anonymous request: %v, want ErrUnauthorized", err)
+	}
+	if src.n.Load() != 0 || src.resets.Load() != 0 {
+		t.Errorf("the token source gave %d tokens and reset %d times, want neither", src.n.Load(), src.resets.Load())
+	}
+	if calls.Load() != 2 {
+		t.Errorf("sent %d requests, want 2: a 401 is not sent again", calls.Load())
+	}
+
+	failing, _ := testConfig(t, srv, WithTokenSource(TokenSourceFunc(func(context.Context) (Token, error) {
+		return Token{}, errors.New("the sign-in ended")
+	})))
+	if err := failing.Do(context.Background(), &Request{Method: http.MethodGet, Path: "/v1/web/icons/example.org", Anonymous: true}, nil); err != nil {
+		t.Errorf("an anonymous request with failing credentials: %v", err)
+	}
+}
+
+// A request sent without a credential cannot send the key either.
+func TestAnAnonymousRequestRefusesSendKey(t *testing.T) {
+	var calls atomic.Int32
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) { calls.Add(1) }))
+	defer srv.Close()
+	c, err := NewConfig(WithKey("lk_live_THEKEY"), WithBaseURL(srv.URL))
+	if err != nil {
+		t.Fatal(err)
+	}
+	err = c.Do(context.Background(), &Request{Method: http.MethodGet, Path: "/v1/models", Anonymous: true, SendKey: true}, nil)
+	if err == nil || calls.Load() != 0 {
+		t.Fatalf("err = %v after %d requests; want it refused before sending", err, calls.Load())
 	}
 }

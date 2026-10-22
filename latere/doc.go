@@ -15,6 +15,7 @@
 //	latere.ai/x/sdk-go/storage      files in Storage: upload, read, list, link
 //	latere.ai/x/sdk-go/llm          calling models in the Lux dialect
 //	latere.ai/x/sdk-go/llm/wire     the Lux dialect's types alone, sending nothing
+//	latere.ai/x/sdk-go/web          a site's icon, read through the platform
 //	latere.ai/x/sdk-go/signin       signing a person in, for apps Latere registers
 //
 // Build one [Config] and hand it to the New function of each capability:
@@ -36,6 +37,9 @@
 // passes the person's sign-in to [NewActorTokens] instead, which exchanges
 // it for tokens addressed to the API; package signin obtains and refreshes
 // that sign-in.
+//
+// A route that reads no credential, such as a site's icon, is called with
+// [Request.Anonymous] set: no token is fetched for it, and none is sent.
 //
 // [ReadUnverifiedClaims] reads what a token the platform issued says of
 // itself, whom it names, its context and its expiry, without verifying

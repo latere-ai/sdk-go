@@ -82,6 +82,12 @@ type Request struct {
 	// request, such as a short-lived link to a file's bytes. Do refuses a
 	// request that sets it, since a redirect has no JSON to decode.
 	KeepRedirect bool
+	// Anonymous sends the request without the Config's credential, for a
+	// route that reads none, such as a site's icon: no token is fetched
+	// for it, so it is sent whether or not the credentials work, and a 401
+	// is not answered by renewing one. A request that also sets SendKey is
+	// refused.
+	Anonymous bool
 }
 
 // Do sends r and decodes the JSON answer into out, which may be nil to
@@ -254,6 +260,8 @@ func (c *Config) send(ctx context.Context, r *Request) (*http.Response, error) {
 	switch {
 	case r.SignedURL != "" && r.SendKey:
 		return nil, fmt.Errorf("latere: %s %s goes to a signed URL, which takes no credential, and also sets SendKey", r.Method, where)
+	case r.Anonymous && r.SendKey:
+		return nil, fmt.Errorf("latere: %s %s is sent without a credential and also sets SendKey", r.Method, where)
 	case r.Content != nil && r.Body != nil:
 		return nil, fmt.Errorf("latere: %s %s sets both Body and Content; it sends one body", r.Method, where)
 	case r.Content != nil && r.ContentLength < 0:
@@ -297,7 +305,7 @@ func (c *Config) send(ctx context.Context, r *Request) (*http.Response, error) {
 		// once more with a fresh token whatever its method. A request that
 		// sent the key itself has no token to renew.
 		_, sentKey := c.key(r)
-		if resp.StatusCode == http.StatusUnauthorized && !resetDone && !sentKey && r.SignedURL == "" {
+		if resp.StatusCode == http.StatusUnauthorized && !resetDone && !sentKey && r.SignedURL == "" && !r.Anonymous {
 			if rs, ok := c.tokens.(Resetter); ok {
 				rs.Reset()
 				resetDone = true
@@ -421,7 +429,7 @@ func (c *Config) key(r *Request) (string, bool) {
 // attempt sends r once.
 func (c *Config) attempt(ctx context.Context, r *Request, target string, body []byte) (*http.Response, error) {
 	bearer, sentKey := c.key(r)
-	if !sentKey && r.SignedURL == "" {
+	if !sentKey && r.SignedURL == "" && !r.Anonymous {
 		token, err := c.tokens.Token(ctx)
 		if err != nil {
 			return nil, &TokenError{Err: err}

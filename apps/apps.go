@@ -225,10 +225,13 @@ type SessionRef struct {
 	ID string `json:"id"`
 }
 
-// Thumbnail is a screenshot of a deploy's front page.
+// Thumbnail is a screenshot of a deploy's front page. Read its bytes with
+// ReadThumbnail, which takes the app's slug and the deploy's ID that
+// Deploy returns from URL.
 type Thumbnail struct {
-	// URL is the picture's path under the API's address; add
-	// "?width=640" for a smaller one.
+	// URL is the picture's path under the API's address, which names the
+	// app and the deploy whose picture it is, so a newer deploy's picture
+	// has another URL.
 	URL string `json:"url"`
 	// Width is the picture's width in pixels.
 	Width int `json:"width"`
@@ -303,6 +306,15 @@ func (c *Client) CreateApp(ctx context.Context, params *CreateAppParams) (*App, 
 // GetApp returns the app slug names; slug may also be the app's ID. It
 // returns an error matching latere.ErrNotFound when the caller has no
 // such app.
+//
+// With a Config that sends no credential it reads an app as anyone does:
+// it answers only an app anyone with its address may open, public or
+// unlisted and published, among every account's apps, and only its ID,
+// Slug, Name and URL, as an OpenApp holds them; every other field is
+// zero. Any other app returns an error matching latere.ErrNotFound, and
+// such reads are limited to 120 a minute from one address, past which it
+// returns an error matching latere.ErrRateLimited once its retries are
+// spent.
 func (c *Client) GetApp(ctx context.Context, slug string) (*App, error) {
 	if slug == "" {
 		return nil, errNoSlug

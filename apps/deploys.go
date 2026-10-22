@@ -230,6 +230,88 @@ func (c *Client) GetDeploy(ctx context.Context, slug, id string) (*Deploy, error
 	return &out, nil
 }
 
+// deployPath is the path of a deploy by its ID alone, without its app's
+// slug, or of one of its sub-resources. The apps document serves it at
+// /v1/deploys, which the API's origin serves under /v1/apps.
+func deployPath(id string, rest ...string) string {
+	p := "/v1/apps/deploys/" + url.PathEscape(id)
+	for _, r := range rest {
+		p += "/" + url.PathEscape(r)
+	}
+	return p
+}
+
+// GetDeployByID returns a deploy by its ID in full, without its app's
+// slug, when the app is the caller's to read, as a conversation that kept
+// a deploy's ID reads it. An ID that is not a UUID, that names no deploy,
+// or that names one of an app the caller may not read returns an error
+// matching latere.ErrNotFound; the answers are the same, so it tells the
+// caller nothing of an app it may not read.
+func (c *Client) GetDeployByID(ctx context.Context, id string) (*Deploy, error) {
+	if id == "" {
+		return nil, errNoDeploy
+	}
+	var out Deploy
+	if err := c.cfg.Do(ctx, &latere.Request{Method: http.MethodGet, Path: deployPath(id)}, &out); err != nil {
+		return nil, err
+	}
+	return &out, nil
+}
+
+// OpenApp is an app as anyone may read it: its ID, its slug, its name and
+// its address now. GetDeployApp answers it, and GetApp answers an App with
+// these fields alone to a Config that sends no credential.
+type OpenApp struct {
+	// ID never changes.
+	ID string `json:"id"`
+	// Slug is the app's slug now.
+	Slug string `json:"slug"`
+	// Name is the app's display name.
+	Name string `json:"name"`
+	// URL is the app's address.
+	URL string `json:"url"`
+
+	raw json.RawMessage
+}
+
+// RawJSON returns the JSON the API answered for the app, with every
+// field; nil for an OpenApp the program built itself.
+func (a *OpenApp) RawJSON() json.RawMessage { return a.raw }
+
+// UnmarshalJSON decodes the app and keeps the JSON for RawJSON.
+func (a *OpenApp) UnmarshalJSON(b []byte) error {
+	type plain OpenApp
+	if err := json.Unmarshal(b, (*plain)(a)); err != nil {
+		return err
+	}
+	a.raw = keep(b)
+	return nil
+}
+
+// GetDeployApp returns the app the deploy id belongs to, by the deploy's
+// ID in full: its ID, slug, name and address now. A copy that kept a
+// deploy and the slug its app had then, such as a shared conversation's,
+// reads the app's current address by it after a rename.
+//
+// With a credential it answers a deploy of an app the caller may read.
+// With a Config that sends no credential it answers only a deploy of an
+// app anyone with its address may open, public or unlisted and published,
+// among every account's apps; such reads are limited to 120 a minute from
+// one address, past which it returns an error matching
+// latere.ErrRateLimited once its retries are spent. Any other deploy, or
+// none, returns an error matching latere.ErrNotFound, the same for each,
+// so it tells no one that a private app exists.
+func (c *Client) GetDeployApp(ctx context.Context, id string) (*OpenApp, error) {
+	if id == "" {
+		return nil, errNoDeploy
+	}
+	var out OpenApp
+	if err := c.cfg.Do(ctx, &latere.Request{Method: http.MethodGet, Path: deployPath(id, "app")}, &out); err != nil {
+		return nil, err
+	}
+	return &out, nil
+}
+
 // LogLine is one line of a build log.
 type LogLine struct {
 	// Seq is the line's number within its component's log.

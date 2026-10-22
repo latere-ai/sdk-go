@@ -11,16 +11,19 @@ import (
 	"testing"
 	"time"
 
+	"latere.ai/x/sdk-go/account"
 	"latere.ai/x/sdk-go/agents"
 	"latere.ai/x/sdk-go/apps"
 	"latere.ai/x/sdk-go/connections"
 	"latere.ai/x/sdk-go/latere"
 	"latere.ai/x/sdk-go/llm"
+	"latere.ai/x/sdk-go/storage"
 )
 
 // Every call that is sent once stays sent once after a server error, and
-// every PATCH that only sets values is sent again, whatever the package.
-// The README and latere's package doc list the calls sent once.
+// every PATCH that only sets values, and every POST whose repeat leaves
+// what one would, is sent again, whatever the package. The README and
+// latere's package doc list both.
 func TestTheCallsSentOnceAndThePatchesRetried(t *testing.T) {
 	var sends atomic.Int32
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
@@ -34,6 +37,7 @@ func TestTheCallsSentOnceAndThePatchesRetried(t *testing.T) {
 		t.Fatal(err)
 	}
 	ag, ap, cs, ml := agents.New(cfg), apps.New(cfg), connections.New(cfg), llm.New(cfg)
+	ac, st := account.New(cfg), storage.New(cfg)
 	ctx := t.Context()
 	title := "t"
 	calls := map[string]struct {
@@ -67,6 +71,39 @@ func TestTheCallsSentOnceAndThePatchesRetried(t *testing.T) {
 			return err
 		}, 1 + latere.DefaultMaxRetries},
 		"CountTokens": {func(ctx context.Context) error { _, err := ml.CountTokens(ctx, &llm.Request{Model: "m"}); return err }, 1 + latere.DefaultMaxRetries},
+		"CreateShare": {func(ctx context.Context) error { _, err := ac.CreateShare(ctx, "ses_1"); return err }, 1},
+		"CreateProject": {func(ctx context.Context) error {
+			_, err := ac.CreateProject(ctx, &account.CreateProjectParams{Name: title})
+			return err
+		}, 1},
+		"StartCheckout": {func(ctx context.Context) error {
+			_, err := ac.StartCheckout(ctx, &account.StartCheckoutParams{AmountMicroUSD: 5_000_000,
+				SuccessURL: "https://chat.latere.ai/paid", CancelURL: "https://chat.latere.ai/"})
+			return err
+		}, 1},
+		"MoveFile": {func(ctx context.Context) error {
+			_, err := st.MoveFile(ctx, storage.Me, "files/a", "files/b")
+			return err
+		}, 1},
+		"MoveFolder": {func(ctx context.Context) error {
+			_, err := st.MoveFolder(ctx, storage.Me, "files/a", "files/b")
+			return err
+		}, 1},
+		"UpdateShare": {func(ctx context.Context) error { _, err := ac.UpdateShare(ctx, "shr_1"); return err }, 1 + latere.DefaultMaxRetries},
+		"UpdatePreferences": {func(ctx context.Context) error {
+			_, err := ac.UpdatePreferences(ctx, &account.UpdatePreferencesParams{CallMe: &title})
+			return err
+		}, 1 + latere.DefaultMaxRetries},
+		"UpdateProject": {func(ctx context.Context) error {
+			_, err := ac.UpdateProject(ctx, "prj_1", &account.UpdateProjectParams{Name: &title})
+			return err
+		}, 1 + latere.DefaultMaxRetries},
+		"IssueTriggerHook":    {func(ctx context.Context) error { _, err := ac.IssueTriggerHook(ctx, "trg_1"); return err }, 1 + latere.DefaultMaxRetries},
+		"IssueTriggerAddress": {func(ctx context.Context) error { _, err := ac.IssueTriggerAddress(ctx, "trg_1"); return err }, 1 + latere.DefaultMaxRetries},
+		"CreateFramePass": {func(ctx context.Context) error {
+			_, err := ap.CreateFramePass(ctx, "tides", "https://tides.latere.app/")
+			return err
+		}, 1 + latere.DefaultMaxRetries},
 	}
 	for name, tc := range calls {
 		sends.Store(0)

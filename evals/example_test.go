@@ -253,3 +253,57 @@ func ExampleVersion_Ref() {
 	fmt.Println(v.Ref())
 	// Output: fix-flaky-tests@sha256:9f86d081884c7d659a2feaa0c55ad015a3bf4f1b2b0b822cd15d6c15b0f00a08
 }
+
+// Reading the version of a grader an experiment names by its digest, and
+// what it fills.
+func ExampleClient_GetGrader() {
+	g, err := client().GetGrader(context.Background(), "sha256:9f86d081884c7d659a2feaa0c55ad015a3bf4f1b2b0b822cd15d6c15b0f00a08")
+	if errors.Is(err, latere.ErrNotFound) {
+		fmt.Println("a grader of another context, or none")
+		return
+	}
+	if err != nil {
+		log.Fatal(err)
+	}
+	fmt.Println(g.Ref(), g.Kind, g.Produces)
+}
+
+// Every version of a metric, newest first.
+func ExampleClient_ListMetricVersions() {
+	for m, err := range client().ListMetricVersions(context.Background(), "pass_rate", nil) {
+		if err != nil {
+			log.Fatal(err)
+		}
+		fmt.Println(m.Ref(), m.Current)
+	}
+}
+
+// Every version of a grader, newest first.
+func ExampleClient_ListGraderVersions() {
+	for g, err := range client().ListGraderVersions(context.Background(), "tests-pass", nil) {
+		if err != nil {
+			log.Fatal(err)
+		}
+		fmt.Println(g.Ref(), g.Kind, g.Current)
+	}
+}
+
+// Every version of a task, newest first.
+func ExampleClient_ListTaskVersions() {
+	for task, err := range client().ListTaskVersions(context.Background(), "fix-the-flaky-test", nil) {
+		if err != nil {
+			log.Fatal(err)
+		}
+		fmt.Println(task.Ref(), task.CreatedAt.Format("2006-01-02"))
+	}
+}
+
+// Every version of a candidate, newest first.
+func ExampleClient_ListCandidateVersions() {
+	for c, err := range client().ListCandidateVersions(context.Background(), "harness", &evals.ListVersionsParams{Limit: 10}) {
+		if err != nil {
+			log.Fatal(err)
+		}
+		fmt.Println(c.Ref(), c.Kind)
+	}
+}

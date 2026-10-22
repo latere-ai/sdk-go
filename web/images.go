@@ -115,9 +115,9 @@ func (c *Client) ReadImage(ctx context.Context, address string, width ImageWidth
 // Markdown image of a kept answer within the link's bound names, so a
 // link is no way to fetch any other.
 //
-// A share anyone may read reads no credential, so a Config built with
-// latere.WithoutCredentials reads it; a share for the members of an
-// organization answers a member's token alone. A token that is no link's,
+// A share anyone may read, the one kind of link the API makes, reads no
+// credential, so a Config built with latere.WithoutCredentials reads it.
+// A token that is no link's,
 // a link that was stopped or that the reader may not read, and an address
 // the shared part does not name all return an error matching
 // latere.ErrNotFound; an address the platform shows no picture for

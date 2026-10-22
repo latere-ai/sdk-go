@@ -74,3 +74,30 @@ func ExampleClient_ReadImage() {
 		}
 	})
 }
+
+// A server rendering a share link's page passes on the pictures its
+// answers show, as anyone holding the link reads them.
+func ExampleClient_ReadSharedImage() {
+	cfg, err := latere.NewConfig(latere.WithoutCredentials())
+	if err != nil {
+		log.Fatal(err)
+	}
+	client := web.New(cfg)
+	http.HandleFunc("GET /share/{token}/pictures", func(w http.ResponseWriter, r *http.Request) {
+		img, err := client.ReadSharedImage(r.Context(), r.PathValue("token"), r.URL.Query().Get("url"), web.ImageSmall)
+		switch {
+		case errors.Is(err, web.ErrNoImage), errors.Is(err, latere.ErrNotFound):
+			http.NotFound(w, r)
+			return
+		case err != nil:
+			http.Error(w, "The picture could not be read.", http.StatusBadGateway)
+			return
+		}
+		defer img.Close()
+		w.Header().Set("Content-Type", img.MediaType())
+		w.Header().Set("Cache-Control", img.CacheControl())
+		if _, err := io.Copy(w, img); err != nil {
+			log.Print("the picture's answer was cut off: ", err)
+		}
+	})
+}

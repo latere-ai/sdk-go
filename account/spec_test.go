@@ -115,6 +115,11 @@ func TestModelsMatchTheSchemas(t *testing.T) {
 		"ModelTerms":          {account.ModelTerms{}, s["ModelTerms"]},
 		"ServingProvider":     {account.ServingProvider{}, s["ServingProvider"]},
 		"RecordArrivalParams": {account.RecordArrivalParams{}, requestSchema(t, d, "put", "/v1/account/arrival")},
+		"Project":             {account.Project{}, s["Project"]},
+		"ProjectOwner":        {account.ProjectOwner{}, s["Project"].Properties["owner"]},
+		"ProjectApp":          {account.ProjectApp{}, s["ProjectApp"]},
+		"CreateProjectParams": {account.CreateProjectParams{}, s["ProjectCreate"]},
+		"TriggerInlet":        {account.TriggerInlet{}, s["TriggerInlet"]},
 	}
 	for name, c := range cases {
 		if c.schema == nil {
@@ -157,6 +162,8 @@ func TestModelsReadEveryField(t *testing.T) {
 		"Bookmarks": account.Bookmarks{}, "Share": account.Share{}, "Checkout": account.Checkout{},
 		"CheckoutRequest": account.StartCheckoutParams{}, "DataPlaces": account.DataPlaces{}, "Place": account.Place{},
 		"ModelDataTerms": account.ModelDataTerms{}, "ModelTerms": account.ModelTerms{}, "ServingProvider": account.ServingProvider{},
+		"Project": account.Project{}, "Project.owner": account.ProjectOwner{}, "ProjectApp": account.ProjectApp{},
+		"ProjectCreate": account.CreateProjectParams{}, "TriggerInlet": account.TriggerInlet{},
 	} {
 		fields := jsonFields(reflect.TypeOf(model))
 		sch := s[name]
@@ -201,6 +208,18 @@ func TestEndpointsAreInTheDocument(t *testing.T) {
 		{"put", "/v1/account/preferences/pins/projects/{project_id}"},
 		{"delete", "/v1/account/preferences/pins/projects/{project_id}"},
 		{"put", "/v1/account/arrival"},
+		{"get", "/v1/account/projects"},
+		{"post", "/v1/account/projects"},
+		{"get", "/v1/account/projects/{id}"},
+		{"patch", "/v1/account/projects/{id}"},
+		{"delete", "/v1/account/projects/{id}"},
+		{"put", "/v1/account/projects/{id}/apps/{app_id}"},
+		{"delete", "/v1/account/projects/{id}/apps/{app_id}"},
+		{"get", "/v1/account/triggers/inbound"},
+		{"post", "/v1/account/triggers/{trigger_id}/hook"},
+		{"delete", "/v1/account/triggers/{trigger_id}/hook"},
+		{"post", "/v1/account/triggers/{trigger_id}/address"},
+		{"delete", "/v1/account/triggers/{trigger_id}/address"},
 	} {
 		if _, ok := d.Paths[e.path][e.method]; !ok {
 			t.Errorf("%s %s is not in the document", strings.ToUpper(e.method), e.path)

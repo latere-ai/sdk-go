@@ -5,6 +5,7 @@ package signin_test
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"log"
 	"os/exec"
@@ -55,4 +56,35 @@ func ExampleConfig_Device() {
 		log.Fatal(err)
 	}
 	fmt.Println("signed in as", info.Email)
+}
+
+// Showing whom a sign-in names: the organizations they can act in, and
+// the handle of someone else.
+func ExampleConfig_ListOrganizations() {
+	signer := &signin.Config{ClientID: "my-app"}
+	ctx := context.Background()
+	tok, err := signer.Browser(ctx, func(url string) error {
+		return exec.Command("open", url).Run()
+	})
+	if err != nil {
+		log.Fatal(err)
+	}
+	orgs, err := signer.ListOrganizations(ctx, tok.AccessToken)
+	if err != nil {
+		log.Fatal(err)
+	}
+	for _, org := range orgs {
+		fmt.Println(org.Name, org.Slug)
+	}
+	handle, err := signer.GetHandle(ctx, tok.AccessToken, "0b6f1c1e-0000-4000-8000-000000000001")
+	switch {
+	case errors.Is(err, signin.ErrNoPerson):
+		fmt.Println("no one has that id")
+	case err != nil:
+		log.Fatal(err)
+	case handle == "":
+		fmt.Println("they have claimed no handle")
+	default:
+		fmt.Println("@" + handle)
+	}
 }

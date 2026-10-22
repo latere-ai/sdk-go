@@ -7,6 +7,21 @@ minor version may break code, and every such change is marked **Breaking**.
 
 ## [Unreleased]
 
+### Added
+
+- Package `signin`: `UserInfo.OrgID`, the organization a sign-in acts in,
+  and `UserInfo.Handle`, the handle the person claimed.
+- Package `signin`: `ListOrganizations`, the organizations a person
+  belongs to as `Organization`s with their slug, owner, the time they
+  joined and the identity provider that manages the membership, and
+  `GetHandle`, the handle a person claimed, by their id, with
+  `ErrNoPerson` for an id that names no one. Both read the sign-in
+  service's own records with the sign-in's access token, need no client
+  id, and never follow a redirect.
+- Package `signin`: `Error.Description` holds the message of a refusal the
+  sign-in service answers as `{"error", "message"}`, as its own records
+  do.
+
 ## [0.7.0] - 2026-10-22
 
 ### Added

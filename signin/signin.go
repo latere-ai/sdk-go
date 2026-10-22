@@ -5,7 +5,10 @@
 // standard OAuth 2.0 and OpenID Connect: in their browser from a desktop
 // app (Browser), or with a code they enter on another device from a
 // terminal (Device). It then keeps the sign-in fresh (TokenSource), says
-// who signed in (UserInfo), and ends it (Revoke).
+// who signed in (UserInfo), and ends it (Revoke). With the same sign-in it
+// reads the sign-in service's own records: the organizations the person
+// belongs to (ListOrganizations) and the handle another person claimed
+// (GetHandle).
 //
 // A sign-in's token opens the sign-in service only. To call the API as the
 // person, exchange it for API tokens with latere.NewActorTokens:
@@ -104,12 +107,14 @@ type endpoints struct {
 	Revocation    string `json:"revocation_endpoint"`
 }
 
-// Error is an error the sign-in service answered with, in the OAuth form
-// {"error", "error_description"}.
+// Error is an error the sign-in service answered with: in the OAuth form
+// {"error", "error_description"} from its sign-in endpoints, and as
+// {"error", "message"} from its own records, which ListOrganizations and
+// GetHandle read.
 type Error struct {
 	// StatusCode is the response's HTTP status.
 	StatusCode int
-	// Code is the OAuth error code, such as "invalid_grant".
+	// Code is the error's code, such as "invalid_grant" or "not_found".
 	Code string
 	// Description explains the error, when the service did.
 	Description string
@@ -197,10 +202,17 @@ func (c *Config) discover(ctx context.Context) (*endpoints, error) {
 	return &e, nil
 }
 
-// do sends req and decodes a 2xx JSON answer into out, which may be nil.
-// An error answer becomes an *Error.
+// do sends req with the Config's client and decodes a 2xx JSON answer into
+// out, which may be nil. An error answer becomes an *Error.
 func (c *Config) do(req *http.Request, out any) error {
-	resp, err := c.httpClient().Do(req)
+	return send(c.httpClient(), req, out)
+}
+
+// send sends req with hc and decodes a 2xx JSON answer into out, which may
+// be nil. Any other answer, a redirect hc did not follow included, becomes
+// an *Error.
+func send(hc *http.Client, req *http.Request, out any) error {
+	resp, err := hc.Do(req)
 	if err != nil {
 		return err
 	}
@@ -214,13 +226,19 @@ func (c *Config) do(req *http.Request, out any) error {
 		return fmt.Errorf("reading the %d answer: %w", resp.StatusCode, err)
 	}
 	if resp.StatusCode/100 != 2 {
+		// The OAuth endpoints answer {"error", "error_description"}; the
+		// service's own records answer {"error", "message"}.
 		var oe struct {
 			Error       string `json:"error"`
 			Description string `json:"error_description"`
+			Message     string `json:"message"`
 		}
 		e := &Error{StatusCode: resp.StatusCode}
 		if json.Unmarshal(body, &oe) == nil && oe.Error != "" {
 			e.Code, e.Description = oe.Error, oe.Description
+			if e.Description == "" {
+				e.Description = oe.Message
+			}
 		} else {
 			e.Code = http.StatusText(resp.StatusCode)
 		}
@@ -377,6 +395,12 @@ type UserInfo struct {
 	EmailVerified bool `json:"email_verified,omitempty"`
 	// Picture is the address of the person's picture.
 	Picture string `json:"picture,omitempty"`
+	// OrgID is the organization the sign-in acts in, which the person
+	// chose when signing in; empty for a sign-in in their own context.
+	OrgID string `json:"org_id,omitempty"`
+	// Handle is the name the person claimed, as their addresses show it;
+	// empty when they have claimed none.
+	Handle string `json:"handle,omitempty"`
 }
 
 // UserInfo returns who the access token belongs to, from the service's

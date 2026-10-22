@@ -60,7 +60,7 @@ func newIssuer(t *testing.T) *fakeIssuer {
 			oauthError(w, http.StatusUnauthorized, "invalid_token", "")
 			return
 		}
-		writeJSON(w, map[string]any{"sub": "u_1", "name": "Al", "email": "al@example.test", "email_verified": true, "picture": "https://example.test/al.png"})
+		writeJSON(w, map[string]any{"sub": "u_1", "name": "Al", "email": "al@example.test", "email_verified": true, "picture": "https://example.test/al.png", "org_id": "org_1", "handle": "al"})
 	})
 	mux.HandleFunc("POST /revoke", func(w http.ResponseWriter, r *http.Request) {
 		f.mu.Lock()
@@ -333,7 +333,7 @@ func TestUserInfoAndRevoke(t *testing.T) {
 	f := newIssuer(t)
 	c := f.config()
 	u, err := c.UserInfo(t.Context(), "access_1")
-	if err != nil || u.Subject != "u_1" || u.Email != "al@example.test" || !u.EmailVerified {
+	if err != nil || u.Subject != "u_1" || u.Email != "al@example.test" || !u.EmailVerified || u.OrgID != "org_1" || u.Handle != "al" {
 		t.Errorf("UserInfo: %+v, %v", u, err)
 	}
 	var oe *Error

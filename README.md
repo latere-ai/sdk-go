@@ -824,6 +824,13 @@ if err != nil {
 cfg, err := latere.NewConfig(latere.WithTokenSource(tokens))
 ```
 
+With the same sign-in, before it is exchanged, `UserInfo` says who signed
+in and the organization they act in, `ListOrganizations` lists the
+organizations they belong to, and `GetHandle` reads the handle another
+person claimed, by the id the sign-in service names them by. These two read
+the sign-in service's own records and need no client id; a token for the
+API is refused there with 401.
+
 This needs a client id that Latere registers for your program;
 registration is not self-service yet. To ask for one, write to
 [contact@latere.ai](mailto:contact@latere.ai) with your program's name,

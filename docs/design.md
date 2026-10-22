@@ -548,6 +548,15 @@ device and polls until they do, slowing down when the service asks.
 new token to a callback, so a program can store it where it keeps
 secrets. Programs that only use keys never import the package.
 
+The sign-in service also keeps records of its own that a sign-in reads:
+the organizations a person belongs to and the handles people claimed.
+`ListOrganizations` and `GetHandle` read them with the sign-in's access
+token, at the service's root rather than through discovery, and answer a
+redirect instead of following it, so that token goes to the sign-in
+service alone. The service answers its records' refusals as
+`{"error", "message"}` rather than OAuth's `error_description`, and
+`Error` reads both.
+
 Both flows need a client that Latere registers, with the API among its
 audiences, until registration is self-service; the package documentation
 says how to ask for one and what to register.

@@ -444,6 +444,18 @@ func TestRequestsFitTheirSchemas(t *testing.T) {
 			return err
 		}, s["CreateSessionRequest"], ""},
 		{"ForkSession, least", func() error { _, err := c.ForkSession(ctx, "ses_1", &ForkSessionParams{}); return err }, s["ForkSessionRequest"], ""},
+		{"ForkSession, a copy at a turn's end", func() error {
+			_, err := c.ForkSession(ctx, "ses_1", &ForkSessionParams{AtSeq: 5, Untitled: true, NewTree: true, Attended: true})
+			return err
+		}, s["ForkSessionRequest"], ""},
+		{"ForkSession, an edit that keeps a file", func() error {
+			_, err := c.ForkSession(ctx, "ses_1", &ForkSessionParams{BeforeSeq: 3, Message: text, Attachments: []NewAttachment{{Name: "a.txt", Blob: "sha256:ab"}}})
+			return err
+		}, s["ForkSessionRequest"], ""},
+		{"SendMessage, asked and answering", func() error {
+			_, err := c.SendMessage(ctx, "ses_1", &SendMessageParams{Content: text, Askable: true, Answers: "ask_1", Attachments: []NewAttachment{{Name: "a.txt", Blob: "sha256:ab"}}})
+			return err
+		}, nil, "user.message"},
 		{"ResumeSession, least", func() error { _, err := c.ResumeSession(ctx, "ses_1", nil); return err }, s["ResumeSessionRequest"], ""},
 		{"UpdateSession, the agent's reasoning", func() error {
 			_, err := c.UpdateSession(ctx, "ses_1", &UpdateSessionParams{Model: &ModelChange{AgentReasoning: true}})

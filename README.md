@@ -521,6 +521,18 @@ _, err = ag.SendMessage(ctx, id, &agents.SendMessageParams{
 })
 ```
 
+An edited message is a fork of the session just before the message it
+replaces, with the new message in the same call. A file the old message
+carried is kept by its `Blob`, without its bytes being sent again:
+
+```go
+_, err = ag.ForkSession(ctx, id, &agents.ForkSessionParams{
+	BeforeSeq:   old.Seq,
+	Message:     []agents.ContentBlock{agents.Text("Summarize the talk in French.")},
+	Attachments: []agents.NewAttachment{{Name: "talk.mp4", Blob: kept.Blob}},
+})
+```
+
 ## Evals
 
 Package `evals` reads Evals, the platform's experiments on agents and on

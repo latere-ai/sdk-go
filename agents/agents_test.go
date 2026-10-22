@@ -610,6 +610,8 @@ func TestSendingAMessageWithPicturesAndFiles(t *testing.T) {
 		"source and type": {Name: "a", MediaType: "text/plain", Source: &agents.AttachmentSource{Owner: "me", Path: "files/a"}},
 		"long name":       {Name: strings.Repeat("n", agents.MaxAttachmentName+1), Data: []byte("x")},
 		"long path":       {Name: "a", Source: &agents.AttachmentSource{Owner: "me", Path: "files/" + strings.Repeat("p", agents.MaxSourcePath)}},
+		"data and blob":   {Name: "a", Data: []byte("x"), Blob: "sha256:aa"},
+		"blob and type":   {Name: "a", MediaType: "text/plain", Blob: "sha256:aa"},
 	} {
 		if _, err := s.SendMessage(t.Context(), "ses_1", &agents.SendMessageParams{Attachments: []agents.NewAttachment{a}}); err == nil {
 			t.Errorf("%s: no error", name)
@@ -636,5 +638,102 @@ func TestAMessageRecordsItsFiles(t *testing.T) {
 	if len(msg.Attachments) != 2 || msg.Attachments[0].Source == nil || msg.Attachments[0].Source.Path != "files/Uploads/talk.mp4" || msg.Attachments[0].Size != 2048 ||
 		msg.Attachments[1].Source != nil || !msg.Attachments[1].Inline {
 		t.Errorf("attachments %+v", msg.Attachments)
+	}
+}
+
+// A message says the program shows the platform's ask, or names the ask
+// it answers, and may keep a file a message of the session carried by its
+// blob.
+func TestSendingAMessageThatAsksOrAnswers(t *testing.T) {
+	s, calls := fakeAPI(t, map[string]string{"POST /v1/agents/sessions/ses_1/events": event})
+	if _, err := s.SendMessage(t.Context(), "ses_1", &agents.SendMessageParams{Content: []agents.ContentBlock{agents.Text("Plan it")}, Askable: true, IdempotencyKey: "k1"}); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := s.SendMessage(t.Context(), "ses_1", &agents.SendMessageParams{
+		Content:     []agents.ContentBlock{agents.Text("Plan it")},
+		Attachments: []agents.NewAttachment{{Name: "plan.pdf", Blob: "sha256:ab"}},
+		Answers:     "ask_1",
+	}); err != nil {
+		t.Fatal(err)
+	}
+	want := []string{
+		`{"payload":{"askable":true,"content":[{"text":"Plan it","type":"text"}]},"type":"user.message"}`,
+		`{"payload":{"answers":"ask_1","attachments":[{"blob":"sha256:ab","name":"plan.pdf"}],"content":[{"text":"Plan it","type":"text"}]},"type":"user.message"}`,
+	}
+	for i, w := range want {
+		got, err := json.Marshal((*calls)[i].Body)
+		if err != nil {
+			t.Fatal(err)
+		}
+		if string(got) != w {
+			t.Errorf("message %d sent %s, want %s", i, got, w)
+		}
+	}
+	if (*calls)[0].Key != "k1" {
+		t.Errorf("the message's key is %q, want k1", (*calls)[0].Key)
+	}
+	text := []agents.ContentBlock{agents.Text("x")}
+	for name, p := range map[string]*agents.SendMessageParams{
+		"answers past the bound":  {Content: text, Answers: strings.Repeat("a", agents.MaxAnswersBytes+1)},
+		"answers with space":      {Content: text, Answers: " ask_1"},
+		"answers with a new line": {Content: text, Answers: "ask_1\n"},
+	} {
+		if _, err := s.SendMessage(t.Context(), "ses_1", p); err == nil {
+			t.Errorf("%s: no error", name)
+		}
+	}
+	if len(*calls) != 2 {
+		t.Errorf("%d messages sent, want the 2 that hold", len(*calls))
+	}
+}
+
+// A fork names its point at a turn's end or before a message, starts a
+// tree of its own or joins its parent's, carries a title, none, or its
+// parent's, and sends its first message with the files it keeps.
+func TestForkingAtAPointWithAMessage(t *testing.T) {
+	s, calls := fakeAPI(t, map[string]string{"POST /v1/agents/sessions/ses_1/fork": session})
+	if _, err := s.ForkSession(t.Context(), "ses_1", &agents.ForkSessionParams{AtSeq: 12, Title: "Notes again", NewTree: true, Attended: true, IdempotencyKey: "k1:copy"}); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := s.ForkSession(t.Context(), "ses_1", &agents.ForkSessionParams{
+		BeforeSeq:   8,
+		Untitled:    true,
+		Message:     []agents.ContentBlock{agents.Text("Edited")},
+		Attachments: []agents.NewAttachment{{Name: "a.txt", Blob: "sha256:ab"}, {Name: "b.txt", Data: []byte("b")}},
+	}); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := s.ForkSession(t.Context(), "ses_1", &agents.ForkSessionParams{Attachments: []agents.NewAttachment{{Name: "c.txt", Blob: "sha256:cd"}}}); err != nil {
+		t.Fatal(err)
+	}
+	want := []string{
+		`{"at_seq":12,"attended":true,"title":"Notes again","tree":"new"}`,
+		`{"before_seq":8,"message":{"attachments":[{"blob":"sha256:ab","name":"a.txt"},{"data":"Yg==","name":"b.txt"}],"content":[{"text":"Edited","type":"text"}]},"title":""}`,
+		`{"message":{"attachments":[{"blob":"sha256:cd","name":"c.txt"}],"content":[]}}`,
+	}
+	for i, w := range want {
+		got, err := json.Marshal((*calls)[i].Body)
+		if err != nil {
+			t.Fatal(err)
+		}
+		if string(got) != w {
+			t.Errorf("fork %d sent %s, want %s", i, got, w)
+		}
+	}
+	if (*calls)[0].Key != "k1:copy" {
+		t.Errorf("the fork's key is %q, want k1:copy", (*calls)[0].Key)
+	}
+	for name, p := range map[string]*agents.ForkSessionParams{
+		"both points":     {AtSeq: 3, BeforeSeq: 4},
+		"title and none":  {Title: "T", Untitled: true},
+		"a file of none":  {Attachments: []agents.NewAttachment{{Name: "a"}}},
+		"a blob and type": {Attachments: []agents.NewAttachment{{Name: "a", Blob: "sha256:ab", MediaType: "text/plain"}}},
+	} {
+		if _, err := s.ForkSession(t.Context(), "ses_1", p); err == nil {
+			t.Errorf("%s: no error", name)
+		}
+	}
+	if len(*calls) != 3 {
+		t.Errorf("%d forks sent, want the 3 that hold", len(*calls))
 	}
 }

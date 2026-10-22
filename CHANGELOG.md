@@ -21,6 +21,16 @@ minor version may break code, and every such change is marked **Breaking**.
 - Package `signin`: `Error.Description` holds the message of a refusal the
   sign-in service answers as `{"error", "message"}`, as its own records
   do.
+- Package `agents`: `SendMessageParams.Askable`, a message whose program
+  shows the person the ask the platform may hold it for, and
+  `SendMessageParams.Answers`, the ask an earlier copy of the message was
+  refused with, which this copy answers, at most `MaxAnswersBytes`.
+- Package `agents`: `NewAttachment.Blob`, a file a message of the session
+  already carried, kept by its digest without its bytes being sent again.
+- Package `agents`: `ForkSessionParams.AtSeq`, a fork at the end of a
+  given turn; `Untitled`, a fork with no title where an empty `Title`
+  gives it the parent's; `NewTree`, a fork that starts a conversation of
+  its own; and `Attachments`, the files of the fork's first message.
 
 ## [0.7.0] - 2026-10-22
 

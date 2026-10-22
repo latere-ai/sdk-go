@@ -12,6 +12,7 @@ import (
 	"net/http"
 	"net/url"
 	"strconv"
+	"strings"
 
 	"latere.ai/x/sdk-go/latere"
 )
@@ -403,15 +404,36 @@ func (c *Client) action(ctx context.Context, id, route string, body any) (*Sessi
 	return &out, nil
 }
 
-// ForkSessionParams describes a fork of a session.
+// ForkSessionParams describes a fork of a session. A nil
+// *ForkSessionParams forks at the last turn boundary.
 type ForkSessionParams struct {
-	// BeforeSeq forks at the turn boundary before this sequence; zero forks
-	// at the end of the log.
+	// BeforeSeq forks just before the person's message at this sequence,
+	// to send an edited message in its place as Message; zero forks at a
+	// turn boundary.
 	BeforeSeq int64
-	// Title names the new session.
+	// AtSeq forks at the turn boundary at this sequence, the session.status
+	// that ended a turn, so the new session holds the log to the end of
+	// that turn; zero forks at the last boundary. Set it or BeforeSeq, not
+	// both.
+	AtSeq int64
+	// Title names the new session. Empty gives it the forked session's
+	// title marked as its continuation, as "Notes (continued)".
 	Title string
-	// Message is the new session's first message.
+	// Untitled gives the new session no title at all, where an empty Title
+	// gives it the forked session's. Set it or Title, not both.
+	Untitled bool
+	// Message is the new session's first message, sent in the same call.
 	Message []ContentBlock
+	// Attachments are the files that message carries. A file a message of
+	// the forked session attached is kept by its Blob, without its bytes
+	// being sent again.
+	Attachments []NewAttachment
+	// NewTree starts a fork tree of the new session's own, a new
+	// conversation from the fork point: its root is its own id, and a list
+	// by the forked session's root leaves it out. Its parent still names
+	// the session it was forked from. False joins the forked session's
+	// tree.
+	NewTree bool
 	// Attended says a person follows the new session.
 	Attended bool
 	// IdempotencyKey makes a repeated fork return the first fork; one is
@@ -428,15 +450,35 @@ func (c *Client) ForkSession(ctx context.Context, id string, params *ForkSession
 	if params == nil {
 		params = &ForkSessionParams{}
 	}
+	switch {
+	case params.BeforeSeq > 0 && params.AtSeq > 0:
+		return nil, errors.New("agents: ForkSessionParams sets both BeforeSeq and AtSeq")
+	case params.Untitled && params.Title != "":
+		return nil, errors.New("agents: ForkSessionParams sets both Title and Untitled")
+	}
+	if err := checkAttachments("ForkSessionParams", params.Attachments); err != nil {
+		return nil, err
+	}
 	body := map[string]any{}
 	if params.BeforeSeq > 0 {
 		body["before_seq"] = params.BeforeSeq
 	}
-	if params.Title != "" {
-		body["title"] = params.Title
+	if params.AtSeq > 0 {
+		body["at_seq"] = params.AtSeq
 	}
-	if len(params.Message) > 0 {
-		body["message"] = map[string]any{"content": params.Message}
+	switch {
+	case params.Title != "":
+		body["title"] = params.Title
+	case params.Untitled:
+		// The API reads an empty title as none, and an absent one as the
+		// forked session's.
+		body["title"] = ""
+	}
+	if len(params.Message) > 0 || len(params.Attachments) > 0 {
+		body["message"] = messageBody(params.Message, params.Attachments)
+	}
+	if params.NewTree {
+		body["tree"] = "new"
 	}
 	if params.Attended {
 		body["attended"] = true
@@ -511,14 +553,28 @@ type SendMessageParams struct {
 	// Attachments are the files the message carries, which the agent
 	// finds in its working directory.
 	Attachments []NewAttachment
+	// Askable says your program shows the person an ask the platform may
+	// put on the message, such as whether a long task should run at a
+	// level that takes longer: the platform may then hold the message and
+	// answer it with the ask as a refusal, rather than run it. A message
+	// without it is never held to ask.
+	Askable bool
+	// Answers names the ask a refusal of an earlier copy of the message
+	// carried, which this copy is sent in answer to, so it is not asked
+	// again: at most MaxAnswersBytes, with no space around it.
+	Answers string
 	// IdempotencyKey makes a repeated send deliver the message once; one is
 	// generated when it is empty.
 	IdempotencyKey string
 }
 
-// A NewAttachment is a file a message carries: its bytes in Data, or a
-// file of the sender's Storage by its Source, which the platform reads
-// when the message is sent. Set one of the two.
+// MaxAnswersBytes is the longest SendMessageParams.Answers, in bytes.
+const MaxAnswersBytes = 512
+
+// A NewAttachment is a file a message carries: its bytes in Data, a file
+// of the sender's Storage by its Source, which the platform reads when the
+// message is sent, or a file a message of the session already carried by
+// its Blob. Set one of the three.
 type NewAttachment struct {
 	// Name is the file's name: one path segment, at most
 	// MaxAttachmentName bytes, and no other file of the message's.
@@ -533,6 +589,12 @@ type NewAttachment struct {
 	// Source names a file of the sender's Storage, at most MaxSourceBytes:
 	// how a file too large for Data goes, once it is uploaded.
 	Source *AttachmentSource `json:"source,omitempty"`
+	// Blob names a file a message of the session already carried, by the
+	// Blob of its Attachment, which the platform keeps with that file's
+	// media type and size without its bytes being sent again: how an
+	// edited message, sent with ForkSession, keeps the files of the message
+	// it replaces. A Blob names no MediaType.
+	Blob string `json:"blob,omitempty"`
 }
 
 // The limits the hosted platform holds a message to. The images and the
@@ -569,32 +631,64 @@ func (c *Client) SendMessage(ctx context.Context, id string, params *SendMessage
 	if params == nil || len(params.Content) == 0 && len(params.Attachments) == 0 {
 		return nil, errors.New("agents: SendMessageParams holds no Content and no Attachments")
 	}
-	for i, a := range params.Attachments {
-		if a.Name == "" {
-			return nil, fmt.Errorf("agents: SendMessageParams.Attachments[%d] has no Name", i)
-		}
-		if (a.Source == nil) == (a.Data == nil) {
-			return nil, fmt.Errorf("agents: SendMessageParams.Attachments[%d] (%s) sets one of Data and Source", i, a.Name)
-		}
-		if len(a.Name) > MaxAttachmentName {
-			return nil, fmt.Errorf("agents: SendMessageParams.Attachments[%d]'s Name is %d bytes, at most %d", i, len(a.Name), MaxAttachmentName)
-		}
-		if a.Source != nil && a.MediaType != "" {
-			return nil, fmt.Errorf("agents: SendMessageParams.Attachments[%d] (%s) names a MediaType beside its Source, whose type is the one Storage keeps", i, a.Name)
-		}
-		if a.Source != nil && len(a.Source.Path) > MaxSourcePath {
-			return nil, fmt.Errorf("agents: SendMessageParams.Attachments[%d]'s Source.Path is %d bytes, at most %d", i, len(a.Source.Path), MaxSourcePath)
-		}
+	if err := checkAttachments("SendMessageParams", params.Attachments); err != nil {
+		return nil, err
 	}
-	content := params.Content
+	switch {
+	case len(params.Answers) > MaxAnswersBytes:
+		return nil, fmt.Errorf("agents: SendMessageParams.Answers is %d bytes, at most %d", len(params.Answers), MaxAnswersBytes)
+	case params.Answers != strings.TrimSpace(params.Answers):
+		return nil, errors.New("agents: SendMessageParams.Answers has space around it")
+	}
+	payload := messageBody(params.Content, params.Attachments)
+	if params.Askable {
+		payload["askable"] = true
+	}
+	if params.Answers != "" {
+		payload["answers"] = params.Answers
+	}
+	return c.send(ctx, id, EventUserMessage, payload, params.IdempotencyKey)
+}
+
+// messageBody is a message as the API takes it: its content, an empty
+// list when it holds none, and its attachments when it carries any.
+func messageBody(content []ContentBlock, attachments []NewAttachment) map[string]any {
 	if content == nil {
 		content = []ContentBlock{}
 	}
-	payload := map[string]any{"content": content}
-	if len(params.Attachments) > 0 {
-		payload["attachments"] = params.Attachments
+	body := map[string]any{"content": content}
+	if len(attachments) > 0 {
+		body["attachments"] = attachments
 	}
-	return c.send(ctx, id, EventUserMessage, payload, params.IdempotencyKey)
+	return body
+}
+
+// checkAttachments returns an error naming the first file of a message,
+// in the params of name, that the API would refuse for its shape.
+func checkAttachments(name string, attachments []NewAttachment) error {
+	for i, a := range attachments {
+		set := 0
+		for _, given := range []bool{a.Data != nil, a.Source != nil, a.Blob != ""} {
+			if given {
+				set++
+			}
+		}
+		switch {
+		case a.Name == "":
+			return fmt.Errorf("agents: %s.Attachments[%d] has no Name", name, i)
+		case set != 1:
+			return fmt.Errorf("agents: %s.Attachments[%d] (%s) sets one of Data, Source and Blob", name, i, a.Name)
+		case len(a.Name) > MaxAttachmentName:
+			return fmt.Errorf("agents: %s.Attachments[%d]'s Name is %d bytes, at most %d", name, i, len(a.Name), MaxAttachmentName)
+		case a.Source != nil && a.MediaType != "":
+			return fmt.Errorf("agents: %s.Attachments[%d] (%s) names a MediaType beside its Source, whose type is the one Storage keeps", name, i, a.Name)
+		case a.Blob != "" && a.MediaType != "":
+			return fmt.Errorf("agents: %s.Attachments[%d] (%s) names a MediaType beside its Blob, whose type is the one its first message kept", name, i, a.Name)
+		case a.Source != nil && len(a.Source.Path) > MaxSourcePath:
+			return fmt.Errorf("agents: %s.Attachments[%d]'s Source.Path is %d bytes, at most %d", name, i, len(a.Source.Path), MaxSourcePath)
+		}
+	}
+	return nil
 }
 
 // Interrupt stops a session's running turn and returns the event the

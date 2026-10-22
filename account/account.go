@@ -1,10 +1,14 @@
 // Copyright 2026 Latere AI
 // SPDX-License-Identifier: Apache-2.0
 
-// Package account reads what the Latere API knows about the person a
-// request acts for, and that no single capability owns: the Effort levels a
-// session can run at, the wallet turns are paid from, preferences, pins,
-// the person's computers, and the labels a create in Environments carries.
+// Package account reads and changes what the Latere API knows about the
+// person a request acts for, and that no single capability owns: the
+// Effort levels a session can run at, the wallet turns are paid from and
+// the payment pages that add to it, preferences with their sites, pins
+// and bookmarks, the links that share a conversation, the person's
+// computers, where the installation keeps sessions and the data terms of
+// the models that ran them, what brought a person at sign-in, and the
+// labels a create in Environments carries.
 //
 //	cfg, err := latere.NewConfig() // the key in LATERE_KEY
 //	if err != nil {
@@ -388,6 +392,24 @@ type Network struct {
 	PackageManagers []string `json:"package_managers"`
 	// MaxDomains is the most sites the context holds.
 	MaxDomains int `json:"max_domains"`
+
+	raw json.RawMessage
+}
+
+// RawJSON returns the JSON the API answered for the network section, with
+// every field, including those this package does not model; nil for a
+// Network the program built itself.
+func (n *Network) RawJSON() json.RawMessage { return n.raw }
+
+// UnmarshalJSON decodes the network section and keeps the JSON for
+// RawJSON.
+func (n *Network) UnmarshalJSON(b []byte) error {
+	type plain Network
+	if err := json.Unmarshal(b, (*plain)(n)); err != nil {
+		return err
+	}
+	n.raw = keep(b)
+	return nil
 }
 
 // Sharing is whether conversations may be shared by link.
@@ -464,6 +486,23 @@ type Bookmarks struct {
 	MaxPerSession int `json:"max_per_session"`
 	// MaxSessions is the most sessions a context holds bookmarks in.
 	MaxSessions int `json:"max_sessions"`
+
+	raw json.RawMessage
+}
+
+// RawJSON returns the JSON the API answered for the bookmarks, with every
+// field, including those this package does not model; nil for a Bookmarks
+// the program built itself.
+func (b *Bookmarks) RawJSON() json.RawMessage { return b.raw }
+
+// UnmarshalJSON decodes the bookmarks and keeps the JSON for RawJSON.
+func (b *Bookmarks) UnmarshalJSON(data []byte) error {
+	type plain Bookmarks
+	if err := json.Unmarshal(data, (*plain)(b)); err != nil {
+		return err
+	}
+	b.raw = keep(data)
+	return nil
 }
 
 // DataPreferences hold a person's data retention setting.

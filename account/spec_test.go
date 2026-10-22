@@ -106,6 +106,15 @@ func TestModelsMatchTheSchemas(t *testing.T) {
 		"DeviceNetwork":       {account.DeviceNetwork{}, device.Properties["network"]},
 		"EnvironmentsContext": {account.EnvironmentsContext{}, s["EnvironmentsContext"]},
 		"Tenant":              {account.Tenant{}, s["EnvironmentsContext"].Properties["tenant"]},
+		"Share":               {account.Share{}, s["Share"]},
+		"Checkout":            {account.Checkout{}, s["Checkout"]},
+		"StartCheckoutParams": {account.StartCheckoutParams{}, s["CheckoutRequest"]},
+		"DataPlaces":          {account.DataPlaces{}, s["DataPlaces"]},
+		"Place":               {account.Place{}, s["Place"]},
+		"ModelDataTerms":      {account.ModelDataTerms{}, s["ModelDataTerms"]},
+		"ModelTerms":          {account.ModelTerms{}, s["ModelTerms"]},
+		"ServingProvider":     {account.ServingProvider{}, s["ServingProvider"]},
+		"RecordArrivalParams": {account.RecordArrivalParams{}, requestSchema(t, d, "put", "/v1/account/arrival")},
 	}
 	for name, c := range cases {
 		if c.schema == nil {
@@ -145,6 +154,9 @@ func TestModelsReadEveryField(t *testing.T) {
 		"EffortLevel": account.EffortLevel{}, "Wallet": account.Wallet{}, "Preferences": account.Preferences{},
 		"Device": account.Device{}, "Pins": account.Pins{}, "Network": account.Network{}, "Price": account.Price{},
 		"EnvironmentsContext": account.EnvironmentsContext{}, "EnvironmentsContext.tenant": account.Tenant{},
+		"Bookmarks": account.Bookmarks{}, "Share": account.Share{}, "Checkout": account.Checkout{},
+		"CheckoutRequest": account.StartCheckoutParams{}, "DataPlaces": account.DataPlaces{}, "Place": account.Place{},
+		"ModelDataTerms": account.ModelDataTerms{}, "ModelTerms": account.ModelTerms{}, "ServingProvider": account.ServingProvider{},
 	} {
 		fields := jsonFields(reflect.TypeOf(model))
 		sch := s[name]
@@ -172,6 +184,23 @@ func TestEndpointsAreInTheDocument(t *testing.T) {
 		{"patch", "/v1/account/devices/{id}"},
 		{"delete", "/v1/account/devices/{id}"},
 		{"get", "/v1/account/environments/context"},
+		{"get", "/v1/account/shares"},
+		{"post", "/v1/account/shares"},
+		{"patch", "/v1/account/shares/{share_id}"},
+		{"delete", "/v1/account/shares/{share_id}"},
+		{"post", "/v1/account/wallet/checkout"},
+		{"get", "/v1/account/data"},
+		{"get", "/v1/account/data/models"},
+		{"patch", "/v1/account/preferences"},
+		{"put", "/v1/account/preferences/network/domains/{domain}"},
+		{"delete", "/v1/account/preferences/network/domains/{domain}"},
+		{"put", "/v1/account/preferences/bookmarks/{session_id}/{seq}"},
+		{"delete", "/v1/account/preferences/bookmarks/{session_id}/{seq}"},
+		{"put", "/v1/account/preferences/pins/apps/{app_id}"},
+		{"delete", "/v1/account/preferences/pins/apps/{app_id}"},
+		{"put", "/v1/account/preferences/pins/projects/{project_id}"},
+		{"delete", "/v1/account/preferences/pins/projects/{project_id}"},
+		{"put", "/v1/account/arrival"},
 	} {
 		if _, ok := d.Paths[e.path][e.method]; !ok {
 			t.Errorf("%s %s is not in the document", strings.ToUpper(e.method), e.path)

@@ -6,6 +6,7 @@ package storage_test
 import (
 	"bytes"
 	"context"
+	"errors"
 	"fmt"
 	"io"
 	"log"
@@ -124,5 +125,26 @@ func ExampleClient_ListSharedWithMe() {
 		if info, err := c.StatFile(ctx, g.Owner, g.PathPrefix); err == nil {
 			fmt.Println("a file of", info.Size, "bytes")
 		}
+	}
+}
+
+// Renaming a file, and telling a taken name from another failure.
+func ExampleClient_MoveFile() {
+	f, err := client().MoveFile(context.Background(), storage.Me, "files/notes/draft.md", "files/notes/talk.md")
+	if errors.Is(err, latere.ErrConflict) {
+		fmt.Println("a file is already at files/notes/talk.md")
+		return
+	}
+	if err != nil {
+		log.Fatal(err)
+	}
+	fmt.Println("moved to", f.Path)
+}
+
+// Removing a folder and every file under it for good, not to the trash.
+func ExampleClient_DeleteFolder() {
+	err := client().DeleteFolder(context.Background(), storage.Me, "files/scratch", &storage.DeleteOptions{Permanent: true})
+	if err != nil {
+		log.Fatal(err)
 	}
 }

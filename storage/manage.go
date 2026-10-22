@@ -146,11 +146,8 @@ func (c *Client) DeleteFile(ctx context.Context, owner, path string, opts *Delet
 // DeleteFolder moves the folder at path in owner's space, with every file
 // under it, to the trash in one change, or with opts.Permanent removes
 // them with their versions. A folder named "files/notes" holds the files
-// under "files/notes/", never "files/notes-old". A folder with nothing
-// under it returns an error matching latere.ErrNotFound.
-//
-// As with DeleteFile, a retry after a failure on the network can meet
-// the 404 of a delete that succeeded.
+// under "files/notes/", never "files/notes-old". Deleting a folder with
+// nothing under it succeeds, so a delete is safe to repeat.
 func (c *Client) DeleteFolder(ctx context.Context, owner, path string, opts *DeleteOptions) error {
 	p, err := filePath(owner, path)
 	if err != nil {

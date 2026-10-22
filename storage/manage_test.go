@@ -171,7 +171,7 @@ func TestDeletesTrashOrRemoveAFileOrAFolder(t *testing.T) {
 
 func TestADeleteOfNothingIsNotFound(t *testing.T) {
 	srv, _ := recorder(t, http.StatusNotFound, `{"error":{"code":"not_found","message":"There is no such object."}}`)
-	if err := newClient(t, srv).DeleteFolder(context.Background(), storage.Me, "files/none", nil); !errors.Is(err, latere.ErrNotFound) {
+	if err := newClient(t, srv).DeleteFile(context.Background(), storage.Me, "files/none.txt", nil); !errors.Is(err, latere.ErrNotFound) {
 		t.Errorf("err = %v, want ErrNotFound", err)
 	}
 }

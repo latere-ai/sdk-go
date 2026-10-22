@@ -160,3 +160,14 @@ func ExampleReadUnverifiedClaims() {
 	}
 	fmt.Println(claims.Subject, "until", claims.Expiry.Format(time.RFC3339))
 }
+
+// A server that shows a shared conversation to a visitor who has not
+// signed in holds no credential of its own: the API's public reads answer
+// a Config that sends none.
+func ExampleWithoutCredentials() {
+	cfg, err := latere.NewConfig(latere.WithoutCredentials())
+	if err != nil {
+		log.Fatal(err)
+	}
+	fmt.Println(cfg.BaseURL())
+}

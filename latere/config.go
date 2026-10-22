@@ -195,10 +195,17 @@ func WithTokenSource(ts TokenSource) Option {
 // program that holds none, such as a server that shows a shared
 // conversation to a visitor who has not signed in. Only the API's public
 // reads answer such a request: a conversation's share that anyone may
-// read, a site anyone may open and its pictures, a site's icon. Any other
+// read, an app anyone may open and its pictures, a site's icon. Any other
 // call is refused with 401, an error matching ErrUnauthorized. It takes
 // the place of WithKey, WithTokenSource and LATERE_KEY, whichever came
 // last wins, and a request that sets SendKey is refused before it is sent.
+//
+// The public reads are limited by the client address the API reads, so a
+// server that reads for its visitors counts them all as itself. Where the
+// installation takes the reader's address from an X-Real-IP header the
+// server sends, as one reached inside its own network may, a
+// Hooks.BeforeRequest given with WithHooks sets the header from the
+// request's context, which carries the ctx the call was made with.
 func WithoutCredentials() Option {
 	return func(c *Config) error {
 		c.tokens, c.tokensSet, c.noCredentials = nil, true, true

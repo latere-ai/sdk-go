@@ -91,3 +91,34 @@ func TestTheLastCredentialOptionWins(t *testing.T) {
 		}
 	}
 }
+
+// visitorKey carries a visitor's address in a call's context.
+type visitorKey struct{}
+
+// A hook sees the context the call was made with, so a server forwards
+// each visitor's address on the reads it makes for them.
+func TestAHookForwardsTheVisitorFromTheContext(t *testing.T) {
+	var got atomic.Value
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		got.Store(r.Header.Get("X-Real-IP"))
+		_, _ = io.WriteString(w, `{}`)
+	}))
+	defer srv.Close()
+	c, err := NewConfig(WithBaseURL(srv.URL), WithoutCredentials(), WithHooks(Hooks{
+		BeforeRequest: func(req *http.Request) {
+			if v, ok := req.Context().Value(visitorKey{}).(string); ok {
+				req.Header.Set("X-Real-IP", v)
+			}
+		},
+	}))
+	if err != nil {
+		t.Fatal(err)
+	}
+	ctx := context.WithValue(context.Background(), visitorKey{}, "203.0.113.7")
+	if err := c.Do(ctx, &Request{Method: http.MethodGet, Path: "/v1/shares/tok"}, nil); err != nil {
+		t.Fatal(err)
+	}
+	if got.Load() != "203.0.113.7" {
+		t.Errorf("X-Real-IP = %q, want the visitor's address", got.Load())
+	}
+}

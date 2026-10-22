@@ -77,6 +77,10 @@
 // makes a managed agent exist with account.ApplyManagedAgent. A routine's
 // runs are the sessions whose TriggerID is its TriggerID.
 //
+// The shape is package routine's, which names the manifest, the name a key
+// makes and the checks, and imports the standard library alone, for a
+// server that applies a routine without this package's client.
+//
 // # Scope
 //
 // The package covers sessions and their events: listing, searching,

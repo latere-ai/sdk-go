@@ -20,6 +20,7 @@ they share. Import the ones you use:
 |---|---|
 | [`latere`](https://pkg.go.dev/latere.ai/x/sdk-go/latere) | The core: configuration, credentials, errors, retries, pagination |
 | [`agents`](https://pkg.go.dev/latere.ai/x/sdk-go/agents) | Sessions with agents: create, list, follow, answer, approve, end, read what they made; triggers that start them |
+| [`agents/routine`](https://pkg.go.dev/latere.ai/x/sdk-go/agents/routine) | A routine's trigger shape alone, for code that writes or reads a routine without calling the API |
 | [`connections`](https://pkg.go.dev/latere.ai/x/sdk-go/connections) | The services a person connects once, such as a calendar or an MCP server, which agents then use |
 | [`storage`](https://pkg.go.dev/latere.ai/x/sdk-go/storage) | Files in Latere Storage: upload a file of any size, read, list, and link to it |
 | [`account`](https://pkg.go.dev/latere.ai/x/sdk-go/account) | Your Effort levels, wallet, preferences, pins and computers |
@@ -182,6 +183,12 @@ names no routine matches `latere.ErrNotFound`. The agent must exist in the
 caller's context first: a program signed in as a person makes a managed
 agent exist with `account.ApplyManagedAgent`. A routine's runs are the
 sessions `ListSessions` lists with `Trigger: r.TriggerID`.
+
+The shape itself, the manifest, the name a key makes and the checks, is
+package `agents/routine`, which imports the standard library alone. A
+server that applies a routine on a person's behalf, such as one an agent
+offered and the person accepted, writes it with `routine.Manifest`, so
+what it makes is a routine every client reads as one.
 
 ### Searching
 

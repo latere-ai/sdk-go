@@ -29,6 +29,7 @@ flowchart TD
     storage --> latere
     llm --> latere
     llm --> wire[llm/wire]
+    agents --> routine[agents/routine]
     signin --> latere
     latere --> sse[internal/sse]
     app[your program] --> agents
@@ -39,6 +40,7 @@ flowchart TD
     app --> llm
     app -. a person's sign-in .-> signin
     gateway[the Lux gateway's codec] --> wire
+    server[a server that applies routines] --> routine
 ```
 
 `latere` is the core: configuration, credentials, the error type, the
@@ -310,6 +312,16 @@ language.
 
 A routine names its agent rather than assuming Latere Chat's, so a
 program can keep routines of an agent of its own in the same shape.
+
+The shape lives in `agents/routine`, which imports the standard library
+alone, as `llm/wire` holds the Lux dialect: the manifest, the name a key
+makes, reading a trigger back and the checks, with nothing that sends
+them. `agents` names its types and constants as aliases and writes and
+reads routines through it. A server writes a routine through it too:
+Topos applies a routine its agent offered once the person said yes, and
+importing `agents` would put this module's HTTP client and credentials in
+a server that applies the trigger itself. One definition, so a routine an
+agent made is listed, changed and deleted as any other.
 
 A change reads the trigger and writes it back, since the trigger
 endpoints replace a whole manifest. It writes over the trigger's JSON as

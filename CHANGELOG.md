@@ -7,6 +7,24 @@ minor version may break code, and every such change is marked **Breaking**.
 
 ## [Unreleased]
 
+### Added
+
+- Package `agents/routine`: a routine's trigger shape alone, importing the
+  standard library alone, for code that writes or reads a routine without
+  calling the API, such as a server that applies a routine an agent
+  offered once the person accepted it. `Manifest` writes the trigger,
+  `Name` makes its name from a key, `Read` reads a trigger back, `New`
+  and the `Check` functions hold the bounds, and `Cron` and
+  `ParseSchedule` write and read the schedule. `agents` writes and reads
+  routines through it, so the shape is defined once.
+
+### Changed
+
+- Package `agents`: `RoutineSchedule` and `RoutineStart` are aliases of
+  `routine.Schedule` and `routine.Start`, and the routine errors are
+  `routine`'s, so their text starts `routine:`. Matching them with
+  `errors.Is` is unchanged.
+
 ## [0.5.0] - 2026-10-21
 
 ### Added

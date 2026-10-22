@@ -7,29 +7,8 @@ minor version may break code, and every such change is marked **Breaking**.
 
 ## [Unreleased]
 
-## [0.6.0] - 2026-10-22
-
 ### Added
 
-- Package `agents/routine`: a routine's trigger shape alone, importing the
-  standard library alone, for code that writes or reads a routine without
-  calling the API, such as a server that applies a routine an agent
-  offered once the person accepted it. `Manifest` writes the trigger,
-  `Name` makes its name from a key, `Read` reads a trigger back, `New`
-  and the `Check` functions hold the bounds, and `Cron` and
-  `ParseSchedule` write and read the schedule. `agents` writes and reads
-  routines through it, so the shape is defined once.
-- Package `web`: `GetIcon` reads a site's icon through the platform, a
-  PNG of `IconSmall`, 32 pixels a side, or `IconLarge`, 64, to draw beside
-  a link to the site, as Latere Chat does. A site without an icon answers
-  nil and no error; a host the platform reads no icon for, such as
-  localhost or an IP address, returns an error matching `ErrInvalidHost`,
-  and an answer past `MaxIconBytes`, 64 KiB, one matching
-  `ErrIconTooLarge`. The request carries no credential, since the route
-  reads none.
-- Package `latere`: `Request.Anonymous` sends a request without the
-  `Config`'s credential, for a route that reads none: no token is fetched
-  for it, and a 401 is not answered by renewing one.
 - Package `account`: `DeviceNetwork.Blocked`, the hosts a computer on the
   `open` network blocks, and the `open` mode in `DeviceNetwork.Mode`'s
   docs.
@@ -100,6 +79,30 @@ minor version may break code, and every such change is marked **Breaking**.
   streams it with its media type, length and Cache-Control. An address
   the platform shows no picture for returns an error matching
   `ErrNoImage`.
+
+## [0.6.0] - 2026-10-22
+
+### Added
+
+- Package `agents/routine`: a routine's trigger shape alone, importing the
+  standard library alone, for code that writes or reads a routine without
+  calling the API, such as a server that applies a routine an agent
+  offered once the person accepted it. `Manifest` writes the trigger,
+  `Name` makes its name from a key, `Read` reads a trigger back, `New`
+  and the `Check` functions hold the bounds, and `Cron` and
+  `ParseSchedule` write and read the schedule. `agents` writes and reads
+  routines through it, so the shape is defined once.
+- Package `web`: `GetIcon` reads a site's icon through the platform, a
+  PNG of `IconSmall`, 32 pixels a side, or `IconLarge`, 64, to draw beside
+  a link to the site, as Latere Chat does. A site without an icon answers
+  nil and no error; a host the platform reads no icon for, such as
+  localhost or an IP address, returns an error matching `ErrInvalidHost`,
+  and an answer past `MaxIconBytes`, 64 KiB, one matching
+  `ErrIconTooLarge`. The request carries no credential, since the route
+  reads none.
+- Package `latere`: `Request.Anonymous` sends a request without the
+  `Config`'s credential, for a route that reads none: no token is fetched
+  for it, and a 401 is not answered by renewing one.
 
 ### Changed
 

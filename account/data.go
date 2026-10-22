@@ -10,6 +10,7 @@ import (
 	"fmt"
 	"net/http"
 	"net/url"
+	"slices"
 
 	"latere.ai/x/sdk-go/latere"
 )
@@ -135,15 +136,19 @@ type ServingProvider struct {
 // empty, or it fails before any request. A catalog that cannot be read now
 // is answered with 503 and the code "data_terms_unavailable".
 func (c *Client) GetModelDataTerms(ctx context.Context, names ...string) (*ModelDataTerms, error) {
-	if len(names) == 0 || len(names) > MaxDataTermsModels {
-		return nil, fmt.Errorf("account: GetModelDataTerms names %d models; it names 1 to %d", len(names), MaxDataTermsModels)
-	}
+	// The API counts the distinct names, so a name given twice is sent
+	// once and counted once.
 	q := url.Values{}
 	for _, n := range names {
 		if n == "" {
 			return nil, errors.New("account: GetModelDataTerms: a model's name is empty")
 		}
-		q.Add("name", n)
+		if !slices.Contains(q["name"], n) {
+			q.Add("name", n)
+		}
+	}
+	if n := len(q["name"]); n == 0 || n > MaxDataTermsModels {
+		return nil, fmt.Errorf("account: GetModelDataTerms names %d distinct models; it names 1 to %d", n, MaxDataTermsModels)
 	}
 	var out ModelDataTerms
 	if err := c.cfg.Do(ctx, &latere.Request{Method: http.MethodGet, Path: "/v1/account/data/models", Query: q}, &out); err != nil {

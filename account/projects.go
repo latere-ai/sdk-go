@@ -47,7 +47,8 @@ var (
 	// ErrAppNotInContext matches an app a project may not hold: one the
 	// caller cannot open, or one of another context than the project's.
 	// The *latere.Error's Details hold "app_id" and "reason", one of
-	// "unknown", "other_context" or "unreadable".
+	// "unknown", "other_context", "unreadable" or "no_registry", the last
+	// for an installation that keeps no record of apps.
 	ErrAppNotInContext = errors.New("account: the app is not one of the project's context that the caller can open")
 )
 
@@ -321,25 +322,17 @@ func (c *Client) UpdateProject(ctx context.Context, id string, params *UpdatePro
 // agents no longer reach the project's apps. Who may delete it is who may
 // change it, as UpdateProject says.
 //
-// Deleting a project the context no longer holds succeeds, so a deletion
-// is safe to repeat: the API answers 404 with the code
-// "project_not_found" for an id it holds no project by, the same for one
-// deleted before and one never made, and a deletion the SDK sends again
-// after a lost answer meets that 404 although the first one deleted the
-// project. A mistyped id therefore returns nil too; GetProject tells
-// whether a project is there.
+// An id the context holds no project by returns an error matching
+// latere.ErrNotFound, with the code "project_not_found": a project never
+// made, one deleted before, and one of another context, such as the
+// person's organization after they switched to their own account, all
+// answer it. A deletion is retried after a failure on the network, so a
+// retry can meet that 404 although the first attempt deleted the project.
 func (c *Client) DeleteProject(ctx context.Context, id string) error {
 	if id == "" {
 		return errNoProject
 	}
-	err := c.cfg.Do(ctx, &latere.Request{Method: http.MethodDelete, Path: projectPath(id)}, nil)
-	var apiErr *latere.Error
-	if errors.As(err, &apiErr) && apiErr.StatusCode == http.StatusNotFound && apiErr.Code == "project_not_found" {
-		// The API's own answer that it holds no such project; a 404
-		// without its envelope, such as a proxy's, is still an error.
-		return nil
-	}
-	return err
+	return c.cfg.Do(ctx, &latere.Request{Method: http.MethodDelete, Path: projectPath(id)}, nil)
 }
 
 // AddProjectApp adds an app, by its id, to a project after the apps added

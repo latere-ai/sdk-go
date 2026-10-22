@@ -222,8 +222,8 @@ func TestDeleteProject(t *testing.T) {
 	if err := c.DeleteProject(t.Context(), "prj_1"); err != nil || (*got)[0].method != http.MethodDelete || (*got)[0].path != "/v1/account/projects/prj_1" {
 		t.Errorf("delete: %v, sent %+v", err, (*got)[0])
 	}
-	if err := c.DeleteProject(t.Context(), "prj_gone"); err != nil {
-		t.Errorf("a project the context no longer holds: %v, want done", err)
+	if err := c.DeleteProject(t.Context(), "prj_gone"); !errors.Is(err, latere.ErrNotFound) {
+		t.Errorf("a project the context does not hold: %v, want ErrNotFound", err)
 	}
 	if err := c.DeleteProject(t.Context(), "prj_proxy"); !errors.Is(err, latere.ErrNotFound) {
 		t.Errorf("a 404 that is not the API's: %v, want an error", err)

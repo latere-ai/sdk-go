@@ -185,8 +185,9 @@ func (c *Client) BookmarkTurn(ctx context.Context, sessionID string, seq int64) 
 }
 
 // UnbookmarkTurn removes the bookmark of the turn at seq of a session in
-// the token's context. Removing one that is not there succeeds; an id that
-// is no session's returns an error matching latere.ErrNotFound.
+// the token's context. Removing one that is not there succeeds, whether
+// or not the id names a session; an id that is not a session id's shape
+// returns an error matching latere.ErrNotFound.
 func (c *Client) UnbookmarkTurn(ctx context.Context, sessionID string, seq int64) error {
 	p, err := bookmarkPath(sessionID, seq)
 	if err != nil {

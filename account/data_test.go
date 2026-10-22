@@ -61,6 +61,14 @@ func TestGetModelDataTerms(t *testing.T) {
 	if n := len(calls()); n != 2 {
 		t.Errorf("sent %d requests; a read past its bounds was sent", n)
 	}
+	// The API counts distinct names, so a name given twice is sent once.
+	twice := append(tooMany[:account.MaxDataTermsModels:account.MaxDataTermsModels], tooMany[0])
+	if _, err := c.GetModelDataTerms(t.Context(), twice...); err != nil {
+		t.Errorf("the most distinct models, one named twice: %v", err)
+	}
+	if q := calls()[2].Query; strings.Count(q, "name=vendor%2Fm0&") != 1 || strings.Count(q, "name=") != account.MaxDataTermsModels {
+		t.Errorf("sent the query %q", q)
+	}
 }
 
 // A checkout is sent once: the API takes no key, and a repeat would open a

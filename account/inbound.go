@@ -159,7 +159,7 @@ func inletPath(triggerID, kind string) string {
 // ListTriggerInbound returns whether the installation receives email, and
 // the caller's triggers that have a link or an address. A link is listed
 // without its secret; an address is listed whole, since a person forwards
-// to it again. A key's token lists the triggers its grants cover
+// to it again, and only while the installation receives email. A key's token lists the triggers its grants cover
 // "topos:trigger.update" on.
 //
 // Triggers are applied in the personal context alone: a token that names
@@ -236,10 +236,9 @@ func (c *Client) IssueTriggerAddress(ctx context.Context, triggerID string) (*Tr
 }
 
 // RemoveTriggerAddress turns the trigger's email address off, so mail to
-// it starts nothing. Turning off an address that is not there succeeds.
-// An installation that receives no email returns an error matching
-// ErrMailNotEnabled, and a trigger the caller does not hold one matching
-// latere.ErrNotFound.
+// it starts nothing. Turning off an address that is not there succeeds,
+// as it does on an installation that receives no email. A trigger the
+// caller does not hold returns an error matching latere.ErrNotFound.
 func (c *Client) RemoveTriggerAddress(ctx context.Context, triggerID string) error {
 	if triggerID == "" {
 		return errNoTrigger

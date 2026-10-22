@@ -3,15 +3,15 @@
 
 // Package web reads what the Latere platform fetches from the web for a
 // program that shows an answer, so that the program loads nothing from a
-// third party: a site's icon, to draw beside a link to it.
+// third party: a site's icon, to draw beside a link to it, and the
+// pictures on other websites an answer shows.
 //
 // The platform reads the icon from the site on its own outbound path, so
 // the site learns the platform's address and never the reader's, and
 // answers it encoded again as a small PNG, never the site's own bytes. An
 // icon is the site's and no one's: the route reads no credential, and
-// GetIcon sends none. A Config is built with credentials all the same; a
-// program that holds none gives latere.WithTokenSource a source of its
-// own, which GetIcon never calls.
+// GetIcon sends none, whatever the Config's credentials are. A program
+// that holds none builds its Config with latere.WithoutCredentials.
 //
 //	cfg, err := latere.NewConfig() // the key in LATERE_KEY
 //	if err != nil {
@@ -26,8 +26,13 @@
 //	}
 //	draw(icon.Data, icon.MediaType)
 //
-// Pictures of the web an answer shows, which the platform reads as the
-// person, are not covered yet; call them with latere.Config.Open.
+// A picture of the web an answer shows, such as a Markdown image's, is
+// read the same way, and encoded again at ImageSmall or ImageLarge:
+// ReadImage reads it as the person the Config speaks for, and
+// ReadSharedImage as the reader of a share link, for an address the
+// shared answers name. Both answer an ImageReader, which streams the
+// picture with its media type, its length and how long it may be kept,
+// so a server can pass it on to a browser as it reads it.
 package web
 
 import (

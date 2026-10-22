@@ -7,8 +7,11 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"io"
 	"log"
+	"net/http"
 	"net/url"
+	"strconv"
 	"strings"
 
 	"latere.ai/x/sdk-go/latere"
@@ -40,4 +43,34 @@ func ExampleClient_GetIcon() {
 	default:
 		fmt.Println(site, icon.MediaType, len(icon.Data), "bytes")
 	}
+}
+
+// A server passing a picture an answer shows on to the browser that asked
+// for it, as it reads it, so the browser loads nothing from the website.
+func ExampleClient_ReadImage() {
+	cfg, err := latere.NewConfig()
+	if err != nil {
+		log.Fatal(err)
+	}
+	client := web.New(cfg)
+	http.HandleFunc("GET /pictures", func(w http.ResponseWriter, r *http.Request) {
+		img, err := client.ReadImage(r.Context(), r.URL.Query().Get("url"), web.ImageSmall)
+		switch {
+		case errors.Is(err, web.ErrNoImage):
+			http.NotFound(w, r)
+			return
+		case err != nil:
+			http.Error(w, "The picture could not be read.", http.StatusBadGateway)
+			return
+		}
+		defer img.Close()
+		w.Header().Set("Content-Type", img.MediaType())
+		w.Header().Set("Cache-Control", img.CacheControl())
+		if img.Size() >= 0 {
+			w.Header().Set("Content-Length", strconv.FormatInt(img.Size(), 10))
+		}
+		if _, err := io.Copy(w, img); err != nil {
+			log.Print("the picture's answer was cut off: ", err)
+		}
+	})
 }

@@ -18,9 +18,15 @@ import (
 // basePath is where the API serves Evals.
 const basePath = "/v1/evals"
 
-// MaxLimit is the most items a page of any list of Evals holds; a larger
-// Limit is refused with 400. A list whose Limit is zero gets pages of 50.
-const MaxLimit = 200
+// The page sizes of every list of Evals.
+const (
+	// DefaultLimit is how many items a page holds when a list's Limit is
+	// zero.
+	DefaultLimit = 50
+	// MaxLimit is the most items a page holds; a larger Limit is refused
+	// with 400.
+	MaxLimit = 200
+)
 
 // Client reads Evals. It is safe for concurrent use.
 type Client struct {
@@ -67,9 +73,10 @@ type Version struct {
 func (v Version) Ref() string { return v.Name + "@" + v.Digest }
 
 // ListVersionsParams page through the versions of one name. The zero value
-// lists them newest first, in pages of 50.
+// lists them newest first, in pages of DefaultLimit.
 type ListVersionsParams struct {
-	// Limit is the page size, at most MaxLimit; 50 when zero.
+	// Limit is the page size, at most MaxLimit;
+	// DefaultLimit when zero.
 	Limit int
 	// Cursor asks a Page method for the page after the one that returned
 	// it. The iterating methods ignore it.

@@ -321,7 +321,8 @@ type Independence struct {
 }
 
 // ListExperimentsParams filter and page the experiments of the caller's
-// context. The zero value lists every one, newest first, in pages of 50.
+// context. The zero value lists every one, newest first, in pages of
+// DefaultLimit.
 type ListExperimentsParams struct {
 	// Suite keeps the experiments of a version of a suite, by digest, or
 	// of every version of a suite, by name.
@@ -338,7 +339,8 @@ type ListExperimentsParams struct {
 	// MetadataKey and MetadataValue keep the experiments whose metadata
 	// holds the key with exactly the value. The API takes one such pair.
 	MetadataKey, MetadataValue string
-	// Limit is the page size, at most MaxLimit; 50 when zero.
+	// Limit is the page size, at most MaxLimit;
+	// DefaultLimit when zero.
 	Limit int
 	// Cursor asks ListExperimentsPage for the page after the one that
 	// returned it. ListExperiments ignores it.
@@ -456,7 +458,7 @@ func (c *Cell) UnmarshalJSON(b []byte) error {
 }
 
 // ListCellsParams filter and page the cells of an experiment. The zero
-// value lists every cell, newest first, in pages of 50.
+// value lists every cell, newest first, in pages of DefaultLimit.
 type ListCellsParams struct {
 	// State keeps the cells in this state.
 	State CellState
@@ -464,7 +466,8 @@ type ListCellsParams struct {
 	Task string
 	// Candidate keeps the cells of this candidate, by digest.
 	Candidate string
-	// Limit is the page size, at most MaxLimit; 50 when zero.
+	// Limit is the page size, at most MaxLimit;
+	// DefaultLimit when zero.
 	Limit int
 	// Cursor asks ListCellsPage for the page after the one that returned
 	// it. ListCells ignores it.
@@ -510,6 +513,28 @@ func (c *Client) ListCellsPage(ctx context.Context, id string, params *ListCells
 }
 
 // ---- comparisons ----
+
+// A Verdict is what a comparison found of a metric on one task.
+type Verdict string
+
+// The verdicts of a comparison's task-level results.
+const (
+	// VerdictImproved is a difference past the noise, in the metric's
+	// better direction.
+	VerdictImproved Verdict = "improved"
+	// VerdictRegressed is a difference past the noise, in its worse
+	// direction.
+	VerdictRegressed Verdict = "regressed"
+	// VerdictChanged is a difference past the noise of a metric that has
+	// no better direction, or of a label metric's labels.
+	VerdictChanged Verdict = "changed"
+	// VerdictWithinNoise is no difference the test tells apart from the
+	// noise.
+	VerdictWithinNoise Verdict = "within_noise"
+	// VerdictInsufficient is too little to test, such as too few trials or
+	// tasks on a side; the result's reason says what.
+	VerdictInsufficient Verdict = "insufficient"
+)
 
 // ComparisonState is where a comparison's computation is.
 type ComparisonState string
@@ -582,7 +607,7 @@ type Comparison struct {
 	Final bool `json:"final"`
 	// VerdictCounts count, for each metric, the task-level results of each
 	// verdict.
-	VerdictCounts map[string]map[string]int `json:"verdict_counts,omitempty"`
+	VerdictCounts map[string]map[Verdict]int `json:"verdict_counts,omitempty"`
 	// Taxonomies name, for each metric of VocabularyOpen it reads, the
 	// taxonomy record its canonical labels were read at.
 	Taxonomies map[string]string `json:"taxonomies,omitempty"`
@@ -631,7 +656,7 @@ type Declaration struct {
 }
 
 // ListExperimentComparisonsParams filter and page the comparisons of an
-// experiment. The zero value lists every one, in pages of 50; a nil
+// experiment. The zero value lists every one, in pages of DefaultLimit; a nil
 // boolean filter keeps both values.
 type ListExperimentComparisonsParams struct {
 	// Candidate keeps the comparisons of this candidate, by digest.
@@ -645,7 +670,8 @@ type ListExperimentComparisonsParams struct {
 	// whose field of that name, or for Declared whether it was declared,
 	// is the value given.
 	Automatic, Declared, Exploratory, Final *bool
-	// Limit is the page size, at most MaxLimit; 50 when zero.
+	// Limit is the page size, at most MaxLimit;
+	// DefaultLimit when zero.
 	Limit int
 	// Cursor asks ListExperimentComparisonsPage for the page after the one
 	// that returned it. ListExperimentComparisons ignores it.

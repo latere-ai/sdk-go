@@ -169,6 +169,33 @@ const (
 	VocabularyOpen Vocabulary = "open"
 )
 
+// An Aggregate is how a cell summarizes the values of its trials for a
+// metric.
+type Aggregate string
+
+// The aggregates of a metric.
+const (
+	// AggregateRate is the share of trials whose value is true.
+	AggregateRate Aggregate = "rate"
+	// AggregateMean is the mean of the trials' values.
+	AggregateMean Aggregate = "mean"
+	// AggregateMedian is their median.
+	AggregateMedian Aggregate = "median"
+	// AggregateP90 is their 90th percentile.
+	AggregateP90 Aggregate = "p90"
+	// AggregateDistribution is the share of trials of each label.
+	AggregateDistribution Aggregate = "distribution"
+	// AggregateRepeatRate is, for a LevelCell metric, the share of the
+	// pairs of trials that hold one label.
+	AggregateRepeatRate Aggregate = "repeat_rate"
+	// AggregateModeShare is, for a LevelCell metric, the share of trials
+	// that hold the most common label.
+	AggregateModeShare Aggregate = "mode_share"
+	// AggregateDistinctCount is, for a LevelCell metric, how many
+	// distinct labels the trials hold.
+	AggregateDistinctCount Aggregate = "distinct_count"
+)
+
 // A Metric is one version of a metric: a quantity a trial, a cell or a
 // candidate is measured on, such as whether a task's check passed or what
 // a trial cost.
@@ -186,11 +213,9 @@ type Metric struct {
 	Range []float64 `json:"range,omitempty"`
 	// Unit is the unit a value is shown in, such as "s" or "USD".
 	Unit string `json:"unit,omitempty"`
-	// Aggregate is how a cell summarizes its trials' values: "rate",
-	// "mean", "median", "p90" or "distribution", or for a LevelCell
-	// metric "repeat_rate", "mode_share" or "distinct_count". Empty for a
+	// Aggregate is how a cell summarizes its trials' values. Empty for a
 	// LevelCandidate metric, whose one value is its summary.
-	Aggregate string `json:"aggregate,omitempty"`
+	Aggregate Aggregate `json:"aggregate,omitempty"`
 	// AppliesTo are, for a LevelTrial metric, the outcomes of the trials
 	// it has a value for; a trial of another outcome is not missing a
 	// value. Empty means every outcome the system under test caused:
@@ -229,7 +254,7 @@ func (m *Metric) UnmarshalJSON(b []byte) error {
 
 // ListMetricsParams filter and page the metrics of the caller's context.
 // The zero value lists the current version of each metric, newest first,
-// in pages of 50.
+// in pages of DefaultLimit.
 type ListMetricsParams struct {
 	// Name keeps the metric of this name.
 	Name string
@@ -237,7 +262,8 @@ type ListMetricsParams struct {
 	Type MetricType
 	// AllVersions lists every version rather than each name's current one.
 	AllVersions bool
-	// Limit is the page size, at most MaxLimit; 50 when zero.
+	// Limit is the page size, at most MaxLimit;
+	// DefaultLimit when zero.
 	Limit int
 	// Cursor asks ListMetricsPage for the page after the one that returned
 	// it. ListMetrics ignores it.
@@ -440,7 +466,7 @@ type JudgeInputs struct {
 
 // ListGradersParams filter and page the graders of the caller's context.
 // The zero value lists the current version of each grader, newest first,
-// in pages of 50.
+// in pages of DefaultLimit.
 type ListGradersParams struct {
 	// Name keeps the grader of this name.
 	Name string
@@ -450,7 +476,8 @@ type ListGradersParams struct {
 	Produces string
 	// AllVersions lists every version rather than each name's current one.
 	AllVersions bool
-	// Limit is the page size, at most MaxLimit; 50 when zero.
+	// Limit is the page size, at most MaxLimit;
+	// DefaultLimit when zero.
 	Limit int
 	// Cursor asks ListGradersPage for the page after the one that returned
 	// it. ListGraders ignores it.
@@ -643,18 +670,21 @@ type Environment struct {
 
 // ListTasksParams filter and page the tasks of the caller's context. The
 // zero value lists the current version of each task, newest first, in
-// pages of 50.
+// pages of DefaultLimit.
 type ListTasksParams struct {
 	// Name keeps the task of this name.
 	Name string
-	// Suite keeps the tasks a version of a suite pins, by its digest.
+	// Suite keeps the tasks a version of a suite pins, by its digest or
+	// its name@digest; a name alone, which names no one version, is
+	// refused with 400.
 	Suite string
 	// MetadataKey and MetadataValue keep the tasks whose metadata holds
 	// the key with exactly the value. The API takes one such pair.
 	MetadataKey, MetadataValue string
 	// AllVersions lists every version rather than each name's current one.
 	AllVersions bool
-	// Limit is the page size, at most MaxLimit; 50 when zero.
+	// Limit is the page size, at most MaxLimit;
+	// DefaultLimit when zero.
 	Limit int
 	// Cursor asks ListTasksPage for the page after the one that returned
 	// it. ListTasks ignores it.
@@ -771,13 +801,14 @@ func (s *Suite) UnmarshalJSON(b []byte) error {
 
 // ListSuitesParams filter and page the suites of the caller's context. The
 // zero value lists the current version of each suite, newest first, in
-// pages of 50.
+// pages of DefaultLimit.
 type ListSuitesParams struct {
 	// Name keeps the suite of this name.
 	Name string
 	// AllVersions lists every version rather than each name's current one.
 	AllVersions bool
-	// Limit is the page size, at most MaxLimit; 50 when zero.
+	// Limit is the page size, at most MaxLimit;
+	// DefaultLimit when zero.
 	Limit int
 	// Cursor asks ListSuitesPage for the page after the one that returned
 	// it. ListSuites ignores it.
@@ -963,7 +994,7 @@ type ExternalCandidate struct {
 
 // ListCandidatesParams filter and page the candidates of the caller's
 // context. The zero value lists the current version of each candidate,
-// newest first, in pages of 50.
+// newest first, in pages of DefaultLimit.
 type ListCandidatesParams struct {
 	// Name keeps the candidate of this name.
 	Name string
@@ -979,7 +1010,8 @@ type ListCandidatesParams struct {
 	MetadataKey, MetadataValue string
 	// AllVersions lists every version rather than each name's current one.
 	AllVersions bool
-	// Limit is the page size, at most MaxLimit; 50 when zero.
+	// Limit is the page size, at most MaxLimit;
+	// DefaultLimit when zero.
 	Limit int
 	// Cursor asks ListCandidatesPage for the page after the one that
 	// returned it. ListCandidates ignores it.

@@ -109,9 +109,14 @@ func TestTheStreamFollowsAnExperimentToItsEnd(t *testing.T) {
 			if err := ev.Decode(&end); err != nil || end.State != evals.ExperimentComplete || end.Budget != "evals" {
 				t.Errorf("end %+v, %v", end, err)
 			}
+		case evals.EventEnd:
+			var end evals.StreamEnd
+			if err := ev.Decode(&end); err != nil || end.State != evals.ExperimentComplete {
+				t.Errorf("the stream's end %+v, %v", end, err)
+			}
 		}
 	}
-	want := "4:snapshot,5:cell,6:trial,7:graded,8:comparison,9:experiment,10:experiment.completed,11:bar.future"
+	want := "4:snapshot,5:cell,6:trial,7:graded,8:comparison,9:experiment,10:experiment.completed,11:bar.future,0:end"
 	if strings.Join(got, ",") != want {
 		t.Errorf("streamed %v, want %s", got, want)
 	}
@@ -131,10 +136,12 @@ func TestTheStreamResumesAfterASequence(t *testing.T) {
 	})
 	n := 0
 	for ev, err := range c.StreamEvents(t.Context(), "exp_1", &evals.StreamEventsParams{AfterSeq: 41}) {
-		if err != nil || ev.Seq != 42 {
+		if err != nil || (ev.Seq != 42 && ev.Type != evals.EventEnd) {
 			t.Fatalf("%+v, %v", ev, err)
 		}
-		n++
+		if ev.Type != evals.EventEnd {
+			n++
+		}
 	}
 	if n != 1 {
 		t.Errorf("%d events", n)

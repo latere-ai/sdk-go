@@ -246,7 +246,7 @@ func TestExperimentsAreRead(t *testing.T) {
 		`"metadata":{"pr":"42"},"created_at":"2026-10-01T09:00:00Z","updated_at":"2026-10-01T09:30:00Z"}`
 	cell := `{"id":"cel_1","experiment":"exp_1","task":"sha256:t1","candidate":"sha256:c1","state":"blocked","parked_reason":"run_denied","created_at":"2026-10-01T09:00:00Z","tuple":{"model":"m"}}`
 	comparison := `{"id":"cmp_1","experiment":"exp_1","candidate":"sha256:c2","reference_candidate":"sha256:c1","automatic":true,"exploratory":false,"state":"complete","final":false,` +
-		`"declared":0,"variable":["model"],"single_variable":true,"confounds":["tools"],"verdict_counts":{"sha256:m1":{"better":2}},"results":[{"metric":"sha256:m1"}],"computed_at":"2026-10-01T09:40:00Z"}`
+		`"declared":0,"variable":["model"],"single_variable":true,"confounds":["tools"],"verdict_counts":{"sha256:m1":{"improved":2}},"results":[{"metric":"sha256:m1"}],"computed_at":"2026-10-01T09:40:00Z"}`
 	c, _ := newClient(t, map[string]string{
 		"GET /v1/evals/experiments":                   `{"items":[` + experiment + `]}`,
 		"GET /v1/evals/experiments/exp_1":             experiment,
@@ -277,7 +277,7 @@ func TestExperimentsAreRead(t *testing.T) {
 	}
 	for cm, err := range c.ListExperimentComparisons(ctx, "exp_1", nil) {
 		if err != nil || cm.State != evals.ComparisonComplete || cm.Final || cm.Declared == nil || *cm.Declared != 0 || !*cm.SingleVariable ||
-			cm.VerdictCounts["sha256:m1"]["better"] != 2 || !strings.Contains(string(cm.RawJSON()), `"results"`) || cm.ComputedAt.IsZero() {
+			cm.VerdictCounts["sha256:m1"][evals.VerdictImproved] != 2 || !strings.Contains(string(cm.RawJSON()), `"results"`) || cm.ComputedAt.IsZero() {
 			t.Errorf("comparison %+v, %v", cm, err)
 		}
 	}

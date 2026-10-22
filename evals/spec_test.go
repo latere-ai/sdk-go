@@ -44,9 +44,24 @@ type schema struct {
 }
 
 type parameter struct {
-	Ref  string `json:"$ref"`
-	In   string `json:"in"`
-	Name string `json:"name"`
+	Ref    string `json:"$ref"`
+	In     string `json:"in"`
+	Name   string `json:"name"`
+	Schema struct {
+		Default *int `json:"default"`
+		Maximum *int `json:"maximum"`
+	} `json:"schema"`
+}
+
+// The page sizes are the document's.
+func TestThePageSizesAreTheDocuments(t *testing.T) {
+	p, ok := loadDocument(t).Components.Parameters["Limit"]
+	if !ok || p.Schema.Default == nil || p.Schema.Maximum == nil {
+		t.Fatal("the document's Limit parameter names no default and no maximum")
+	}
+	if *p.Schema.Default != evals.DefaultLimit || *p.Schema.Maximum != evals.MaxLimit {
+		t.Errorf("DefaultLimit %d and MaxLimit %d; the document's are %d and %d", evals.DefaultLimit, evals.MaxLimit, *p.Schema.Default, *p.Schema.Maximum)
+	}
 }
 
 type operation struct {
@@ -400,6 +415,8 @@ func enums(t *testing.T, d *document) map[string][]string {
 		"Scheduling":      d.at(t, "Experiment.scheduling").Enum,
 		"ComparisonState": d.at(t, "Comparison.state").Enum,
 		"TrialOutcome":    d.at(t, "Submit.outcome").Enum,
+		"Verdict":         d.at(t, "Result.verdict").Enum,
+		"Aggregate":       d.at(t, "Summary.aggregate").Enum,
 	}
 }
 

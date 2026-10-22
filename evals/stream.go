@@ -44,7 +44,18 @@ const (
 	// EventExperimentCanceled is the experiment canceled, an
 	// ExperimentEnd.
 	EventExperimentCanceled EventType = "experiment.canceled"
+	// EventEnd is the stream's last event, once the experiment finished
+	// and every event before it was delivered: a StreamEnd with the state
+	// it finished in. The loop ends after it.
+	EventEnd EventType = frameEnd
 )
+
+// StreamEnd is the Data of an EventEnd.
+type StreamEnd struct {
+	// State is the state the experiment finished in, ExperimentComplete
+	// or ExperimentCanceled.
+	State ExperimentState `json:"state"`
+}
 
 // A StreamEvent is one event of an experiment's stream.
 type StreamEvent struct {
@@ -195,7 +206,8 @@ type StreamEventsParams struct {
 	AfterSeq int64
 }
 
-// The frames a stream ends with, which are no events of the log.
+// The frames a stream ends with, which are no events of the log: the end,
+// delivered as EventEnd, and an error, as a *StreamError.
 const (
 	frameEnd   = "end"
 	frameError = "error"
@@ -203,9 +215,10 @@ const (
 
 // StreamEvents returns an iterator over the events of the experiment id as
 // they happen: an EventSnapshot first unless params resumes, then every
-// event in order. The loop ends, with no error, once the experiment is
-// complete or canceled and every event was delivered; for an experiment
-// finished already, after its snapshot. When the connection drops, or the
+// event in order. Once the experiment is complete or canceled and every
+// event was delivered, an EventEnd with the state it finished in is the
+// last event, and the loop ends with no error; for an experiment finished
+// already, it follows the snapshot. When the connection drops, or the
 // API closes it as the token it was opened with expires, it connects
 // again and resumes after the last event it yielded, so no event is lost
 // or repeated; a stream opened before the experiment's log held any event
@@ -233,6 +246,8 @@ func (c *Client) StreamEvents(ctx context.Context, id string, params *StreamEven
 			}
 			switch frame.Event {
 			case frameEnd:
+				ev, err := decodeFrame(frame)
+				yield(ev, err)
 				return
 			case frameError:
 				yield(nil, streamError(frame.Data))

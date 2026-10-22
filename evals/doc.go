@@ -62,5 +62,7 @@
 // Applying definitions, creating, canceling and closing experiments,
 // running trials of one's own, and the figures of a comparison's results
 // are not covered yet; call them with latere.Config.Do, and read a
-// comparison's figures from its RawJSON.
+// comparison's figures from its RawJSON. Nor is the owner parameter of
+// the definition reads: every call reads the context the token names, as
+// the Credentials section says.
 package evals

@@ -13,9 +13,9 @@ import "slices"
 type ContextReport struct {
 	// Window is the model's input window, in tokens; zero when the
 	// model catalog names none.
-	Window int `json:"window"`
+	Window int64 `json:"window"`
 	// Used is the input tokens the request used.
-	Used int `json:"used"`
+	Used int64 `json:"used"`
 	// Source is where Used came from.
 	Source ContextSource `json:"source"`
 	// Parts are what the request was made of, in the order of the
@@ -61,9 +61,10 @@ func (r *ContextReport) PartsInOrder() []ContextPart {
 type ContextPart struct {
 	// Part is which part it is.
 	Part ContextPartKind `json:"part"`
-	// Tokens is how many tokens of the window it took: the harness's
-	// estimate of the part, scaled so the parts sum to the report's Used.
-	Tokens int `json:"tokens"`
+	// Tokens is how many tokens of the window it took: for each part but
+	// ContextFree, the harness's estimate of it, scaled so those parts sum
+	// to the report's Used; for ContextFree, the window less Used.
+	Tokens int64 `json:"tokens"`
 }
 
 // ContextPartKind is which part of a model request a ContextPart is.

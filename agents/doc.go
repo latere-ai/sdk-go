@@ -131,9 +131,11 @@
 // An offer's why is in the call it was offered with, not on its trigger,
 // so the first reading reads the logs of the sessions offers came from;
 // a reading given the whys of the last reads one page of triggers and one
-// session per session a watch came from. Client.SetTriggerHold pauses
-// every trigger of the person at once and leaves each one's own pause as
-// it was, and Client.GetTriggerHold reads it. A Session names its pending
+// session per session a watch came from. Client.SuspendTrigger pauses or
+// resumes one watch, keeping every other field of its trigger;
+// Client.SetTriggerHold pauses every trigger of the person at once and
+// leaves each one's own pause as it was, and Client.GetTriggerHold reads
+// it. A Session names its pending
 // wake, whether its latest turn a trigger began was TurnQuiet or
 // TurnNotified, and the latest Notice its agent brought the person.
 //

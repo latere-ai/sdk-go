@@ -18,6 +18,10 @@ minor version may break code, and every such change is marked **Breaking**.
   and a wake's `Count`. An offer's why is read from the session's log it
   was offered in; pass the whys of the last reading in
   `ListWatchesParams.KnownWhys` and a reading reads no log again.
+- Package `agents`: `SuspendTrigger`, a pause or a resume of any trigger
+  by its id or name that keeps every other field as the API answered it,
+  for a watch that is no routine, such as an event trigger an agent
+  offered.
 - Package `agents`: `GetTriggerHold` and `SetTriggerHold`, the hold of
   every trigger of the caller at once, as a `TriggerHold`. Each trigger
   keeps its own pause, so releasing the hold brings back only those that
@@ -48,9 +52,7 @@ minor version may break code, and every such change is marked **Breaking**.
   its `Offer.TriggerID`), and the held call of the `wake` tool past its
   row of looks (`Offer.At`, `Offer.After`, `Offer.Note`). Before, it read
   a proposal alone and returned an error for the others; check
-  `Offer.Action` before wording an offer as a new routine. A proposal's
-  `Offer.Notify` holds the default the tool applies when the call leaves
-  it out.
+  `Offer.Action` before wording an offer as a new routine.
 - Package `agents`: `ApplyTrigger`, `GetTrigger` and `DeleteTrigger`
   refuse the name `hold` before any request, since its path is the
   hold's.

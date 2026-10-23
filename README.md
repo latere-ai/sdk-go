@@ -230,11 +230,14 @@ A page of watches reads one page of triggers, each session a watch came
 from once, and, for watches an agent offered, the log of their session
 from its start up to the calls they were offered with, since that is
 where the agent's sentence of why is kept. Pass the whys of the last
-reading in `KnownWhys` and a reading reads no log again. Delete a watch
-with `DeleteTrigger`; pause a routine or an event watch with
-`ChangeRoutine`. `GetTriggerHold` and `SetTriggerHold` read and set the
-hold of every trigger of the person, which leaves each one's own pause
-as it was. A `Session` names its pending `Wake`, the `Outcome` of its
+reading in `KnownWhys` and a reading reads no log again. An event
+trigger an agent offered on events no routine starts from, such as a
+repository's pushes, carries its agent's label under a name of its own,
+so `ListRoutines` leaves it out and `ListWatches` reads it. Pause or
+resume any watch with `SuspendTrigger`, which keeps every other field of
+its trigger, and delete one with `DeleteTrigger`. `GetTriggerHold` and
+`SetTriggerHold` read and set the hold of every trigger of the person,
+which leaves each one's own pause as it was. A `Session` names its pending `Wake`, the `Outcome` of its
 latest turn a trigger began, `agents.TurnQuiet` or `agents.TurnNotified`,
 and the latest `Notice` its agent brought the person; the idle
 `SessionStatus` that ends such a turn carries the outcome too.

@@ -391,7 +391,10 @@ a person under one heading: the routines they made, the routines and
 event triggers an agent offered and they accepted, and the wakes an agent
 set to look again in a session. Each is a trigger; what tells them apart
 is the routine's shape and the trigger's `origin`, the call of a
-session's agent that made it. Read by each client, the rules for which
+session's agent that made it. An offer on events no routine starts from,
+such as a repository's pushes, carries the routine's label under a name
+of its own, so the routine methods, which could neither show nor change
+it as a routine, leave it alone, and the watches read it by its origin. Read by each client, the rules for which
 triggers are watches and what each one's sentence of why is would drift,
 so the SDK reads them, as `ListWatches`, a layer over the trigger list
 like `ListRoutines`.
@@ -421,9 +424,15 @@ with many triggers is read a page at a time, as their routines are.
 
 A wake whose session the caller can no longer read is left out, since
 the session's end deletes it and its agent cannot be told; a session
-otherwise gone leaves its title empty and an offer's why the routine's
-instruction. An error of any other read fails the page, so a program
+otherwise gone leaves its title empty, and an offer's why the routine's
+instruction, or none for an event trigger. An error of any other read fails the page, so a program
 never shows a partial list as a whole one.
+
+Pausing a watch is `SuspendTrigger`, a read of the trigger and an apply
+of it with its `suspend` set, over the JSON the API answered as a
+routine's change is, so it keeps every field, those this version of the
+SDK does not model included, and pauses an event trigger as it does a
+routine.
 
 The offers themselves are read from the held call alone, by
 `ToolUse.Offer`, which sends nothing: a client finds a held call in the

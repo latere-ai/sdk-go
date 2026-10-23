@@ -35,9 +35,12 @@ minor version may break code, and every such change is marked **Breaking**.
   weekly allowance a held `trigger` call asks for, as the agent wrote it
   and in millionths of a dollar.
 - Package `agents`: `Session.ContextReport` and `EventModelRequest` with
-  its `ModelRequest` payload, whose `Context` is a `ContextReport`: the
-  model's window, the tokens used and their `ContextSource`, and the
-  parts that fill it, with `UsedFraction` and `PartsInOrder`.
+  its `ModelRequest` payload, the request's model, `Usage` and cost, whose
+  `Context` is a `ContextReport`: the model's window, the tokens used and
+  their `ContextSource` (`ContextFromProvider` or `ContextEstimated`), and
+  the `ContextPart`s that fill it by `ContextPartKind`
+  (`ContextInstructions` through `ContextFree`), with `UsedFraction` and
+  `PartsInOrder`.
 - Package `agents/routine`: `Fields.PerWeekMicroUSD` and
   `Trigger.PerWeekMicroUSD`, written as `spec.budget.perWeek` by
   `Manifest`, which keeps the stored allowance when the fields carry

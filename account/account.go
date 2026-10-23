@@ -3,8 +3,9 @@
 
 // Package account reads and changes what the Latere API knows about the
 // person a request acts for, and that no single capability owns: the
-// Effort levels a session can run at, the wallet turns are paid from and
-// the payment pages that add to it, preferences with their sites, pins
+// Effort levels a session can run at, the wallet turns are paid from, the
+// payment pages that add to it and what it spent by day, preferences with
+// their sites, pins
 // and bookmarks, the links that share a conversation, the person's
 // computers, where the installation keeps sessions and the data terms of
 // the models that ran them, what brought a person at sign-in, and the

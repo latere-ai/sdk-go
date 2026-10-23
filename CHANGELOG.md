@@ -40,6 +40,13 @@ minor version may break code, and every such change is marked **Breaking**.
   or a wake began was `TurnQuiet` or `TurnNotified`; `Session.Notice`,
   what the agent last brought to the person; and `UserMessage.FiringID`
   and `UserMessage.Wake`, the firing and the wake a message came from.
+- Package `agents/routine`: the shape of the trigger of an agent's offer
+  on events no routine starts from, such as a repository's pushes, for a
+  server that applies it and a client that reads it: `OfferKey`, the key
+  an offer's call names its trigger by; `EventPrefix`, `EventName` and
+  `IsEventName`, its name; `StartsOn`, whether a routine starts on given
+  events; `EventSuffix` and `EventMessage`, its message; and `ReadEvent`
+  with `EventFields`, its title and ask read back.
 - Package `agents`: `ToolWake` and `ToolNotify`, the names of the tools
   an agent sets its next wake and brings a turn's result to the person
   with.

@@ -370,6 +370,16 @@ importing `agents` would put this module's HTTP client and credentials in
 a server that applies the trigger itself. One definition, so a routine an
 agent made is listed, changed and deleted as any other.
 
+An agent's offer on events no routine starts from, such as a
+repository's pushes, is the second shape the package holds. It is
+written as a routine is, with the events as its `on`, but named
+`EventPrefix` and the routine's digits of the same key, so no client
+lists or changes it as a routine it could not show, and its message is
+the ask followed by `EventSuffix`, which hands each run the event that
+started it. `StartsOn` says which events a routine starts on, so the
+server and the clients draw the line in one place, and `ReadEvent`
+reads the title and the ask back, as `Read` reads a routine's.
+
 A change reads the trigger and writes it back, since the trigger
 endpoints replace a whole manifest. It writes over the trigger's JSON as
 the API answered it, decoded as a JSON object with its numbers kept as
@@ -424,9 +434,10 @@ with many triggers is read a page at a time, as their routines are.
 
 A wake whose session the caller can no longer read is left out, since
 the session's end deletes it and its agent cannot be told; a session
-otherwise gone leaves its title empty, and an offer's why the routine's
-instruction, or none for an event trigger. An error of any other read fails the page, so a program
-never shows a partial list as a whole one.
+otherwise gone leaves its title empty, and an offer's why what each run
+asks, the routine's instruction or the event trigger's ask. An error of
+any other read fails the page, so a program never shows a partial list
+as a whole one.
 
 Pausing a watch is `SuspendTrigger`, a read of the trigger and an apply
 of it with its `suspend` set, over the JSON the API answered as a

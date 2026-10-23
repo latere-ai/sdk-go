@@ -106,7 +106,9 @@
 //
 // The shape is package routine's, which names the manifest, the name a key
 // makes and the checks, and imports the standard library alone, for a
-// server that applies a routine without this package's client.
+// server that applies a routine without this package's client. It also
+// names the shape of an agent's offer on events no routine starts from,
+// which the watches below read.
 //
 // # Watches
 //

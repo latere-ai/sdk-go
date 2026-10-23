@@ -201,7 +201,11 @@ The shape itself, the manifest, the name a key makes and the checks, is
 package `agents/routine`, which imports the standard library alone. A
 server that applies a routine on a person's behalf, such as one an agent
 offered and the person accepted, writes it with `routine.Manifest`, so
-what it makes is a routine every client reads as one.
+what it makes is a routine every client reads as one. The package holds
+the other shape an offer is written in too: an offer on events no
+routine starts from (`routine.StartsOn` says which) is named
+`routine.EventName(routine.OfferKey(session, call))`, its message is
+`routine.EventMessage(ask)`, and `routine.ReadEvent` reads it back.
 
 ### Watches
 
@@ -232,8 +236,9 @@ from its start up to the calls they were offered with, since that is
 where the agent's sentence of why is kept. Pass the whys of the last
 reading in `KnownWhys` and a reading reads no log again. An event
 trigger an agent offered on events no routine starts from, such as a
-repository's pushes, carries its agent's label under a name of its own,
-so `ListRoutines` leaves it out and `ListWatches` reads it. Pause or
+repository's pushes, carries its agent's label under a name of
+`routine.EventName`'s shape, so `ListRoutines` leaves it out and
+`ListWatches` reads it. Pause or
 resume any watch with `SuspendTrigger`, which keeps every other field of
 its trigger, and delete one with `DeleteTrigger`. `GetTriggerHold` and
 `SetTriggerHold` read and set the hold of every trigger of the person,

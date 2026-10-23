@@ -9,7 +9,6 @@ import (
 	"errors"
 	"fmt"
 	"math"
-	"regexp"
 	"strconv"
 	"strings"
 	"time"
@@ -190,46 +189,51 @@ func (t *ToolUse) triggerOffer() (*Offer, error) {
 	return o, nil
 }
 
-// usdPattern is the shape of an amount of US dollars as the trigger tool
-// takes it: digits, and after a point at most six more.
-var usdPattern = regexp.MustCompile(`^([0-9]+)(?:\.([0-9]{1,6}))?$`)
-
 // microsPerUSD is how many millionths of a US dollar make one.
 const microsPerUSD = 1_000_000
 
-// parseUSD reads an amount of US dollars the agent wrote as a JSON string
-// or number, and returns it as written and in millionths of a dollar. It
-// returns "" and 0 for an amount left out or null, and an error for one
-// that is not a decimal above zero with at most six fraction digits, or
-// past what millionths of a dollar hold in an int64.
+// parseUSD reads the weekly allowance a call of the trigger tool asks for
+// as the tool reads it, and returns it as written and in millionths of a
+// dollar. The tool decodes it as a JSON number, or a JSON string holding
+// one, and takes digits, a point and at most six more, above zero: so
+// neither a sign, an exponent, a space nor a point without digits before
+// it is an amount. It returns "" and 0 for an amount left out or null, and
+// an error for any other, and for one past what millionths of a dollar
+// hold in an int64.
 func parseUSD(raw json.RawMessage) (string, int64, error) {
-	raw = bytes.TrimSpace(raw)
-	if len(raw) == 0 || bytes.Equal(raw, []byte("null")) {
+	if len(bytes.TrimSpace(raw)) == 0 {
 		return "", 0, nil
 	}
-	text := string(raw)
-	if raw[0] == '"' {
-		// The call's input decoded, so a value that starts with a quote is
-		// a JSON string, which decodes into a string without an error.
-		_ = json.Unmarshal(raw, &text)
-		text = strings.TrimSpace(text)
-	}
-	m := usdPattern.FindStringSubmatch(text)
-	if m == nil {
-		return "", 0, errors.New("it is not a decimal amount of dollars with at most six digits after the point")
-	}
-	whole, err := strconv.ParseInt(m[1], 10, 64)
-	if err != nil {
+	var n json.Number
+	if err := json.Unmarshal(raw, &n); err != nil {
 		return "", 0, err
 	}
-	// The pattern admits at most six digits, so the padded fraction is a
-	// count of millionths below microsPerUSD, which parses without an
-	// error.
-	frac, _ := strconv.ParseInt(m[2]+strings.Repeat("0", 6-len(m[2])), 10, 64)
-	if whole > (math.MaxInt64-frac)/microsPerUSD {
+	text := n.String()
+	if text == "" {
+		return "", 0, nil
+	}
+	whole, frac, _ := strings.Cut(text, ".")
+	if whole == "" || len(frac) > 6 || strings.HasPrefix(whole, "-") {
+		return "", 0, errors.New("it is not a decimal amount of dollars with at most six digits after the point")
+	}
+	// A JSON number's whole part is digits after the sign the check above
+	// refused, so a failure is an exponent, or digits past an int64.
+	w, err := strconv.ParseInt(whole, 10, 64)
+	if err != nil {
+		return "", 0, fmt.Errorf("it is not a decimal amount of dollars: %w", err)
+	}
+	var f int64
+	if frac != "" {
+		// A JSON number's fraction is digits, and an exponent after them
+		// fails here.
+		if f, err = strconv.ParseInt(frac+strings.Repeat("0", 6-len(frac)), 10, 64); err != nil {
+			return "", 0, fmt.Errorf("it is not a decimal amount of dollars: %w", err)
+		}
+	}
+	if w > (math.MaxInt64-f)/microsPerUSD {
 		return "", 0, errors.New("it is too large")
 	}
-	micro := whole*microsPerUSD + frac
+	micro := w*microsPerUSD + f
 	if micro <= 0 {
 		return "", 0, errors.New("it is not above zero")
 	}

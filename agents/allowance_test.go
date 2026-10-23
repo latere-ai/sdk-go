@@ -199,42 +199,70 @@ func TestSetTriggerAllowanceKeepsEveryOtherField(t *testing.T) {
 }
 
 // TestAnOffersAllowanceIsRead: a proposal and a change read the weekly
-// allowance the call asks for, written as a string or a number, as written
-// and in millionths of a dollar; a call without one reads none; a resume
-// ignores one; an amount the tool would refuse reads as no offer.
+// allowance the call asks for as the trigger tool reads it, a JSON number
+// or a string holding one, with at most six digits after the point and
+// above zero; a call without one reads none; a resume ignores one; and an
+// amount the tool refuses reads as no offer. The amounts are those the
+// tool's own decoding was run over, with its answers. An amount past an
+// int64 of millionths is refused, where the tool's multiplication wraps.
 func TestAnOffersAllowanceIsRead(t *testing.T) {
 	offer := func(input string) (*agents.Offer, error) {
 		use := &agents.ToolUse{ToolUseID: "toolu_1", Name: agents.ToolTrigger, Verdict: agents.VerdictAsk, Input: json.RawMessage(input)}
 		return use.Offer()
 	}
-	for input, want := range map[string]struct {
+	type read struct {
 		usd   string
 		micro int64
-	}{
-		`{"action":"propose","name":"Inbox","ask":"Look.","why":"Daily, about $1.50 a week.","schedule":"0 9 * * *","timeZone":"UTC","perWeekUsd":"1.50"}`: {"1.50", 1_500_000},
-		`{"action":"propose","name":"Inbox","ask":"Look.","why":"Daily.","schedule":"0 9 * * *","timeZone":"UTC","perWeekUsd":2}`:                          {"2", 2_000_000},
-		`{"action":"change","id":"trg_1","why":"A smaller week.","perWeekUsd":0.000001}`:                                                                   {"0.000001", 1},
-		`{"action":"change","id":"trg_1","why":"A smaller week.","perWeekUsd":" 0.25 "}`:                                                                   {"0.25", 250_000},
-		`{"action":"change","id":"trg_1","why":"Mondays instead.","schedule":"0 9 * * 1","timeZone":"UTC"}`:                                                {"", 0},
-		`{"action":"change","id":"trg_1","why":"Mondays instead.","perWeekUsd":null}`:                                                                      {"", 0},
-		`{"action":"resume","id":"trg_1","perWeekUsd":"3"}`:                                                                                                {"", 0},
+	}
+	for amount, want := range map[string]*read{
+		`"1.50"`:                 {"1.50", 1_500_000},
+		`2`:                      {"2", 2_000_000},
+		`0.000001`:               {"0.000001", 1},
+		`"0.40"`:                 {"0.40", 400_000},
+		`1.000000`:               {"1.000000", 1_000_000},
+		`"9223372036854.775807"`: {"9223372036854.775807", 1<<63 - 1},
+		`null`:                   {"", 0},
+		`" 0.25 "`:               nil,
+		`"0"`:                    nil,
+		`0`:                      nil,
+		`0.0`:                    nil,
+		`"-1"`:                   nil,
+		`-1`:                     nil,
+		`-0.5`:                   nil,
+		`"1.1234567"`:            nil,
+		`1e3`:                    nil,
+		`1E3`:                    nil,
+		`1.5e0`:                  nil,
+		`"abc"`:                  nil,
+		`true`:                   nil,
+		`""`:                     nil,
+		`".5"`:                   nil,
+		`"5."`:                   nil,
+		`"+5"`:                   nil,
+		`"01.5"`:                 nil,
+		`"9223372036854.775808"`: nil,
+		`"99999999999999999999"`: nil,
+		`18446744073710`:         nil,
 	} {
-		o, err := offer(input)
-		if err != nil {
-			t.Errorf("%s: %v", input, err)
-			continue
-		}
-		if o.PerWeekUSD != want.usd || o.PerWeekMicroUSD != want.micro {
-			t.Errorf("%s reads %q, %d", input, o.PerWeekUSD, o.PerWeekMicroUSD)
+		for _, input := range []string{
+			`{"action":"propose","name":"Inbox","ask":"Look.","why":"Daily.","schedule":"0 9 * * *","timeZone":"UTC","perWeekUsd":` + amount + `}`,
+			`{"action":"change","id":"trg_1","why":"Another week.","perWeekUsd":` + amount + `}`,
+		} {
+			o, err := offer(input)
+			switch {
+			case want == nil && err == nil:
+				t.Errorf("an allowance of %s read as %q, %d", amount, o.PerWeekUSD, o.PerWeekMicroUSD)
+			case want != nil && err != nil:
+				t.Errorf("an allowance of %s: %v", amount, err)
+			case want != nil && (o.PerWeekUSD != want.usd || o.PerWeekMicroUSD != want.micro):
+				t.Errorf("an allowance of %s reads %q, %d", amount, o.PerWeekUSD, o.PerWeekMicroUSD)
+			}
 		}
 	}
-	for _, amount := range []string{`"0"`, `0`, `"-1"`, `-1`, `"1.1234567"`, `1e3`, `"abc"`, `true`, `""`, `".5"`, `"9223372036854.775808"`, `"99999999999999999999"`} {
-		input := `{"action":"propose","name":"Inbox","ask":"Look.","why":"Daily.","schedule":"0 9 * * *","timeZone":"UTC","perWeekUsd":` + amount + `}`
-		if o, err := offer(input); err == nil {
-			t.Errorf("an allowance of %s read as %+v", amount, o)
-		}
+	if o, err := offer(`{"action":"change","id":"trg_1","why":"Mondays instead.","schedule":"0 9 * * 1","timeZone":"UTC"}`); err != nil || o.PerWeekUSD != "" || o.PerWeekMicroUSD != 0 {
+		t.Errorf("a change that names no allowance reads %+v, %v", o, err)
 	}
-	if o, err := offer(`{"action":"propose","perWeekUsd":"9223372036854.775807"}`); err != nil || o.PerWeekMicroUSD != 1<<63-1 {
-		t.Errorf("the largest allowance reads %+v, %v", o, err)
+	if o, err := offer(`{"action":"resume","id":"trg_1","perWeekUsd":"3"}`); err != nil || o.PerWeekUSD != "" || o.PerWeekMicroUSD != 0 {
+		t.Errorf("a resume reads %+v, %v", o, err)
 	}
 }

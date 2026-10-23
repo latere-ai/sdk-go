@@ -335,6 +335,11 @@ func TestTheHoldIsReadAndSet(t *testing.T) {
 		t.Errorf("put the hold on with %v", (*calls)[2].Body)
 	}
 
+	var bad agents.TriggerHold
+	if err := json.Unmarshal([]byte(`{"held":"yes"}`), &bad); err == nil {
+		t.Error("a hold whose held is no boolean decoded")
+	}
+
 	refused, _ := fakeAPI(t, nil)
 	if _, err := refused.GetTriggerHold(t.Context()); !errors.Is(err, latere.ErrNotFound) {
 		t.Errorf("a refusal of the read: %v", err)

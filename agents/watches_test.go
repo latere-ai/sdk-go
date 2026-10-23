@@ -33,6 +33,7 @@ type watchAPI struct {
 	sessions map[string]string
 	logs     map[string][]string
 	failing  map[string]bool
+	slow     time.Duration
 	calls    []string
 }
 
@@ -68,6 +69,13 @@ func (api *watchAPI) received() []string {
 }
 
 func (api *watchAPI) serve(w http.ResponseWriter, r *http.Request) {
+	api.mu.Lock()
+	slow := api.slow
+	if api.failing[r.URL.Path] {
+		slow = 0
+	}
+	api.mu.Unlock()
+	time.Sleep(slow)
 	api.mu.Lock()
 	defer api.mu.Unlock()
 	line := r.Method + " " + r.URL.Path
@@ -149,9 +157,14 @@ func wakeTrigger(id, session, toolUse, title string) map[string]any {
 }
 
 // offered is the status of a trigger an agent offered in session with the
-// call toolUse, which the person accepted at created.
+// call toolUse, which the person accepted at created, or at a time the
+// status does not say when created is empty.
 func offered(id, session, toolUse, created string) map[string]any {
-	return map[string]any{"id": id, "createdAt": created, "origin": map[string]any{"kind": "proposal", "sessionId": session, "toolUseId": toolUse, "confirmedBy": "alice"}}
+	status := map[string]any{"id": id, "origin": map[string]any{"kind": "proposal", "sessionId": session, "toolUseId": toolUse, "confirmedBy": "alice"}}
+	if created != "" {
+		status["createdAt"] = created
+	}
+	return status
 }
 
 // sessionOf is a session of agent with a title and, when wake is set, its
@@ -461,5 +474,53 @@ func TestAnEventWatchPausesAsARoutine(t *testing.T) {
 	}
 	if !got.Paused || got.Origin == nil || got.Origin.SessionID != "ses_a" {
 		t.Errorf("the paused watch reads %+v", got)
+	}
+}
+
+// TestAnOffersLogIsReadAsFarAsItMustBe: with no time its trigger was made,
+// a log is read past other calls to its offer's, and to its end when the
+// call is not there, which leaves the routine's instruction as the why; a
+// call of the offer's id that offers nothing fails the page.
+func TestAnOffersLogIsReadAsFarAsItMustBe(t *testing.T) {
+	api, c := newWatchAPI(t)
+	api.triggers = []map[string]any{routineTrigger(chat, "undated", "Monday plan", "Plan the week.", offered("trg_1", "ses_a", "toolu_1", ""), nil)}
+	api.sessions["ses_a"] = sessionOf("ses_a", chat, "Plan my week", "")
+	api.logs["ses_a"] = []string{
+		logEvent("ses_a", 1, 0, "agent.tool_use", `{"tool_use_id":"toolu_0","name":"bash","input":{"command":"date"}}`),
+		logEvent("ses_a", 2, 900, "agent.tool_use", heldCall("toolu_1", `{"action":"propose","name":"Monday plan","why":"Every Monday I plan your week."}`)),
+	}
+	page, err := c.ListWatchesPage(t.Context(), &agents.ListWatchesParams{Agent: chat})
+	if err != nil || len(page.Items) != 1 || page.Items[0].Why != "Every Monday I plan your week." {
+		t.Fatalf("read %+v, %v", page, err)
+	}
+	api.logs["ses_a"] = api.logs["ses_a"][:1]
+	page, err = c.ListWatchesPage(t.Context(), &agents.ListWatchesParams{Agent: chat})
+	if err != nil || len(page.Items) != 1 || page.Items[0].Why != "Plan the week." {
+		t.Fatalf("a log without the call read %+v, %v", page, err)
+	}
+	api.logs["ses_a"] = []string{logEvent("ses_a", 1, 0, "agent.tool_use", heldCall("toolu_1", `{"action":"list"}`))}
+	if _, err := c.ListWatchesPage(t.Context(), &agents.ListWatchesParams{Agent: chat}); err == nil {
+		t.Error("a call of the offer's id that offers nothing read as no error")
+	}
+}
+
+// TestAFailureStartsNoMoreReads: once a read of a page fails, the reads
+// waiting for their turn are not sent.
+func TestAFailureStartsNoMoreReads(t *testing.T) {
+	api, c := newWatchAPI(t)
+	api.pageSize, api.slow = 10, 200*time.Millisecond
+	for i := range 6 {
+		id := "ses_" + strconv.Itoa(i)
+		api.triggers = append(api.triggers, wakeTrigger("trg_"+strconv.Itoa(i), id, "toolu_"+strconv.Itoa(i), "Look again"))
+		api.sessions[id] = sessionOf(id, chat, "A watch", "")
+	}
+	api.failing["/v1/agents/sessions/ses_0"] = true
+	if _, err := c.ListWatchesPage(t.Context(), &agents.ListWatchesParams{Agent: chat}); err == nil {
+		t.Fatal("a failed read of a session read as no error")
+	}
+	for _, call := range api.received() {
+		if strings.HasSuffix(call, "/ses_4") || strings.HasSuffix(call, "/ses_5") {
+			t.Errorf("read %s after a read failed", call)
+		}
 	}
 }

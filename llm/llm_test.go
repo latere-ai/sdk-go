@@ -11,6 +11,7 @@ import (
 	"net/http"
 	"net/http/httptest"
 	"slices"
+	"strconv"
 	"strings"
 	"sync/atomic"
 	"testing"
@@ -117,6 +118,74 @@ func TestGenerateReportsABrokenAnswer(t *testing.T) {
 	c := newClient(t, func(w http.ResponseWriter, r *http.Request) { fmt.Fprint(w, `{"blocks":`) })
 	if _, err := c.Generate(t.Context(), hello()); err == nil || !strings.Contains(err.Error(), "decoding the answer") {
 		t.Errorf("err = %v", err)
+	}
+}
+
+// Generate decodes the answer's one JSON value and reads no further, so an
+// answer whose connection ends early after a complete value is kept: the
+// model has run and may have been billed, and nothing of the answer is
+// missing. An answer that ends inside its value, or holds none, is refused.
+func TestGenerateKeepsAnAnswerCutOffAfterItsValue(t *testing.T) {
+	const answer = `{"id":"msg_1","model":"anthropic/claude-sonnet-4.5","blocks":[{"type":"text","text":"Hello"}],"stop_reason":"end_turn","usage":{"input_tokens":12,"output_tokens":1}}`
+	// write sends body, after promising length bytes when length is not
+	// zero, and then closes the connection without ending the answer when
+	// cut is set.
+	write := func(body string, length int, cut bool) http.HandlerFunc {
+		return func(w http.ResponseWriter, r *http.Request) {
+			if length > 0 {
+				w.Header().Set("Content-Length", strconv.Itoa(length))
+			}
+			if _, err := io.WriteString(w, body); err != nil {
+				t.Error(err)
+				return
+			}
+			if !cut {
+				return
+			}
+			rc := http.NewResponseController(w)
+			if err := rc.Flush(); err != nil {
+				t.Error(err)
+				return
+			}
+			conn, _, err := rc.Hijack()
+			if err != nil {
+				t.Error(err)
+				return
+			}
+			if err := conn.Close(); err != nil {
+				t.Error(err)
+			}
+		}
+	}
+	half := answer[:len(answer)/2]
+	for _, tc := range []struct {
+		name    string
+		handler http.HandlerFunc
+		wantErr error
+	}{
+		{"complete", write(answer, 0, false), nil},
+		{"whitespace after the value", write(answer+"\n \n", 0, false), nil},
+		{"promised length short after the value", write(answer, len(answer)+10, false), nil},
+		{"connection closed after the value", write(answer, 0, true), nil},
+		{"promised length short inside the value", write(half, len(answer), false), io.ErrUnexpectedEOF},
+		{"connection closed inside the value", write(half, 0, true), io.ErrUnexpectedEOF},
+		{"no value", write("", 0, false), io.EOF},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			res, err := newClient(t, tc.handler).Generate(t.Context(), hello())
+			if tc.wantErr != nil {
+				if !errors.Is(err, tc.wantErr) || !strings.Contains(err.Error(), "decoding the answer") {
+					t.Fatalf("err = %v, want a decoding error wrapping %v", err, tc.wantErr)
+				}
+				return
+			}
+			if err != nil {
+				t.Fatal(err)
+			}
+			if res.Text() != "Hello" || res.StopReason != llm.StopEndTurn || res.Usage.OutputTokens != 1 {
+				t.Errorf("result = %+v", res)
+			}
+		})
 	}
 }
 

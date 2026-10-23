@@ -7,6 +7,8 @@ minor version may break code, and every such change is marked **Breaking**.
 
 ## [Unreleased]
 
+## [0.11.0] - 2026-10-24
+
 ### Added
 
 - Package `agents`: a trigger's weekly allowance. `TriggerSpec.Budget`, a

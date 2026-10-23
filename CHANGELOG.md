@@ -7,6 +7,8 @@ minor version may break code, and every such change is marked **Breaking**.
 
 ## [Unreleased]
 
+## [0.9.0] - 2026-10-23
+
 ### Added
 
 - Package `agents`: `PageSandbox` and `PagePolicy`, the frame sandbox and

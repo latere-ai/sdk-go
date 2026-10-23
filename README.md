@@ -19,7 +19,7 @@ they share. Import the ones you use:
 | Package | What it does |
 |---|---|
 | [`latere`](https://pkg.go.dev/latere.ai/x/sdk-go/latere) | The core: configuration, credentials, errors, retries, pagination |
-| [`agents`](https://pkg.go.dev/latere.ai/x/sdk-go/agents) | Sessions with agents: create, list, count, follow, answer, approve, end, read what they made; shared conversations; triggers that start them |
+| [`agents`](https://pkg.go.dev/latere.ai/x/sdk-go/agents) | Sessions with agents: create, list, count, follow, answer, approve, end, read what they made, and the rules a page an agent made runs under; shared conversations; triggers that start them |
 | [`agents/routine`](https://pkg.go.dev/latere.ai/x/sdk-go/agents/routine) | A routine's trigger shape alone, for code that writes or reads a routine without calling the API |
 | [`connections`](https://pkg.go.dev/latere.ai/x/sdk-go/connections) | The services a person connects once, such as a calendar or an MCP server, which agents then use |
 | [`storage`](https://pkg.go.dev/latere.ai/x/sdk-go/storage) | Files in Latere Storage: upload a file of any size, read, list, move, delete, and link to it; what others shared with you |

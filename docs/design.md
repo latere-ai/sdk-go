@@ -384,6 +384,26 @@ The agent a routine names must exist before its trigger is applied. The
 agent, and when to bring it to its live version, is the program's
 choice, and the docs name `account.ApplyManagedAgent`.
 
+## A page an agent made
+
+An HTML file an agent wrote is shown by the clients of the platform as a
+page whose scripts run, and those scripts are the agent's. The rules that
+close such a page off, the frame's sandbox and the content security
+policy, are not a resource of the API either: they are a decision two
+clients, Latere Chat and Latere Studio, must make the same way, and a copy
+in each drifts. So the SDK holds them, as `agents.PageSandbox` and
+`agents.PagePolicy`, beside the reads that return the page.
+
+They are two string constants rather than a function that frames a page.
+The clients apply them in different places: Latere Chat in a browser, as
+an iframe's sandbox and a policy put first in the page's head, and Latere
+Studio in a web view of the Mac, as the policy and the sandbox its own
+address answers with. Each needs the two values and nothing more, and a
+Go function could not run in either place. The package docs say how a
+program applies them; the tests hold the properties a change must keep: a
+sandbox of scripts alone, and a policy that sends, frames and navigates
+nothing and names no host.
+
 ## Streams
 
 A session's events are a log with sequence numbers, served as server-sent

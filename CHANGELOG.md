@@ -7,6 +7,13 @@ minor version may break code, and every such change is marked **Breaking**.
 
 ## [Unreleased]
 
+### Added
+
+- Package `agents`: `PageSandbox` and `PagePolicy`, the frame sandbox and
+  the content security policy a program shows a page an agent made under,
+  the same rules Latere Chat and Latere Studio follow, and the package
+  docs on how to apply them.
+
 ## [0.8.0] - 2026-10-22
 
 ### Added

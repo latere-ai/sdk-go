@@ -135,12 +135,7 @@ func RoutineOf(t *Trigger, agent string) (*Routine, bool) {
 	if t == nil {
 		return nil, false
 	}
-	shape := routine.Trigger{Name: t.Metadata.Name, DisplayName: t.Metadata.DisplayName, Labels: t.Metadata.Labels,
-		Schedule: t.Spec.Schedule, TimeZone: t.Spec.TimeZone, Message: t.Spec.Session.Message, Title: t.Spec.Session.Title, Suspend: t.Spec.Suspend}
-	if t.Spec.On != nil {
-		shape.Product = t.Spec.On.Product
-	}
-	f, ok := routine.Read(shape, agent)
+	f, ok := routine.Read(shapeOf(t), agent)
 	if !ok {
 		return nil, false
 	}
@@ -153,6 +148,16 @@ func RoutineOf(t *Trigger, agent string) (*Routine, bool) {
 		r.NextRunAt = t.Status.NextFireAt
 	}
 	return r, true
+}
+
+// shapeOf is what package routine reads of t.
+func shapeOf(t *Trigger) routine.Trigger {
+	shape := routine.Trigger{Name: t.Metadata.Name, DisplayName: t.Metadata.DisplayName, Labels: t.Metadata.Labels,
+		Schedule: t.Spec.Schedule, TimeZone: t.Spec.TimeZone, Message: t.Spec.Session.Message, Title: t.Spec.Session.Title, Suspend: t.Spec.Suspend}
+	if t.Spec.On != nil {
+		shape.Product = t.Spec.On.Product
+	}
+	return shape
 }
 
 // The errors of the routine methods, each matched with errors.Is. Each is

@@ -11,6 +11,7 @@ import (
 	"sync"
 	"time"
 
+	"latere.ai/x/sdk-go/agents/routine"
 	"latere.ai/x/sdk-go/latere"
 )
 
@@ -34,8 +35,8 @@ const (
 	// WatchEvent is a trigger that fires on the events its On selects,
 	// which an agent offered and the person accepted: events no routine
 	// starts from, such as a repository's pushes. It carries the
-	// RoutineLabel of its agent under a name no routine has, so the
-	// routine methods leave it alone.
+	// RoutineLabel of its agent under a name of routine.EventName's shape,
+	// which no routine has, so the routine methods leave it alone.
 	WatchEvent WatchKind = "event"
 	// WatchWake is a wake an agent set in a session: a trigger that fires
 	// once, at NextAt, and sends the agent's note back to that session.
@@ -75,8 +76,8 @@ type Watch struct {
 	// Why is the sentence that says why it exists: what the agent wrote
 	// when it offered it, for one set by an offer; the routine's
 	// instruction, for one the person made; and a wake's Title. For an
-	// offer whose call its session's log no longer holds, it is the
-	// routine's instruction, or empty for an event watch.
+	// offer whose call its session's log no longer holds, it is what each
+	// run asks: the routine's instruction, or the event trigger's ask.
 	Why string
 	// SetBy is who set it.
 	SetBy SetBy
@@ -135,11 +136,10 @@ type WatchSession struct {
 }
 
 // watchOf reads t as a watch of agent, and reports false when it is none:
-// a wake, whose agent is read with its session; a routine of agent; or a
-// trigger labeled as agent's that an agent offered on events no routine
-// starts from, which is written under a name of its own so no program
-// reads it as a routine. Why holds the routine's instruction for a
-// routine, which the offer's own sentence replaces once read.
+// a wake, whose agent is read with its session; a routine of agent; or the
+// trigger of an offer of agent's on events no routine starts from, which
+// routine.ReadEvent reads. Why holds a routine's instruction or an event
+// trigger's ask, which the offer's own sentence replaces once read.
 func watchOf(t *Trigger, agent string) (*Watch, bool) {
 	w := &Watch{
 		TriggerID: t.Status.ID, Name: t.Metadata.Name, Title: t.Metadata.DisplayName, SetBy: SetByPerson, Origin: t.Status.Origin,
@@ -161,8 +161,7 @@ func watchOf(t *Trigger, agent string) (*Watch, bool) {
 		}
 		return w, true
 	}
-	offered := o != nil && o.Kind == TriggerFromProposal
-	if offered {
+	if o != nil && o.Kind == TriggerFromProposal {
 		w.SetBy = SetByOffer
 		w.Session = &WatchSession{ID: o.SessionID}
 	}
@@ -170,10 +169,11 @@ func watchOf(t *Trigger, agent string) (*Watch, bool) {
 		w.Kind, w.Title, w.Why, w.Starts, w.Schedule, w.NextAt = WatchRoutine, r.Title, r.Instruction, r.Starts, r.Schedule, r.NextRunAt
 		return w, true
 	}
-	if !offered || t.Spec.On == nil || agent == "" || t.Metadata.Labels[RoutineLabel] != agent {
+	e, ok := routine.ReadEvent(shapeOf(t), agent)
+	if !ok {
 		return nil, false
 	}
-	w.Kind, w.On = WatchEvent, t.Spec.On
+	w.Kind, w.On, w.Title, w.Why = WatchEvent, t.Spec.On, e.Title, e.Ask
 	return w, true
 }
 

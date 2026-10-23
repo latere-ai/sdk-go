@@ -5,15 +5,18 @@
 // sends it: the label and the name the trigger carries, the name made from
 // a create's key, the manifest's fields, reading a trigger back as a
 // routine, and the checks a routine's title, instruction and schedule must
-// pass.
+// pass. It also holds the shape of the trigger an agent's offer on events
+// no routine starts from is written as: its name, the words after its ask,
+// and reading it back.
 //
 // A program that keeps a person's routines uses this shape through package
-// agents, which names each of its types and constants and writes and reads
-// routines over the trigger endpoints. This package is for code that
-// writes or reads the shape without calling the Latere API, such as a
-// server that applies a routine an agent offered once its owner said yes,
-// so every program reads one definition. It imports the standard library
-// alone and opens no connection.
+// agents, which names a routine's types and constants, writes and reads
+// routines over the trigger endpoints, and reads both shapes as a person's
+// watches. This package is for code that writes or reads the shape
+// without calling the Latere API, such as a server that applies what an
+// agent offered once its owner said yes, so every program reads one
+// definition. It imports the standard library alone and opens no
+// connection.
 package routine
 
 import (

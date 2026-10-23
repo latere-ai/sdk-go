@@ -18,6 +18,7 @@ import (
 	"time"
 
 	"latere.ai/x/sdk-go/agents"
+	"latere.ai/x/sdk-go/agents/routine"
 	"latere.ai/x/sdk-go/latere"
 )
 
@@ -148,10 +149,8 @@ func routineTrigger(agent, key, title, message string, status map[string]any, ch
 }
 
 // eventName is the name of the trigger of an offer on events no routine
-// starts from, made with key: the routine's digits under "event-".
-func eventName(key string) string {
-	return "event-" + strings.TrimPrefix(agents.RoutineName(key), agents.RoutinePrefix)
-}
+// starts from, made with key.
+func eventName(key string) string { return routine.EventName(key) }
 
 // eventTrigger is a trigger an agent offered on a repository's pushes,
 // which no routine starts from, as the API writes it: a routine's label,
@@ -161,7 +160,7 @@ func eventTrigger(agent, key string, status map[string]any) map[string]any {
 		"metadata": map[string]any{"name": eventName(key), "displayName": "Retry test on main", "labels": map[string]any{agents.RoutineLabel: agent}},
 		"spec": map[string]any{"agent": "agent_1", "skipIfActive": false,
 			"on":      map[string]any{"product": "github", "verbs": []any{"push"}, "resources": []any{"acme/field-notes"}},
-			"session": map[string]any{"message": "Run the retry test.\n\nThe event that started this run:\nProduct: {{event.product}}", "title": "Retry test on main"}}}
+			"session": map[string]any{"message": routine.EventMessage("Run the retry test."), "title": "Retry test on main"}}}
 }
 
 // wakeTrigger is a wake an agent set in session.
@@ -208,11 +207,11 @@ func heldCall(toolUse, input string) string {
 }
 
 // TestWatchesAreReadInOnePass: one page of triggers reads as the watches
-// of one agent, routines, offered event triggers and wakes, with each
-// session they came from read once and each offer's why read from one
-// pass over its session's log; triggers of another agent, of another
-// shape, and wakes of another agent's sessions are left out. A second
-// reading that knows the whys reads no log.
+// of one agent, routines, event triggers in an offer's shape and wakes,
+// with each session they came from read once and each offer's why read
+// from one pass over its session's log; triggers of another agent, of
+// another shape, and wakes of another agent's sessions are left out. A
+// second reading that knows the whys reads no log.
 func TestWatchesAreReadInOnePass(t *testing.T) {
 	api, c := newWatchAPI(t)
 	api.pageSize = 10
@@ -276,6 +275,8 @@ func TestWatchesAreReadInOnePass(t *testing.T) {
 			Origin:  &agents.TriggerOrigin{Kind: agents.TriggerFromProposal, SessionID: "ses_a", ToolUseID: "toolu_2", ConfirmedBy: "alice"},
 			Session: &agents.WatchSession{ID: "ses_a", Title: "Plan my week"}, On: &agents.EventFilter{Product: "github", Verbs: []string{"push"}, Resources: []string{"acme/field-notes"}},
 			Notify: agents.NotifyAlways, CreatedAt: *at("2026-10-22T09:06:00Z")},
+		{Kind: agents.WatchEvent, TriggerID: "trg_10", Name: eventName("unoffered"), Title: "Retry test on main", Why: "Run the retry test.", SetBy: agents.SetByPerson,
+			On: &agents.EventFilter{Product: "github", Verbs: []string{"push"}, Resources: []string{"acme/field-notes"}}, Notify: agents.NotifyAlways},
 		{Kind: agents.WatchWake, TriggerID: "trg_4", Name: "wake-b", Title: "Whether the refund arrived", Why: "Whether the refund arrived", SetBy: agents.SetByAgent,
 			Origin:  &agents.TriggerOrigin{Kind: agents.TriggerFromWake, SessionID: "ses_b", ToolUseID: "toolu_3"},
 			Session: &agents.WatchSession{ID: "ses_b", Title: "A refund"}, NextAt: at("2026-10-24T07:00:00Z"), Notify: agents.NotifyJudged, Count: 3,
@@ -382,8 +383,9 @@ func TestALongLogIsReadUpToTheOffer(t *testing.T) {
 }
 
 // TestASessionGoneLeavesItsTitleEmpty: an offer whose session was deleted
-// reads with no title, and with the routine's instruction as its why, or
-// none for an event watch; a wake whose session is gone is left out.
+// reads with no title, and with what each run asks as its why, the
+// routine's instruction or the event trigger's ask; a wake whose session
+// is gone is left out.
 func TestASessionGoneLeavesItsTitleEmpty(t *testing.T) {
 	api, c := newWatchAPI(t)
 	api.triggers = []map[string]any{
@@ -402,7 +404,7 @@ func TestASessionGoneLeavesItsTitleEmpty(t *testing.T) {
 	if w := page.Items[0]; w.TriggerID != "trg_1" || w.Why != "Plan the week." || w.Session == nil || *w.Session != (agents.WatchSession{ID: "ses_gone"}) {
 		t.Errorf("read %+v, its session %+v", w, w.Session)
 	}
-	if w := page.Items[1]; w.TriggerID != "trg_3" || w.Kind != agents.WatchEvent || w.Why != "" || w.Session == nil || w.Session.Title != "" {
+	if w := page.Items[1]; w.TriggerID != "trg_3" || w.Kind != agents.WatchEvent || w.Why != "Run the retry test." || w.Session == nil || w.Session.Title != "" {
 		t.Errorf("read %+v, its session %+v", w, w.Session)
 	}
 }

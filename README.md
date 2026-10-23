@@ -262,6 +262,9 @@ repository's pushes, carries its agent's label under a name of
 resume any watch with `SuspendTrigger`, which keeps every other field of
 its trigger, set or take off its weekly allowance with
 `SetTriggerAllowance` the same way, and delete one with `DeleteTrigger`.
+A paused watch's `Pause` says who paused it and when, and for one an
+agent paused itself (`Pause.ByAgent()`), the sentence it gave and the
+session it did so in.
 
 A watch's looks count toward one trigger's allowance, `w.CountsToward`:
 its own, for a routine or an event trigger, and for a wake, the trigger

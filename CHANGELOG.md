@@ -41,6 +41,11 @@ minor version may break code, and every such change is marked **Breaking**.
   the `ReportPart`s that fill it by `ReportPartKind`
   (`ContextInstructions` through `ContextFree`), with `UsedFraction` and
   `PartsInOrder`.
+- Package `agents`: `TriggerStatus.Paused`, a `TriggerPause` saying
+  why, by whom and when a paused trigger was paused, with `ByAgent` for a
+  pause an agent's trigger tool made, and `Watch.Pause`, the same on a
+  watch; and `FiringCounts.SkippedEnded`, the firings whose target
+  session had ended.
 - Package `agents/routine`: `Fields.PerWeekMicroUSD` and
   `Trigger.PerWeekMicroUSD`, written as `spec.budget.perWeek` by
   `Manifest`, which keeps the stored allowance when the fields carry

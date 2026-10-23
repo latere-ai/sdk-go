@@ -657,15 +657,14 @@ lists no session's working directory, so a program learns which files a
 session made from its log alone, its kept files and the `ToolMeta` of
 its writes and edits.
 
-The agents API is adding a trigger that fires once and continues a
-session, a hold of every trigger of an owner, and a session's pending
-wake, the outcome of a turn a trigger began and the agent's notice,
-ahead of its published document. The models read them now, and the
-`agents` tests list each field and route the document does not describe
-yet and fail once it does, so the models are then held to it. One thing
-a client shows is not recorded by the API, and the SDK does not guess it:
-who paused a trigger, and why, which an agent writes in its pause call
-alone, in a log the trigger does not name.
+The agents API is adding a trigger's weekly allowance and its week, the
+attendance of a turn's decisions and the context report, ahead of its
+published document. The models read them now, and the `agents` tests
+list each field the document does not describe yet and fail once it
+does, so the models are then held to it. Who paused a trigger, and why,
+is the trigger's own `status.paused`, which the API writes when an apply
+suspends it, so `Watch.Pause` reads it from the trigger list without a
+read of the log the pausing call is in.
 
 The web part has no reference document yet, so `web`'s tests hold the
 client to the answers the platform's icon and image routes give rather

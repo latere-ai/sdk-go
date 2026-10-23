@@ -15,6 +15,7 @@ import (
 	"strconv"
 	"time"
 
+	"latere.ai/x/sdk-go/agents/routine"
 	"latere.ai/x/sdk-go/latere"
 )
 
@@ -112,6 +113,22 @@ type TriggerSpec struct {
 	MaxAge string `json:"maxAge,omitempty"`
 	// Suspend stops the trigger from firing until it is applied without.
 	Suspend bool `json:"suspend,omitempty"`
+	// Budget is the trigger's weekly allowance; nil for a trigger with
+	// none.
+	Budget *TriggerAllowance `json:"budget,omitempty"`
+}
+
+// A TriggerAllowance is the most a trigger's looks may cost in a week. A
+// look is a turn a firing of the trigger began, in a session it started or
+// continued, or a turn a wake began in a session it started. The API
+// counts what the looks of the 7 days before each firing cost, and a
+// firing while that spend is at the allowance starts nothing and records
+// FiringSkippedBudget. Nothing needs resuming: once the oldest looks leave
+// the 7 days, the next firing runs.
+type TriggerAllowance struct {
+	// PerWeekMicroUSD is the allowance, in millionths of a US dollar, above
+	// zero.
+	PerWeekMicroUSD int64 `json:"perWeek"`
 }
 
 // An EventFilter selects events: every field given must match, and a list
@@ -286,6 +303,11 @@ type TriggerStatus struct {
 	// for a trigger applied through the API. It is kept when the trigger
 	// is applied again.
 	Origin *TriggerOrigin `json:"origin,omitempty"`
+	// Spend is the trigger's week as of its latest firing that counts
+	// toward it: what its looks cost in the 7 days before that firing,
+	// and the pace they are on. Nil for a trigger that has not fired since
+	// the API began writing it.
+	Spend *TriggerSpend `json:"spend,omitempty"`
 }
 
 // A TriggerOrigin is the call of a session's agent that made a trigger:
@@ -339,6 +361,11 @@ type FiringCounts struct {
 	Refused int64 `json:"refused"`
 	// Failed firings failed to start or continue a session.
 	Failed int64 `json:"failed"`
+	// SkippedBudget firings came while the week's spend of the trigger
+	// they count toward was at its allowance. A trigger that fires once,
+	// a wake among them, is tried again each minute until the spend
+	// allows it, and its count is taken back once it fires.
+	SkippedBudget int64 `json:"skippedBudget"`
 }
 
 // A Firing is one time a trigger fired, and what came of it.
@@ -437,6 +464,11 @@ const (
 	// FiringFailed failed to start or continue a session; Firing.Reason
 	// says why.
 	FiringFailed FiringOutcome = "failed"
+	// FiringSkippedBudget came while the week's spend of the trigger it
+	// counts toward was at that trigger's TriggerAllowance, and started
+	// nothing. A trigger that fires once is kept and tried again each
+	// minute until the spend allows it or MaxAge passes.
+	FiringSkippedBudget FiringOutcome = "skipped_budget"
 )
 
 // ListTriggersParams narrows and pages a list of triggers. The zero value
@@ -588,6 +620,42 @@ func (c *Client) DeleteTrigger(ctx context.Context, ref string) error {
 // A pause is read, then written: a change made elsewhere between the two
 // is replaced by this one.
 func (c *Client) SuspendTrigger(ctx context.Context, ref string, suspend bool) (*Trigger, error) {
+	return c.rewriteSpec(ctx, ref, func(spec map[string]any) {
+		if suspend {
+			spec["suspend"] = true
+		} else {
+			delete(spec, "suspend")
+		}
+	})
+}
+
+// SetTriggerAllowance sets the weekly allowance of the trigger ref names,
+// by its id or its name, to perWeekMicroUSD millionths of a US dollar, or
+// at zero takes it off, and returns the trigger as stored. Like
+// SuspendTrigger, it reads the trigger and applies it again with the
+// allowance written over the JSON the API answered, so every other field
+// is kept, and a change made elsewhere between the two is replaced. It
+// sets the allowance of any watch, an event trigger an agent offered
+// among them; ChangeRoutine sets a routine's the same way.
+//
+// An allowance below zero returns an error matching ErrAllowanceInvalid
+// before any request. An allowance at or below the week's spend so far
+// skips the trigger's next firings until the spend falls below it.
+func (c *Client) SetTriggerAllowance(ctx context.Context, ref string, perWeekMicroUSD int64) (*Trigger, error) {
+	if err := routine.CheckAllowance(perWeekMicroUSD); err != nil {
+		return nil, err
+	}
+	return c.rewriteSpec(ctx, ref, func(spec map[string]any) {
+		// The answer decoded as a Trigger, so its budget is an object or
+		// null, both of which WriteAllowance writes into without an error.
+		_ = routine.WriteAllowance(spec, perWeekMicroUSD)
+	})
+}
+
+// rewriteSpec reads the trigger ref names, lets edit change its spec,
+// decoded from the JSON the API answered, and applies it again without its
+// status, so every field edit leaves is kept as it was.
+func (c *Client) rewriteSpec(ctx context.Context, ref string, edit func(spec map[string]any)) (*Trigger, error) {
 	t, err := c.GetTrigger(ctx, ref)
 	if err != nil {
 		return nil, err
@@ -608,11 +676,7 @@ func (c *Client) SuspendTrigger(ctx context.Context, ref string, suspend bool) (
 	if !ok {
 		return nil, fmt.Errorf("agents: the API answered the trigger %s without a spec", ref)
 	}
-	if suspend {
-		spec["suspend"] = true
-	} else {
-		delete(spec, "suspend")
-	}
+	edit(spec)
 	delete(m, "status")
 	var out Trigger
 	if err := c.cfg.Do(ctx, &latere.Request{Method: http.MethodPut, Path: triggerPath(t.Metadata.Name, ""), Body: m}, &out); err != nil {

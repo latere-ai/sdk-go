@@ -61,6 +61,9 @@ const (
 	// links files of the session's machine, and records the copies the
 	// session kept of them; its payload is a FilesKept.
 	EventFilesKept EventType = "files.kept"
+	// EventModelRequest records one request the session sent a model; its
+	// payload is a ModelRequest.
+	EventModelRequest EventType = "model.request"
 )
 
 // An Event is one entry of a session's log.
@@ -446,6 +449,12 @@ type UserMessage struct {
 	// Wake is the wake that sent the message, whose content is the note
 	// the agent wrote to itself; nil for any other message.
 	Wake *WakeFiring `json:"wake,omitempty"`
+	// Spend is the week of the trigger the turn the message begins counts
+	// toward, as the firing found it, which the model read before the
+	// message: for a trigger's message, the trigger's; for a wake's, the
+	// trigger's that started the session. Nil for a person's message, and
+	// for a wake's in a session a person started.
+	Spend *FiringSpend `json:"spend,omitempty"`
 }
 
 // A WakeFiring is the wake a message came from.
@@ -626,6 +635,11 @@ type ToolUse struct {
 	Verdict Verdict `json:"verdict,omitempty"`
 	// Reason explains the verdict, when the policy gave one.
 	Reason string `json:"reason,omitempty"`
+	// Attended reports whether a person began the call's turn: false for
+	// a turn a trigger's or a wake's message began, which nobody watches,
+	// and for a helper agent's call in such a turn. Nil on a call recorded
+	// before the API wrote it.
+	Attended *bool `json:"attended,omitempty"`
 }
 
 // Verdict is what a session's approval policy decided about a tool call or
@@ -667,6 +681,46 @@ type ApprovalRequested struct {
 	// More counts further connections to the same host the request
 	// stands for.
 	More int `json:"more,omitempty"`
+	// Attended reports whether a person began the turn the request was
+	// raised in, as ToolUse.Attended does; nil on a request recorded
+	// before the API wrote it.
+	Attended *bool `json:"attended,omitempty"`
+}
+
+// ModelRequest is the payload of an EventModelRequest event: one request
+// the session sent a model, with what it used and cost and how full it
+// left the model's input window. The log holds more of each request, such
+// as its timing and the blobs of its request and response; Event.Payload
+// keeps all of it.
+type ModelRequest struct {
+	// Model is the model the request was sent to.
+	Model string `json:"model"`
+	// Usage is the tokens the response counted; nil for a request that
+	// got no response.
+	Usage *Usage `json:"usage,omitempty"`
+	// CostMicroUSD is what the request cost, in millionths of a US
+	// dollar; nil when it was not priced.
+	CostMicroUSD *int64 `json:"cost_usd_micro,omitempty"`
+	// Context is how full the request left the model's input window, and
+	// what filled it, for a step of a thread and a compaction; nil for a
+	// request beside the conversation, such as one for the session's
+	// title, and on a request recorded before the API wrote it.
+	Context *ContextReport `json:"context,omitempty"`
+}
+
+// Usage is the tokens a model's response counted.
+type Usage struct {
+	// InputTokens and OutputTokens are the tokens the request read and the
+	// response wrote.
+	InputTokens  int64 `json:"input_tokens"`
+	OutputTokens int64 `json:"output_tokens"`
+	// CacheReadInputTokens and CacheWriteInputTokens are the input tokens
+	// read from and written to the provider's prompt cache.
+	CacheReadInputTokens  int64 `json:"cache_read_input_tokens,omitempty"`
+	CacheWriteInputTokens int64 `json:"cache_write_input_tokens,omitempty"`
+	// ReasoningTokens are the output tokens the model reasoned with, when
+	// the provider counts them apart.
+	ReasoningTokens int64 `json:"reasoning_tokens,omitempty"`
 }
 
 // Destination is a host a session tried to reach.

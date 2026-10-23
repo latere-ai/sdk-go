@@ -110,6 +110,18 @@ type Routine struct {
 	// in a session and the person accepted, when they did so at
 	// CreatedAt; nil for a routine the person made.
 	Origin *TriggerOrigin
+	// PerWeekMicroUSD is the routine's weekly allowance, in millionths of
+	// a US dollar: the most its runs, and the looks of the wakes set in
+	// the sessions it started, may cost in a rolling 7 days. Zero when it
+	// has none.
+	PerWeekMicroUSD int64
+	// Spend is the routine's week as of its latest run: what its runs cost
+	// in the 7 days before it, and the pace they are on. Nil for a routine
+	// that has not run since the API began writing it.
+	Spend *TriggerSpend
+	// SkippedBudget counts the runs the allowance skipped, which started
+	// nothing because the week's spend was at it.
+	SkippedBudget int64
 
 	raw json.RawMessage
 }
@@ -142,7 +154,8 @@ func RoutineOf(t *Trigger, agent string) (*Routine, bool) {
 	r := &Routine{
 		Name: t.Metadata.Name, TriggerID: t.Status.ID, Agent: agent, Title: f.Title, Instruction: f.Instruction,
 		Starts: f.Starts, Schedule: f.Schedule, Paused: f.Paused, LastRunAt: t.Status.LastFiredAt, LastSessionID: t.Status.LastSessionID,
-		CreatedAt: t.Status.CreatedAt, Origin: t.Status.Origin, raw: t.raw,
+		CreatedAt: t.Status.CreatedAt, Origin: t.Status.Origin, PerWeekMicroUSD: perWeekOf(t), Spend: t.Status.Spend,
+		SkippedBudget: skippedBudgetOf(t), raw: t.raw,
 	}
 	if !r.Paused && r.Starts == StartsOnSchedule {
 		r.NextRunAt = t.Status.NextFireAt
@@ -150,10 +163,27 @@ func RoutineOf(t *Trigger, agent string) (*Routine, bool) {
 	return r, true
 }
 
+// perWeekOf is t's weekly allowance, zero when it has none.
+func perWeekOf(t *Trigger) int64 {
+	if t.Spec.Budget == nil {
+		return 0
+	}
+	return t.Spec.Budget.PerWeekMicroUSD
+}
+
+// skippedBudgetOf is how many of t's firings its allowance skipped.
+func skippedBudgetOf(t *Trigger) int64 {
+	if t.Status.Counts == nil {
+		return 0
+	}
+	return t.Status.Counts.SkippedBudget
+}
+
 // shapeOf is what package routine reads of t.
 func shapeOf(t *Trigger) routine.Trigger {
 	shape := routine.Trigger{Name: t.Metadata.Name, DisplayName: t.Metadata.DisplayName, Labels: t.Metadata.Labels,
-		Schedule: t.Spec.Schedule, TimeZone: t.Spec.TimeZone, Message: t.Spec.Session.Message, Title: t.Spec.Session.Title, Suspend: t.Spec.Suspend}
+		Schedule: t.Spec.Schedule, TimeZone: t.Spec.TimeZone, Message: t.Spec.Session.Message, Title: t.Spec.Session.Title, Suspend: t.Spec.Suspend,
+		PerWeekMicroUSD: perWeekOf(t)}
 	if t.Spec.On != nil {
 		shape.Product = t.Spec.On.Product
 	}
@@ -191,6 +221,9 @@ var (
 	// ErrRoutineStartsInvalid matches a RoutineStart that is none of
 	// StartsOnSchedule, StartsFromLink and StartsFromEmail.
 	ErrRoutineStartsInvalid = routine.ErrStartsInvalid
+	// ErrAllowanceInvalid matches a weekly allowance below zero, given to
+	// CreateRoutine, ChangeRoutine or SetTriggerAllowance. Zero is none.
+	ErrAllowanceInvalid = routine.ErrAllowanceInvalid
 	// ErrRoutinePaused matches a run of a paused routine, refused before
 	// it is fired, and the API's refusal of a firing of a trigger paused
 	// since it was read, which also unwraps to the *latere.Error.
@@ -352,6 +385,11 @@ type CreateRoutineParams struct {
 	Schedule *RoutineSchedule
 	// Paused makes the routine paused from the start.
 	Paused bool
+	// PerWeekMicroUSD is the routine's weekly allowance, in millionths of
+	// a US dollar: the most its runs may cost in a rolling 7 days, past
+	// which the API starts no run until the oldest leave the 7 days. Zero
+	// gives it none; below zero is refused.
+	PerWeekMicroUSD int64
 	// IdempotencyKey names the routine's trigger, RoutineName of it, so a
 	// create sent again with the same key replaces the routine it made
 	// instead of making a second; one is generated when it is empty.
@@ -363,8 +401,10 @@ type CreateRoutineParams struct {
 // a routine they do not make returns an error matching one of
 // ErrRoutineTitleMissing, ErrRoutineTitleInvalid,
 // ErrRoutineInstructionMissing, ErrRoutineInstructionTooLong,
-// ErrRoutineScheduleInvalid or ErrRoutineStartsInvalid. The API may still
-// refuse the manifest, such as a zone it does not know.
+// ErrRoutineScheduleInvalid, ErrRoutineStartsInvalid or
+// ErrAllowanceInvalid. The API may still refuse the manifest, such as a
+// zone it does not know, or one without an allowance where the
+// installation requires one.
 //
 // A create sent again with the same IdempotencyKey writes the same trigger
 // again, so it makes one routine however often it is sent.
@@ -372,7 +412,12 @@ func (c *Client) CreateRoutine(ctx context.Context, params *CreateRoutineParams)
 	if params == nil || params.Agent == "" {
 		return nil, errors.New("agents: CreateRoutineParams.Agent is required")
 	}
-	f, err := routine.New(routine.Fields{Title: params.Title, Instruction: params.Instruction, Starts: params.Starts, Schedule: params.Schedule, Paused: params.Paused})
+	fields := routine.Fields{Title: params.Title, Instruction: params.Instruction, Starts: params.Starts, Schedule: params.Schedule, Paused: params.Paused}
+	if params.PerWeekMicroUSD != 0 {
+		perWeek := params.PerWeekMicroUSD
+		fields.PerWeekMicroUSD = &perWeek
+	}
+	f, err := routine.New(fields)
 	if err != nil {
 		return nil, err
 	}
@@ -401,6 +446,10 @@ type ChangeRoutineParams struct {
 	// Paused pauses or resumes it. A resumed routine runs from its next
 	// time on.
 	Paused *bool
+	// PerWeekMicroUSD is its new weekly allowance, in millionths of a US
+	// dollar; zero takes the allowance off, and below zero is refused. Nil
+	// keeps the allowance it has.
+	PerWeekMicroUSD *int64
 }
 
 // ChangeRoutine changes the caller's routine of agent named name and
@@ -459,6 +508,15 @@ func (c *Client) ChangeRoutine(ctx context.Context, agent, name string, params *
 	}
 	if params.Paused != nil {
 		f.Paused = *params.Paused
+	}
+	// The allowance is left nil unless the change names one, so the stored
+	// one is kept.
+	if params.PerWeekMicroUSD != nil {
+		if err := routine.CheckAllowance(*params.PerWeekMicroUSD); err != nil {
+			return nil, err
+		}
+		perWeek := *params.PerWeekMicroUSD
+		f.PerWeekMicroUSD = &perWeek
 	}
 	// The trigger was read from the API, so its JSON is the API's whole
 	// answer.

@@ -15,9 +15,9 @@ import (
 )
 
 // Making a routine of Latere Chat's agent that runs every Monday and
-// Thursday at 9:00 in Berlin. The key comes from the person's press of
-// the button, so a create sent again after a lost answer makes no second
-// routine.
+// Thursday at 9:00 in Berlin, for at most $1 a week. The key comes from
+// the person's press of the button, so a create sent again after a lost
+// answer makes no second routine.
 func ExampleClient_CreateRoutine() {
 	ctx := context.Background()
 	r, err := client().CreateRoutine(ctx, &agents.CreateRoutineParams{
@@ -25,6 +25,8 @@ func ExampleClient_CreateRoutine() {
 		Title:       "Weekly news",
 		Instruction: "Summarize this week's news on climate policy and city cycling.",
 		Schedule:    &agents.RoutineSchedule{Days: []time.Weekday{time.Monday, time.Thursday}, Hour: 9, Zone: "Europe/Berlin"},
+		// At most $1 a week; the API starts no run past it.
+		PerWeekMicroUSD: 1_000_000,
 		// IdempotencyKey: the key the program made for this press.
 	})
 	if errors.Is(err, agents.ErrRoutineTitleMissing) {

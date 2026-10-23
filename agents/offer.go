@@ -4,8 +4,14 @@
 package agents
 
 import (
+	"bytes"
 	"encoding/json"
+	"errors"
 	"fmt"
+	"math"
+	"regexp"
+	"strconv"
+	"strings"
 	"time"
 
 	"latere.ai/x/sdk-go/agents/routine"
@@ -99,6 +105,16 @@ type Offer struct {
 	// empty when the call leaves it out, so a proposal's trigger takes the
 	// API's default and a change keeps the trigger's.
 	Notify NotifyPolicy
+	// PerWeekUSD is the weekly allowance the call asks for, as the agent
+	// wrote it, a decimal amount of US dollars such as "1.50": its
+	// estimate of what the trigger's looks cost in a week, which the API
+	// enforces as the trigger's TriggerAllowance once the person allows
+	// the call. Empty when the call names none, so a proposal's trigger
+	// has no allowance and a change keeps the trigger's.
+	PerWeekUSD string
+	// PerWeekMicroUSD is PerWeekUSD in millionths of a US dollar, the unit
+	// of TriggerAllowance and TriggerSpend; zero when the call names none.
+	PerWeekMicroUSD int64
 	// At is when a wake would fire, for one set at a time; nil for one set
 	// After a while.
 	At *time.Time
@@ -143,6 +159,8 @@ func (t *ToolUse) triggerOffer() (*Offer, error) {
 		TimeZone string       `json:"timeZone"`
 		On       *EventFilter `json:"on"`
 		Notify   NotifyPolicy `json:"notify"`
+		// The agent writes the allowance as a string or as a number.
+		PerWeekUSD json.RawMessage `json:"perWeekUsd"`
 	}
 	if err := json.Unmarshal(t.Input, &in); err != nil {
 		return nil, fmt.Errorf("agents: decoding the offer of %s: %w", t.ToolUseID, err)
@@ -164,7 +182,58 @@ func (t *ToolUse) triggerOffer() (*Offer, error) {
 	if in.Schedule != "" {
 		o.Schedule = routine.ParseSchedule(in.Schedule, in.TimeZone)
 	}
+	usd, micro, err := parseUSD(in.PerWeekUSD)
+	if err != nil {
+		return nil, fmt.Errorf("agents: the trigger call %s asks for a weekly allowance of %s: %w", t.ToolUseID, in.PerWeekUSD, err)
+	}
+	o.PerWeekUSD, o.PerWeekMicroUSD = usd, micro
 	return o, nil
+}
+
+// usdPattern is the shape of an amount of US dollars as the trigger tool
+// takes it: digits, and after a point at most six more.
+var usdPattern = regexp.MustCompile(`^([0-9]+)(?:\.([0-9]{1,6}))?$`)
+
+// microsPerUSD is how many millionths of a US dollar make one.
+const microsPerUSD = 1_000_000
+
+// parseUSD reads an amount of US dollars the agent wrote as a JSON string
+// or number, and returns it as written and in millionths of a dollar. It
+// returns "" and 0 for an amount left out or null, and an error for one
+// that is not a decimal above zero with at most six fraction digits, or
+// past what millionths of a dollar hold in an int64.
+func parseUSD(raw json.RawMessage) (string, int64, error) {
+	raw = bytes.TrimSpace(raw)
+	if len(raw) == 0 || bytes.Equal(raw, []byte("null")) {
+		return "", 0, nil
+	}
+	text := string(raw)
+	if raw[0] == '"' {
+		// The call's input decoded, so a value that starts with a quote is
+		// a JSON string, which decodes into a string without an error.
+		_ = json.Unmarshal(raw, &text)
+		text = strings.TrimSpace(text)
+	}
+	m := usdPattern.FindStringSubmatch(text)
+	if m == nil {
+		return "", 0, errors.New("it is not a decimal amount of dollars with at most six digits after the point")
+	}
+	whole, err := strconv.ParseInt(m[1], 10, 64)
+	if err != nil {
+		return "", 0, err
+	}
+	// The pattern admits at most six digits, so the padded fraction is a
+	// count of millionths below microsPerUSD, which parses without an
+	// error.
+	frac, _ := strconv.ParseInt(m[2]+strings.Repeat("0", 6-len(m[2])), 10, 64)
+	if whole > (math.MaxInt64-frac)/microsPerUSD {
+		return "", 0, errors.New("it is too large")
+	}
+	micro := whole*microsPerUSD + frac
+	if micro <= 0 {
+		return "", 0, errors.New("it is not above zero")
+	}
+	return text, micro, nil
 }
 
 // wakeOffer reads a held call of the wake tool.

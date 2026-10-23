@@ -117,6 +117,28 @@ type Watch struct {
 	// CreatedAt is when it was set: for one set by an offer, when the
 	// person accepted it.
 	CreatedAt time.Time
+	// CountsToward is the TriggerID of the trigger whose allowance the
+	// watch's looks count toward: its own, for a routine and an event
+	// watch, and for a wake, the trigger that started the wake's session.
+	// Empty for a wake in a session a person started, which counts toward
+	// no trigger; the session's own budget bounds it.
+	CountsToward string
+	// PerWeekMicroUSD is the weekly allowance of the trigger CountsToward
+	// names, in millionths of a US dollar: the most the looks counted
+	// toward it may cost in a rolling 7 days. Zero when it has none, and
+	// for a wake whose trigger the caller can no longer read.
+	PerWeekMicroUSD int64
+	// Spend is the week of the trigger CountsToward names, as of that
+	// trigger's latest firing: what its looks cost in the 7 days before,
+	// and the pace they are on. Nil for a trigger that has not fired since
+	// the API began writing it, and for a wake that counts toward none or
+	// whose trigger the caller can no longer read.
+	Spend *TriggerSpend
+	// SkippedBudget counts the watch's own firings the allowance skipped,
+	// which started nothing because the week's spend was at it. A wake
+	// skipped this way is tried again each minute until the spend allows
+	// it, or it is too late.
+	SkippedBudget int64
 
 	raw json.RawMessage
 }
@@ -144,7 +166,7 @@ func watchOf(t *Trigger, agent string) (*Watch, bool) {
 	w := &Watch{
 		TriggerID: t.Status.ID, Name: t.Metadata.Name, Title: t.Metadata.DisplayName, SetBy: SetByPerson, Origin: t.Status.Origin,
 		Notify: t.Spec.Session.Notify, Paused: t.Spec.Suspend, LastRunAt: t.Status.LastFiredAt, LastSessionID: t.Status.LastSessionID,
-		CreatedAt: t.Status.CreatedAt, raw: t.raw,
+		CreatedAt: t.Status.CreatedAt, SkippedBudget: skippedBudgetOf(t), raw: t.raw,
 	}
 	if w.Notify == "" {
 		w.Notify = NotifyAlways
@@ -159,8 +181,11 @@ func watchOf(t *Trigger, agent string) (*Watch, bool) {
 		if at := t.Spec.At; !at.IsZero() && !w.Paused {
 			w.NextAt = &at
 		}
+		// The trigger a wake counts toward is its session's, read with the
+		// session.
 		return w, true
 	}
+	w.CountsToward, w.PerWeekMicroUSD, w.Spend = w.TriggerID, perWeekOf(t), t.Status.Spend
 	if o != nil && o.Kind == TriggerFromProposal {
 		w.SetBy = SetByOffer
 		w.Session = &WatchSession{ID: o.SessionID}
@@ -206,17 +231,22 @@ type ListWatchesParams struct {
 //
 //   - each session a watch of the page came from, once, for its title,
 //     and, for a wake, its agent, which the wake's trigger does not name,
-//     and its Count;
+//     its Count, and the trigger that started it, which the wake's looks
+//     count toward;
 //   - for the watches set by an offer whose Why is not in KnownWhys, the
 //     log of each session they came from, once, in pages of 500 events
 //     from its start up to the last of the calls they were offered with,
-//     which hold the sentence of why the trigger does not keep.
+//     which hold the sentence of why the trigger does not keep;
+//   - after those, each trigger a wake counts toward that is not on the
+//     page, once, for its allowance and its Spend.
 //
 // A program that lists the watches again passes the Why of the last
-// reading in KnownWhys, and then reads one page of triggers and one
-// session per session the watches came from. A wake whose session the
-// caller can no longer read is left out, since its session's end deletes
-// it; a session gone or unreadable otherwise leaves its title empty.
+// reading in KnownWhys, and then reads one page of triggers, one session
+// per session the watches came from, and the triggers wakes count toward
+// that are on another page. A wake whose session the caller can no longer
+// read is left out, since its session's end deletes it; a session gone or
+// unreadable otherwise leaves its title empty, and a trigger a wake counts
+// toward that is gone or unreadable leaves its allowance and spend empty.
 func (c *Client) ListWatches(ctx context.Context, params *ListWatchesParams) iter.Seq2[*Watch, error] {
 	return latere.Items(ctx, func(ctx context.Context, cursor string) (*latere.Page[*Watch], error) {
 		return c.watchesPage(ctx, params, cursor)
@@ -248,13 +278,20 @@ func (c *Client) watchesPage(ctx context.Context, params *ListWatchesParams, cur
 		return nil, err
 	}
 	var found []*Watch
+	byID := map[string]*Trigger{}
 	for _, t := range page.Items {
+		if t.Status.ID != "" {
+			byID[t.Status.ID] = t
+		}
 		if w, ok := watchOf(t, params.Agent); ok {
 			found = append(found, w)
 		}
 	}
 	watches, err := c.readWatchSessions(ctx, params.Agent, found, params.KnownWhys)
 	if err != nil {
+		return nil, err
+	}
+	if err := c.readWakeSpends(ctx, watches, byID); err != nil {
 		return nil, err
 	}
 	return &latere.Page[*Watch]{Items: watches, NextCursor: page.NextCursor}, nil
@@ -340,11 +377,60 @@ func (c *Client) readWatchSessions(ctx context.Context, agent string, watches []
 				if s.Wake != nil && s.Wake.TriggerID == w.TriggerID {
 					w.Count = s.Wake.Count
 				}
+				w.CountsToward = s.TriggerID
 			}
 		}
 		out = append(out, w)
 	}
 	return out, nil
+}
+
+// readWakeSpends writes, into each wake of watches that counts toward a
+// trigger, that trigger's allowance and Spend: read from page, the page's
+// triggers by id, or else from the API, once per trigger. A trigger the
+// caller may no longer read leaves them empty.
+func (c *Client) readWakeSpends(ctx context.Context, watches []*Watch, page map[string]*Trigger) error {
+	counted := map[string]*Trigger{}
+	var missing []string
+	for _, w := range watches {
+		id := w.CountsToward
+		if w.Kind != WatchWake || id == "" {
+			continue
+		}
+		if _, seen := counted[id]; seen {
+			continue
+		}
+		counted[id] = page[id]
+		if page[id] == nil {
+			missing = append(missing, id)
+		}
+	}
+	var mu sync.Mutex
+	tasks := make([]func(context.Context) error, 0, len(missing))
+	for _, id := range missing {
+		tasks = append(tasks, func(ctx context.Context) error {
+			t, err := c.GetTrigger(ctx, id)
+			if err != nil && !unreadable(err) {
+				return err
+			}
+			mu.Lock()
+			counted[id] = t
+			mu.Unlock()
+			return nil
+		})
+	}
+	if err := runBounded(ctx, tasks); err != nil {
+		return err
+	}
+	for _, w := range watches {
+		if w.Kind != WatchWake {
+			continue
+		}
+		if t := counted[w.CountsToward]; t != nil {
+			w.PerWeekMicroUSD, w.Spend = perWeekOf(t), t.Status.Spend
+		}
+	}
+	return nil
 }
 
 // unreadable reports an answer that the caller may not, or no longer,

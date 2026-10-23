@@ -13,9 +13,10 @@ import (
 	"latere.ai/x/sdk-go/latere"
 )
 
-// Listing what watches for the person in Latere Chat, and whether
-// everything is paused. The program keeps the whys of the last reading,
-// so the next one reads no session's log again.
+// Listing what watches for the person in Latere Chat, whether everything
+// is paused, and each watch's week against its allowance. The program
+// keeps the whys of the last reading, so the next one reads no session's
+// log again.
 func ExampleClient_ListWatches() {
 	ctx := context.Background()
 	c := client()
@@ -43,7 +44,27 @@ func ExampleClient_ListWatches() {
 		if w.SetBy == agents.SetByOffer {
 			fmt.Println("  offered in", w.Session.ID, "and accepted on", w.CreatedAt.Local().Format("2 January"))
 		}
+		if s := w.Spend; s != nil && w.PerWeekMicroUSD > 0 {
+			fmt.Printf("  $%.2f of $%.2f this week\n", float64(s.SpentMicroUSD)/1e6, float64(w.PerWeekMicroUSD)/1e6)
+			switch {
+			case s.AtAllowance():
+				fmt.Println("  paused by its allowance until older looks leave the week")
+			case s.AheadOfPace():
+				fmt.Printf("  on course for $%.2f\n", float64(*s.ProjectedMicroUSD)/1e6)
+			}
+		}
 	}
+}
+
+// Giving a watch an allowance of $2 a week, such as an event trigger the
+// person accepted from an offer that named none.
+func ExampleClient_SetTriggerAllowance() {
+	ctx := context.Background()
+	t, err := client().SetTriggerAllowance(ctx, "trg_01M34G2JF01B91B8399CD1G6YP", 2_000_000)
+	if err != nil {
+		log.Fatal(err)
+	}
+	fmt.Println(t.Metadata.DisplayName, t.Spec.Budget.PerWeekMicroUSD)
 }
 
 // Pausing every trigger of the person at once. Each keeps its own pause,
@@ -89,6 +110,9 @@ func ExampleToolUse_Offer() {
 	switch held.Action {
 	case agents.OfferPropose:
 		fmt.Println(held.Name+"?", held.Why)
+		if held.PerWeekUSD != "" {
+			fmt.Println("At most $" + held.PerWeekUSD + " a week.")
+		}
 	case agents.OfferChange, agents.OfferResume, agents.OfferDelete:
 		t, err := c.GetTrigger(ctx, held.TriggerID)
 		if err != nil {

@@ -149,15 +149,23 @@ var leftOut = map[string]string{
 // takes them as read, and TestFieldsAheadOfTheDocumentAreStillAhead fails
 // once the document describes one, so the model is then held to it.
 var aheadOfTheDocument = map[string]ahead{
-	"Session.wake":            {"Session", "a session's pending wake"},
-	"Session.outcome":         {"Session", "whether the latest turn a trigger began brought anything to the person"},
-	"Session.notice":          {"Session", "what the agent last brought to the person"},
-	"SessionStatus.outcome":   {"event:session.status", "the outcome of the turn the idle status ends"},
-	"UserMessage.wake":        {"event:user.message", "the wake a message came from"},
-	"TriggerSpec.at":          {"TriggerSpec", "the time a trigger that fires once fires at"},
-	"TriggerSession.target":   {"TriggerSession", "the session every firing continues"},
-	"TriggerSession.attended": {"TriggerSession", "whether a firing's sessions wait for their owner's answers"},
-	"TriggerSession.notify":   {"TriggerSession", "whether every turn a firing begins brings its result"},
+	"Session.wake":               {"Session", "a session's pending wake"},
+	"Session.outcome":            {"Session", "whether the latest turn a trigger began brought anything to the person"},
+	"Session.notice":             {"Session", "what the agent last brought to the person"},
+	"SessionStatus.outcome":      {"event:session.status", "the outcome of the turn the idle status ends"},
+	"UserMessage.wake":           {"event:user.message", "the wake a message came from"},
+	"TriggerSpec.at":             {"TriggerSpec", "the time a trigger that fires once fires at"},
+	"TriggerSession.target":      {"TriggerSession", "the session every firing continues"},
+	"TriggerSession.attended":    {"TriggerSession", "whether a firing's sessions wait for their owner's answers"},
+	"TriggerSession.notify":      {"TriggerSession", "whether every turn a firing begins brings its result"},
+	"TriggerSpec.budget":         {"TriggerSpec", "a trigger's weekly allowance"},
+	"TriggerStatus.spend":        {"ManifestStatus", "a trigger's week as of its latest firing"},
+	"FiringCounts.skippedBudget": {"TriggerCounts", "the firings a trigger's allowance skipped"},
+	"Session.context_report":     {"Session", "how full the session's context is"},
+	"UserMessage.spend":          {"event:user.message", "the week a firing's turn counts toward"},
+	"ToolUse.attended":           {"event:agent.tool_use", "whether a person began the call's turn"},
+	"ApprovalRequested.attended": {"event:approval.requested", "whether a person began the request's turn"},
+	"ModelRequest.context":       {"event:model.request", "how full a request left the model's window"},
 }
 
 // ahead is a field of aheadOfTheDocument: the schema it will join, a
@@ -275,6 +283,8 @@ func TestModelsMatchTheSchemas(t *testing.T) {
 		{[]string{"session.error"}, reflect.TypeFor[SessionError]()},
 		{[]string{"user.message"}, reflect.TypeFor[UserMessage]()},
 		{[]string{"session.machine"}, reflect.TypeFor[SessionMachine]()},
+		{[]string{"approval.requested"}, reflect.TypeFor[ApprovalRequested]()},
+		{[]string{"model.request"}, reflect.TypeFor[ModelRequest]()},
 	} {
 		union := &schema{Properties: map[string]*schema{}}
 		for _, typ := range p.types {

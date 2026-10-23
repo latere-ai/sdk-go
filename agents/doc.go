@@ -93,8 +93,9 @@
 //		Agent:          "latere-chat",
 //		Title:          "Weekly news",
 //		Instruction:    "Summarize this week's news on climate policy.",
-//		Schedule:       &agents.RoutineSchedule{Days: []time.Weekday{time.Monday}, Hour: 9, Zone: "Europe/Berlin"},
-//		IdempotencyKey: key,
+//		Schedule:        &agents.RoutineSchedule{Days: []time.Weekday{time.Monday}, Hour: 9, Zone: "Europe/Berlin"},
+//		PerWeekMicroUSD: 1_000_000, // at most $1 a week
+//		IdempotencyKey:  key,
 //	})
 //
 // Client.ListRoutines, Client.GetRoutine, Client.ChangeRoutine,
@@ -103,6 +104,18 @@
 // exist in the caller's context first: a program signed in as a person
 // makes a managed agent exist with account.ApplyManagedAgent. A routine's
 // runs are the sessions whose TriggerID is its TriggerID.
+//
+// A trigger, a routine among them, may have a weekly allowance in
+// millionths of a US dollar, its TriggerAllowance: the most its looks, the
+// turns its firings began and those of the wakes set in the sessions it
+// started, may cost in a rolling 7 days. The API counts that spend at each
+// firing; a firing while it is at the allowance starts nothing and records
+// FiringSkippedBudget, and once the oldest looks leave the 7 days the next
+// firing runs. A change of a routine keeps its allowance unless it names
+// one, and Client.SetTriggerAllowance sets the allowance of any trigger.
+// TriggerStatus.Spend, a TriggerSpend, is the week as of the latest
+// firing, with the pace it is on: AheadOfPace reports a week on course
+// past its allowance.
 //
 // The shape is package routine's, which names the manifest, the name a key
 // makes and the checks, and imports the standard library alone, for a
@@ -118,8 +131,10 @@
 // that fires once and sends its note back to the session, to look again
 // later. Client.ListWatches reads all of it in one shape, a Watch each:
 // its kind, when it looks next, the sentence of why it exists, who set
-// it, the session it came from, whether it is paused, and a wake's place
-// in its row.
+// it, the session it came from, whether it is paused, a wake's place in
+// its row, and the week of the trigger its looks count toward
+// (Watch.CountsToward): its own, or for a wake, the trigger that started
+// the wake's session.
 //
 //	whys := map[string]string{} // kept between readings
 //	for w, err := range ag.ListWatches(ctx, &agents.ListWatchesParams{Agent: "latere-chat", KnownWhys: whys}) {
@@ -127,7 +142,7 @@
 //			return err
 //		}
 //		whys[w.TriggerID] = w.Why
-//		fmt.Println(w.Kind, w.Title, w.Why, w.SetBy)
+//		fmt.Println(w.Kind, w.Title, w.Why, w.SetBy, w.Spend.AheadOfPace())
 //	}
 //
 // An offer's why is in the call it was offered with, not on its trigger,
@@ -140,6 +155,27 @@
 // it. A Session names its pending
 // wake, whether its latest turn a trigger began was TurnQuiet or
 // TurnNotified, and the latest Notice its agent brought the person.
+//
+// A turn a trigger's or a wake's message began is one nobody watches. Its
+// UserMessage carries the week of the trigger it counts toward as a
+// FiringSpend, which the agent read before the message, and the ToolUse
+// and ApprovalRequested events of the turn say Attended false. An Offer
+// carries the weekly allowance the agent asked for, its estimate of a
+// week of looks, for the person to read before they allow it.
+//
+// # Context
+//
+// A Session's ContextReport says how full its context is and what fills
+// it, from the latest model request of its own thread, and each
+// EventModelRequest's ModelRequest carries the report of that request as
+// its Context. ContextReport.UsedFraction answers the share of the window
+// used, and ContextReport.PartsInOrder the parts that fill it: the
+// instructions, the tool definitions, the conversation, the files people
+// brought, the summary of compacted history, and what is free.
+//
+//	if full, ok := s.ContextReport.UsedFraction(); ok {
+//		fmt.Printf("%.0f%% of %d tokens\n", full*100, s.ContextReport.Window)
+//	}
 //
 // # Scope
 //

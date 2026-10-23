@@ -119,6 +119,16 @@ func (api *watchAPI) serve(w http.ResponseWriter, r *http.Request) {
 			fmt.Fprint(w, s)
 			return
 		}
+	case strings.HasPrefix(r.URL.Path, "/v1/agents/triggers/"):
+		ref := strings.TrimPrefix(r.URL.Path, "/v1/agents/triggers/")
+		for _, t := range api.triggers {
+			if status, _ := t["status"].(map[string]any); status != nil && status["id"] == ref {
+				if err := json.NewEncoder(w).Encode(t); err != nil {
+					api.t.Error(err)
+				}
+				return
+			}
+		}
 	}
 	w.WriteHeader(http.StatusNotFound)
 	fmt.Fprint(w, `{"error":{"code":"not_found","message":"Not found."}}`)
@@ -516,5 +526,117 @@ func TestAFailureStartsNoMoreReads(t *testing.T) {
 		if strings.HasSuffix(call, "/ses_4") || strings.HasSuffix(call, "/ses_5") {
 			t.Errorf("read %s after a read failed", call)
 		}
+	}
+}
+
+// startedBy is a session of agent, with its pending wake, that the
+// trigger triggerID started; none when triggerID is empty.
+func startedBy(id, agent, wake, triggerID string) string {
+	s := sessionOf(id, agent, "Started", wake)
+	if triggerID == "" {
+		return s
+	}
+	return strings.Replace(s, `"status":"idle"`, fmt.Sprintf(`"trigger_id":%q,"status":"idle"`, triggerID), 1)
+}
+
+// TestAWatchCarriesTheWeekItCountsToward: a routine and an event watch
+// carry their own allowance, week and skipped firings; a wake carries the
+// allowance and week of the trigger that started its session, read from
+// the page when it is there and else once per trigger, none in a session a
+// person started, and none when that trigger is gone; its own skipped
+// firings are its own.
+func TestAWatchCarriesTheWeekItCountsToward(t *testing.T) {
+	api, c := newWatchAPI(t)
+	api.pageSize = 6
+	week := map[string]any{"windowDays": 7, "spentUsdMicro": 1_500_000, "perWeekUsdMicro": 2_000_000, "perLookUsdMicro": 300_000,
+		"expectedLooks": 3, "projectedUsdMicro": 2_400_000}
+	other := map[string]any{"windowDays": 7, "spentUsdMicro": 900_000, "expectedLooks": 1}
+	budget := func(perWeek int) func(spec map[string]any) {
+		return func(spec map[string]any) { spec["budget"] = map[string]any{"perWeek": perWeek} }
+	}
+	skipped := func(status map[string]any, n int) map[string]any {
+		status["counts"] = map[string]any{"started": 1, "continued": 0, "held": 0, "filtered": 0, "skippedActive": 0, "skippedBusy": 0,
+			"skippedLate": 0, "refused": 0, "failed": 0, "skippedBudget": n}
+		return status
+	}
+	event := eventTrigger(chat, "event", map[string]any{"id": "trg_2", "spend": other})
+	event["spec"].(map[string]any)["budget"] = map[string]any{"perWeek": 1_000_000}
+	api.triggers = []map[string]any{
+		routineTrigger(chat, "inbox", "Inbox", "Look at the inbox.", skipped(map[string]any{"id": "trg_1", "spend": week}, 2), budget(2_000_000)),
+		event,
+		wakeTrigger("trg_4", "ses_b", "toolu_3", "Whether the refund arrived"),
+		wakeTrigger("trg_5", "ses_c", "toolu_4", "Whether the build passed"),
+		wakeTrigger("trg_6", "ses_d", "toolu_5", "Whether the parcel came"),
+		wakeTrigger("trg_8", "ses_e", "toolu_6", "Whether they answered"),
+		// On the next page.
+		routineTrigger(chat, "build", "Build", "Check the build.", map[string]any{"id": "trg_7", "spend": other}, budget(4_000_000)),
+	}
+	skipped(api.triggers[3]["status"].(map[string]any), 1)
+	api.sessions["ses_b"] = startedBy("ses_b", chat, `{"trigger_id":"trg_4","at":"2026-10-24T07:00:00Z","title":"Whether the refund arrived","count":1}`, "trg_1")
+	api.sessions["ses_c"] = startedBy("ses_c", chat, `{"trigger_id":"trg_5","at":"2026-10-24T07:00:00Z","title":"Whether the build passed","count":1}`, "trg_7")
+	api.sessions["ses_d"] = startedBy("ses_d", chat, "", "trg_7")
+	api.sessions["ses_e"] = startedBy("ses_e", chat, "", "")
+	page, err := c.ListWatchesPage(t.Context(), &agents.ListWatchesParams{Agent: chat})
+	if err != nil {
+		t.Fatal(err)
+	}
+	type read struct {
+		countsToward     string
+		perWeek, skipped int64
+		spent            int64
+	}
+	got := map[string]read{}
+	for _, w := range page.Items {
+		r := read{countsToward: w.CountsToward, perWeek: w.PerWeekMicroUSD, skipped: w.SkippedBudget, spent: -1}
+		if w.Spend != nil {
+			r.spent = w.Spend.SpentMicroUSD
+		}
+		got[w.TriggerID] = r
+	}
+	want := map[string]read{
+		"trg_1": {"trg_1", 2_000_000, 2, 1_500_000},
+		"trg_2": {"trg_2", 1_000_000, 0, 900_000},
+		"trg_4": {"trg_1", 2_000_000, 0, 1_500_000},
+		"trg_5": {"trg_7", 4_000_000, 1, 900_000},
+		"trg_6": {"trg_7", 4_000_000, 0, 900_000},
+		"trg_8": {"", 0, 0, -1},
+	}
+	if !reflect.DeepEqual(got, want) {
+		t.Errorf("the watches read\n%+v\nwant\n%+v", got, want)
+	}
+	for _, w := range page.Items {
+		if w.TriggerID == "trg_4" && !w.Spend.AheadOfPace() {
+			t.Errorf("the wake's week is not ahead of pace: %+v", w.Spend)
+		}
+	}
+	reads := 0
+	for _, call := range api.received() {
+		if strings.HasPrefix(call, "GET /v1/agents/triggers/") {
+			reads++
+			if call != "GET /v1/agents/triggers/trg_7" {
+				t.Errorf("read %s", call)
+			}
+		}
+	}
+	if reads != 1 {
+		t.Errorf("read the trigger on the next page %d times", reads)
+	}
+
+	// The trigger that started a wake's session is gone.
+	api.change(func() { api.triggers = api.triggers[:6] })
+	page, err = c.ListWatchesPage(t.Context(), &agents.ListWatchesParams{Agent: chat})
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, w := range page.Items {
+		if w.TriggerID == "trg_5" && (w.CountsToward != "trg_7" || w.Spend != nil || w.PerWeekMicroUSD != 0) {
+			t.Errorf("a wake whose trigger is gone reads %+v", w)
+		}
+	}
+
+	// A failed read of that trigger fails the page.
+	api.change(func() { api.failing["/v1/agents/triggers/trg_7"] = true })
+	if _, err := c.ListWatchesPage(t.Context(), &agents.ListWatchesParams{Agent: chat}); err == nil {
+		t.Error("a failed read of the trigger a wake counts toward read as a page")
 	}
 }

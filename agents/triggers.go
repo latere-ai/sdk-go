@@ -492,6 +492,24 @@ func (c *Client) triggersPage(ctx context.Context, params *ListTriggersParams, c
 // is empty.
 var errNoTrigger = errors.New("agents: the trigger's id or name is empty")
 
+// holdRef is the last part of the hold's path, a name no trigger takes.
+const holdRef = "hold"
+
+// errHoldRef is returned before any request for a trigger named holdRef,
+// whose path is the hold's: a manifest applied there would set the hold.
+var errHoldRef = errors.New(`agents: "hold" names the hold of every trigger, not a trigger; use GetTriggerHold or SetTriggerHold`)
+
+// checkRef refuses a trigger's id or name that is empty or the hold's.
+func checkRef(ref string) error {
+	switch ref {
+	case "":
+		return errNoTrigger
+	case holdRef:
+		return errHoldRef
+	}
+	return nil
+}
+
 // triggerPath is the path of a trigger, by id or name, or of one of its
 // sub-resources.
 func triggerPath(ref, rest string) string {
@@ -502,8 +520,8 @@ func triggerPath(ref, rest string) string {
 // returns an error matching latere.ErrNotFound when there is no such
 // trigger the caller may read.
 func (c *Client) GetTrigger(ctx context.Context, ref string) (*Trigger, error) {
-	if ref == "" {
-		return nil, errNoTrigger
+	if err := checkRef(ref); err != nil {
+		return nil, err
 	}
 	var out Trigger
 	if err := c.cfg.Do(ctx, &latere.Request{Method: http.MethodGet, Path: triggerPath(ref, "")}, &out); err != nil {
@@ -521,9 +539,15 @@ func (c *Client) GetTrigger(ctx context.Context, ref string) (*Trigger, error) {
 // GetTrigger, changes it and applies it drops any field this version of
 // the SDK does not model, such as one the API added later; send the JSON
 // Trigger.RawJSON holds, changed, through latere.Config.Do to keep them.
+//
+// The name "hold" is refused before any request: its path is the hold's,
+// which SetTriggerHold sets.
 func (c *Client) ApplyTrigger(ctx context.Context, t *Trigger) (*Trigger, error) {
 	if t == nil || t.Metadata.Name == "" {
 		return nil, errors.New("agents: the trigger's Metadata.Name is required")
+	}
+	if t.Metadata.Name == holdRef {
+		return nil, errHoldRef
 	}
 	manifest := *t
 	if manifest.APIVersion == "" {
@@ -544,10 +568,69 @@ func (c *Client) ApplyTrigger(ctx context.Context, t *Trigger) (*Trigger, error)
 // DeleteTrigger deletes the trigger ref names, by its id or its name. The
 // sessions it started are kept.
 func (c *Client) DeleteTrigger(ctx context.Context, ref string) error {
-	if ref == "" {
-		return errNoTrigger
+	if err := checkRef(ref); err != nil {
+		return err
 	}
 	return c.cfg.Do(ctx, &latere.Request{Method: http.MethodDelete, Path: triggerPath(ref, "")}, nil)
+}
+
+// A TriggerHold is whether every trigger of the caller is held: while it
+// is, none of them fires. A schedule fires nothing it missed once the
+// hold is released, a trigger that fires once fires within the minute
+// after, and an event that arrives meanwhile is refused with
+// latere.ErrConflict and not delivered again. Wakes and offers an agent
+// makes meanwhile are still made, and wait for the release.
+type TriggerHold struct {
+	// Held reports that the hold is on.
+	Held bool `json:"held"`
+	// Since is when it was put on; nil while it is off.
+	Since *time.Time `json:"since,omitempty"`
+
+	raw json.RawMessage
+}
+
+// RawJSON returns the JSON the API answered for the hold, with every
+// field, including those this package does not model; nil for a
+// TriggerHold the program built itself.
+func (h *TriggerHold) RawJSON() json.RawMessage { return h.raw }
+
+// UnmarshalJSON decodes the hold and keeps the JSON for RawJSON.
+func (h *TriggerHold) UnmarshalJSON(b []byte) error {
+	type plain TriggerHold
+	if err := json.Unmarshal(b, (*plain)(h)); err != nil {
+		return err
+	}
+	h.raw = keep(b)
+	return nil
+}
+
+// holdPath is the path of the hold of every trigger of the caller.
+const holdPath = basePath + "/triggers/" + holdRef
+
+// GetTriggerHold returns whether every trigger of the caller, in the
+// context its credential names, is held.
+func (c *Client) GetTriggerHold(ctx context.Context) (*TriggerHold, error) {
+	var out TriggerHold
+	if err := c.cfg.Do(ctx, &latere.Request{Method: http.MethodGet, Path: holdPath}, &out); err != nil {
+		return nil, err
+	}
+	return &out, nil
+}
+
+// SetTriggerHold puts the hold on every trigger of the caller, or with
+// held false releases it, and returns the hold as it then stands. A
+// trigger paused on its own stays paused when the hold is released, so a
+// program pauses everything without losing which were on. Setting the
+// hold it already has changes nothing, so the call is safe to retry. An
+// installation whose authorizer does not decide the hold yet refuses it
+// with latere.ErrForbidden.
+func (c *Client) SetTriggerHold(ctx context.Context, held bool) (*TriggerHold, error) {
+	var out TriggerHold
+	req := &latere.Request{Method: http.MethodPut, Path: holdPath, Body: map[string]bool{"held": held}}
+	if err := c.cfg.Do(ctx, req, &out); err != nil {
+		return nil, err
+	}
+	return &out, nil
 }
 
 // FireTriggerParams is a firing a program asks for.

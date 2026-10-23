@@ -302,3 +302,63 @@ func TestATriggerThatFiresOnceContinuesItsTarget(t *testing.T) {
 		t.Errorf("read the origin as %+v, want %+v", o, want)
 	}
 }
+
+// TestTheHoldIsReadAndSet: the hold is read, set and released at its own
+// route, answers with when it was put on, and passes the API's refusal
+// through.
+func TestTheHoldIsReadAndSet(t *testing.T) {
+	c, calls := fakeAPI(t, map[string]string{
+		"GET /v1/agents/triggers/hold": `{"held":true,"since":"2026-10-23T08:00:00Z","by":"alice"}`,
+		"PUT /v1/agents/triggers/hold": `{"held":false}`,
+	})
+	h, err := c.GetTriggerHold(t.Context())
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !h.Held || h.Since == nil || !h.Since.Equal(time.Date(2026, 10, 23, 8, 0, 0, 0, time.UTC)) || !strings.Contains(string(h.RawJSON()), `"by"`) {
+		t.Errorf("read the hold as %+v, %s", h, h.RawJSON())
+	}
+	h, err = c.SetTriggerHold(t.Context(), false)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if h.Held || h.Since != nil {
+		t.Errorf("released the hold as %+v", h)
+	}
+	if put := (*calls)[1]; put.Method != http.MethodPut || put.Path != "/v1/agents/triggers/hold" || len(put.Body) != 1 || put.Body["held"] != false {
+		t.Errorf("sent %+v", put)
+	}
+	if _, err := c.SetTriggerHold(t.Context(), true); err != nil {
+		t.Fatal(err)
+	}
+	if (*calls)[2].Body["held"] != true {
+		t.Errorf("put the hold on with %v", (*calls)[2].Body)
+	}
+
+	refused, _ := fakeAPI(t, nil)
+	if _, err := refused.GetTriggerHold(t.Context()); !errors.Is(err, latere.ErrNotFound) {
+		t.Errorf("a refusal of the read: %v", err)
+	}
+	if _, err := refused.SetTriggerHold(t.Context(), true); !errors.Is(err, latere.ErrNotFound) {
+		t.Errorf("a refusal of the set: %v", err)
+	}
+}
+
+// TestHoldNamesNoTrigger: the trigger calls refuse the name "hold" before
+// any request, since its path is the hold's and a manifest applied there
+// would set it.
+func TestHoldNamesNoTrigger(t *testing.T) {
+	c, calls := fakeAPI(t, map[string]string{"PUT /v1/agents/triggers/hold": `{"held":false}`, "GET /v1/agents/triggers/hold": `{"held":true}`, "DELETE /v1/agents/triggers/hold": ""})
+	if _, err := c.ApplyTrigger(t.Context(), &agents.Trigger{Metadata: agents.TriggerMetadata{Name: "hold"}}); err == nil {
+		t.Error("applied a trigger named hold")
+	}
+	if _, err := c.GetTrigger(t.Context(), "hold"); err == nil {
+		t.Error("read the hold as a trigger")
+	}
+	if err := c.DeleteTrigger(t.Context(), "hold"); err == nil {
+		t.Error("deleted the hold as a trigger")
+	}
+	if len(*calls) != 0 {
+		t.Errorf("sent %+v", *calls)
+	}
+}

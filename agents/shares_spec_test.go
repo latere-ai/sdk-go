@@ -13,10 +13,14 @@ import (
 // routesOutsideTheDocuments are the routes the package calls that no
 // published document describes, each with what its models follow
 // instead. The read of a share is served beside the account part, on
-// the API's own prefix, so the account document is checked too.
+// the API's own prefix, so the account document is checked too. A route
+// of the agents part is written as its document writes its paths, under
+// the server root.
 var routesOutsideTheDocuments = map[string]string{
 	"get /v1/shares/{token}":                "the platform's read of a share, whose page SharedPage and Share follow",
 	"get /v1/shares/{token}/blobs/{digest}": "the platform's read of a file a share names, whose bytes FileReader reads",
+	"get /triggers/hold":                    "the read of the hold of every trigger of the caller, whose answer TriggerHold follows",
+	"put /triggers/hold":                    "the set of the hold of every trigger of the caller, which sends held and answers as the read",
 }
 
 // TestRoutesOutsideTheDocumentsAreStillOutside fails once a vendored

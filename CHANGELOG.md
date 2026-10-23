@@ -7,6 +7,8 @@ minor version may break code, and every such change is marked **Breaking**.
 
 ## [Unreleased]
 
+## [0.10.0] - 2026-10-23
+
 ### Added
 
 - Package `agents`: `ListWatches` and `ListWatchesPage`, a person's

@@ -54,6 +54,29 @@
 // folder there in Session.Folder, and a kept file's Ref is its place in
 // that folder.
 //
+// # A page an agent made
+//
+// An HTML file of a session, such as one the agent wrote or one an answer
+// linked, is a page a program may show as a page rather than as text. Its
+// scripts are the agent's, so the page runs closed off from everything of
+// the program's, under PageSandbox and PagePolicy, the rules Latere Chat
+// and Latere Studio both follow. A program shows the page:
+//
+//   - in a frame or view whose sandbox is PageSandbox and nothing more;
+//   - from an opaque origin of the page's own, such as an iframe's srcdoc
+//     or an address of a scheme or host that serves this page alone, never
+//     the program's own origin;
+//   - with PagePolicy first in the page's head, as
+//     <meta http-equiv="Content-Security-Policy" content="...">, where a
+//     browser reads it before anything it governs, put there without
+//     running the page and after its doctype, so the page is drawn in the
+//     mode its doctype asks for;
+//   - where the program answers the page's address itself, with the
+//     answer's Content-Security-Policy set to "sandbox " + PageSandbox +
+//     "; " + PagePolicy as well;
+//   - sending no referrer, by an iframe's referrerpolicy="no-referrer" or
+//     an answer's Referrer-Policy: no-referrer.
+//
 // # Routines
 //
 // A routine is an instruction a person hands an agent once, which runs

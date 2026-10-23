@@ -46,6 +46,12 @@ minor version may break code, and every such change is marked **Breaking**.
   pause an agent's trigger tool made, and `Watch.Pause`, the same on a
   watch; and `FiringCounts.SkippedEnded`, the firings whose target
   session had ended.
+- Package `account`: `GetSpend`, the person's spending by day as a
+  `Spend`: each `SpendDay`'s `PersonLedMicroUSD` and `ProactiveMicroUSD`,
+  the share of their credit for work that runs with nobody watching
+  (`ShareBasisPoints`, `ShareMovedAt`), its `PoolMicroUSD`, what it spent
+  in the last 7 days and `ProactiveLeftMicroUSD`; `MaxSpendDays` bounds
+  the days read. The personal context alone.
 - Package `agents/routine`: `Fields.PerWeekMicroUSD` and
   `Trigger.PerWeekMicroUSD`, written as `spec.budget.perWeek` by
   `Manifest`, which keeps the stored allowance when the fields carry

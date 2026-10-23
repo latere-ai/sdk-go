@@ -488,7 +488,11 @@ API counts in, named `...MicroUSD` as a session's spend is. The one
 amount an agent writes is the allowance it asks for in an offer, a
 decimal of dollars; `Offer` keeps it as written, for wording, and in
 millionths, parsed as digits rather than as a float, so 0.1 is exactly
-100000.
+100000. It is read by the trigger tool's own rules, a JSON number or a
+string holding one, at most six digits after the point and above zero,
+so an offer the client shows is one the tool held, and the amount it
+shows is the one the tool applies. One amount is refused where the tool
+takes it: one past what an int64 of millionths holds.
 
 `Attended` on a tool call and an approval is a `*bool`: false says a
 person began no part of the turn, and nil says the event was written
@@ -577,7 +581,7 @@ API's reference pages, and its tests hold the routes it calls, and the one
 list shape the document does define, to the document.
 
 Every resource a package returns, a session, an event, a session summary,
-a shared page, a trigger, a wallet, a pin, a context's network section
+a shared page, a trigger, a wallet, a person's spending by day, a pin, a context's network section
 and its bookmarks, a share link, a checkout, the
 data places and terms, a project, a trigger's link or address, a device,
 an app, a deploy, an app's sessions and visits, a listing, a frame pass,
@@ -665,6 +669,14 @@ does, so the models are then held to it. Who paused a trigger, and why,
 is the trigger's own `status.paused`, which the API writes when an apply
 suspends it, so `Watch.Pause` reads it from the trigger list without a
 read of the log the pausing call is in.
+
+The account part's read of spending by day, `/v1/account/wallet/spend`,
+is in the platform's own account reference before the published
+document, so `account.Spend` follows that reference and the `account`
+tests list the route and fail once the vendored document describes it. A
+day of it is a calendar day, which the SDK reads as a `time.Time` at
+midnight UTC, as it reads every other point in time, and writes back in
+the API's own form.
 
 The web part has no reference document yet, so `web`'s tests hold the
 client to the answers the platform's icon and image routes give rather

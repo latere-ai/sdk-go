@@ -460,8 +460,14 @@ The package also keeps what a person's clients share:
   replacing the one it had, with `RemoveTriggerHook` and
   `RemoveTriggerAddress` to turn them off.
 - **Money and data:** `StartCheckout` answers a payment page for credit,
-  sent once, `GetDataPlaces` where the installation keeps sessions and
-  runs their machines, and `GetModelDataTerms` the data terms of models.
+  sent once, `GetSpend` what the person spent by day, split into what
+  they led and what ran with nobody watching (`PersonLedMicroUSD` and
+  `ProactiveMicroUSD`), with the share of their credit that goes to the
+  latter, its pool and what it spent in the last 7 days,
+  `GetDataPlaces` where the installation keeps sessions and runs their
+  machines, and `GetModelDataTerms` the data terms of models. `GetSpend`
+  reads the personal context alone; an organization's token is refused
+  with `latere.ErrForbidden`.
 - `RecordArrival` records the site that referred a person and the page
   they landed on.
 

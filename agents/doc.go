@@ -33,9 +33,10 @@
 // to wait for a tool your program runs, is idle with StopReason
 // StopQuestion, StopToolConfirmation or StopToolResult; answer it with
 // Client.AnswerQuestion, Client.ConfirmTool or Client.SendToolResult. A
-// held call of the trigger tool is an agent's offer of a routine, which
-// ToolUse.Offer reads, and which only the person who started the session
-// answers.
+// held call of the trigger tool is an agent's offer of standing work, a
+// new routine or event trigger, a change, a resume or a delete, and a
+// held call of the wake tool its offer to keep looking again; ToolUse.Offer
+// reads either, and only the person who started the session answers it.
 //
 // # Files
 //
@@ -107,6 +108,35 @@
 // makes and the checks, and imports the standard library alone, for a
 // server that applies a routine without this package's client.
 //
+// # Watches
+//
+// An agent may keep standing work for a person beyond the routines they
+// make: it offers a routine or a trigger that fires on events, which is
+// made, as the person's, once they accept, and it sets a wake, a trigger
+// that fires once and sends its note back to the session, to look again
+// later. Client.ListWatches reads all of it in one shape, a Watch each:
+// its kind, when it looks next, the sentence of why it exists, who set
+// it, the session it came from, whether it is paused, and a wake's place
+// in its row.
+//
+//	whys := map[string]string{} // kept between readings
+//	for w, err := range ag.ListWatches(ctx, &agents.ListWatchesParams{Agent: "latere-chat", KnownWhys: whys}) {
+//		if err != nil {
+//			return err
+//		}
+//		whys[w.TriggerID] = w.Why
+//		fmt.Println(w.Kind, w.Title, w.Why, w.SetBy)
+//	}
+//
+// An offer's why is in the call it was offered with, not on its trigger,
+// so the first reading reads the logs of the sessions offers came from;
+// a reading given the whys of the last reads one page of triggers and one
+// session per session a watch came from. Client.SetTriggerHold pauses
+// every trigger of the person at once and leaves each one's own pause as
+// it was, and Client.GetTriggerHold reads it. A Session names its pending
+// wake, whether its latest turn a trigger began was TurnQuiet or
+// TurnNotified, and the latest Notice its agent brought the person.
+//
 // # Scope
 //
 // The package covers sessions and their events: listing, searching,
@@ -115,8 +145,8 @@
 // interrupts, answers, approvals and tool results, and reading a
 // session's files. It also covers triggers, which start sessions on a
 // schedule or when an event arrives: applying, listing, reading, firing
-// and deleting them, and listing their firings, and the routines written
-// as triggers. It does not cover yet defining agents and their versions,
-// counting sessions, or redacting an event. Call those with
-// latere.Config.Do until it does.
+// and deleting them, listing their firings and holding them all, and the
+// routines and watches written as triggers. It does not cover yet
+// defining agents and their versions, counting sessions, or redacting an
+// event. Call those with latere.Config.Do until it does.
 package agents

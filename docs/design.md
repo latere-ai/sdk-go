@@ -384,6 +384,52 @@ The agent a routine names must exist before its trigger is applied. The
 agent, and when to bring it to its live version, is the program's
 choice, and the docs name `account.ApplyManagedAgent`.
 
+## Watches
+
+A watch is not a resource of the API either. It is what two clients show
+a person under one heading: the routines they made, the routines and
+event triggers an agent offered and they accepted, and the wakes an agent
+set to look again in a session. Each is a trigger; what tells them apart
+is the routine's shape and the trigger's `origin`, the call of a
+session's agent that made it. Read by each client, the rules for which
+triggers are watches and what each one's sentence of why is would drift,
+so the SDK reads them, as `ListWatches`, a layer over the trigger list
+like `ListRoutines`.
+
+Three things a watch shows are not on its trigger, and each costs a read:
+
+- An offer's sentence of why is in the call the agent offered it with,
+  in the log of the session it was offered in, not on the trigger, so a
+  routine an agent made keeps a routine's shape. The log is read from
+  its start, since the events route takes no filter, and no further than
+  the last call a page needs: once in a pass for every offer of the same
+  session, and never past the moment the trigger was made, since the call
+  came before the person's allow.
+- A session's title is the session's.
+- A wake's agent is not on its trigger, which names its agent by id and
+  carries no routine label, and its place in its row of looks is the
+  session's: the wake's session answers both.
+
+So a page of watches reads the page of triggers, each session a watch
+came from once, and each log once, at most four reads at once, so a page
+takes about as long as its slowest read rather than the sum of them. An
+offer's why never changes, since the trigger keeps the call that made it
+across later applies, so `KnownWhys` takes the whys of an earlier
+reading, and a reading given them reads no log. The list keeps the page
+form of the trigger list, an iterator and a one-page method, so a person
+with many triggers is read a page at a time, as their routines are.
+
+A wake whose session the caller can no longer read is left out, since
+the session's end deletes it and its agent cannot be told; a session
+otherwise gone leaves its title empty and an offer's why the routine's
+instruction. An error of any other read fails the page, so a program
+never shows a partial list as a whole one.
+
+The offers themselves are read from the held call alone, by
+`ToolUse.Offer`, which sends nothing: a client finds a held call in the
+log it already follows, and reads the trigger a change, a resume or a
+delete names with `GetTrigger` only when it words one.
+
 ## A page an agent made
 
 An HTML file an agent wrote is shown by the clients of the platform as a
@@ -539,6 +585,16 @@ them. One is in what a program can learn of a session's files: the API
 lists no session's working directory, so a program learns which files a
 session made from its log alone, its kept files and the `ToolMeta` of
 its writes and edits.
+
+The agents API is adding a trigger that fires once and continues a
+session, a hold of every trigger of an owner, and a session's pending
+wake, the outcome of a turn a trigger began and the agent's notice,
+ahead of its published document. The models read them now, and the
+`agents` tests list each field and route the document does not describe
+yet and fail once it does, so the models are then held to it. One thing
+a client shows is not recorded by the API, and the SDK does not guess it:
+who paused a trigger, and why, which an agent writes in its pause call
+alone, in a log the trigger does not name.
 
 The web part has no reference document yet, so `web`'s tests hold the
 client to the answers the platform's icon and image routes give rather

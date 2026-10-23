@@ -130,11 +130,16 @@ to wait for a tool your program runs, is idle with `StopReason`
 `SendToolResult`. End a session whose work is done with `EndSession`, or
 remove it for good with `DeleteSession`.
 
-An agent may offer the person a routine: a held call of its `trigger`
-tool, whose `ToolUse.Offer` reads the routine's name, its ask, the
-agent's sentence of why and its schedule. Only the person who started the
-session answers it, with `ConfirmTool`: `DecisionAllow` makes the routine
-as theirs, and `DecisionDeny` with a `Note` declines it in their words.
+An agent may offer the person standing work: a held call of its
+`trigger` tool that proposes a routine or a trigger that fires on events,
+or changes, resumes or deletes one, or a held call of its `wake` tool to
+keep looking again after many looks in a row. `ToolUse.Offer` reads what
+a client words it from: its `Action`, the name, the ask, the agent's
+sentence of why, the schedule or the events, how it notifies, and the
+trigger a change, a resume or a delete acts on. Only the person who
+started the session answers it, with `ConfirmTool`: `DecisionAllow` runs
+it as theirs, and `DecisionDeny` with a `Note` declines it in their
+words.
 
 Change a session's model, reasoning, approval mode, title or labels with
 `UpdateSession`; an `agents.ModelChange` changes the model, its reasoning
@@ -198,6 +203,42 @@ server that applies a routine on a person's behalf, such as one an agent
 offered and the person accepted, writes it with `routine.Manifest`, so
 what it makes is a routine every client reads as one.
 
+### Watches
+
+Beyond the routines a person makes, an agent keeps standing work of its
+own: a routine or an event trigger it offered and the person accepted,
+and a wake, a trigger that fires once and sends the agent's note back to
+the session it set it in. `ListWatches` reads all of them as `Watch`es,
+each with its kind, when it looks next, the sentence of why it exists,
+who set it, the session it came from, whether it is paused, and a wake's
+place in its row of looks:
+
+```go
+whys := map[string]string{} // keep between readings
+for w, err := range ag.ListWatches(ctx, &agents.ListWatchesParams{Agent: "latere-chat", KnownWhys: whys}) {
+	if err != nil {
+		return err
+	}
+	whys[w.TriggerID] = w.Why
+	fmt.Println(w.Kind, w.Title, w.Why, w.SetBy, w.NextAt)
+}
+
+hold, err := ag.SetTriggerHold(ctx, true) // pause everything at once
+```
+
+A page of watches reads one page of triggers, each session a watch came
+from once, and, for watches an agent offered, the log of their session
+from its start up to the calls they were offered with, since that is
+where the agent's sentence of why is kept. Pass the whys of the last
+reading in `KnownWhys` and a reading reads no log again. Delete a watch
+with `DeleteTrigger`; pause a routine or an event watch with
+`ChangeRoutine`. `GetTriggerHold` and `SetTriggerHold` read and set the
+hold of every trigger of the person, which leaves each one's own pause
+as it was. A `Session` names its pending `Wake`, the `Outcome` of its
+latest turn a trigger began, `agents.TurnQuiet` or `agents.TurnNotified`,
+and the latest `Notice` its agent brought the person; the idle
+`SessionStatus` that ends such a turn carries the outcome too.
+
 ### Searching
 
 `SearchSessions` finds the sessions whose messages, answers and answers to
@@ -242,7 +283,7 @@ The read sends the `Config`'s credential when it has one, which a share
 whose audience is an organization's members would read.
 
 The package covers sessions, their events and files, shared
-conversations, triggers and routines. Defining agents is not covered yet;
+conversations, triggers, routines and watches. Defining agents is not covered yet;
 call it with `Config.Do` (see [Configuration](#configuration)).
 
 ### What an agent made

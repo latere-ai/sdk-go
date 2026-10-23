@@ -7,6 +7,54 @@ minor version may break code, and every such change is marked **Breaking**.
 
 ## [Unreleased]
 
+### Added
+
+- Package `agents`: `ListWatches` and `ListWatchesPage`, a person's
+  standing work of one agent in one reading, as `Watch`es: the routines
+  they made, the routines and event triggers an agent offered and they
+  accepted, and the wakes an agent set to look again in a session, each
+  with its `WatchKind`, when it looks next, the sentence of why it exists,
+  who set it (`SetBy`), the session it came from, whether it is paused,
+  and a wake's `Count`. An offer's why is read from the session's log it
+  was offered in; pass the whys of the last reading in
+  `ListWatchesParams.KnownWhys` and a reading reads no log again.
+- Package `agents`: `GetTriggerHold` and `SetTriggerHold`, the hold of
+  every trigger of the caller at once, as a `TriggerHold`. Each trigger
+  keeps its own pause, so releasing the hold brings back only those that
+  were on.
+- Package `agents`: `TriggerStatus.Origin` and `Routine.Origin`, the
+  `TriggerOrigin` of a trigger an agent's call made: an offer the person
+  accepted, with who accepted it, or a wake.
+- Package `agents`: `TriggerSpec.At`, a trigger that fires once;
+  `TriggerSession.Target`, the session every firing continues;
+  `TriggerSession.Attended`, sessions whose questions wait for the
+  trigger's owner; `TriggerSession.Notify`, whether every turn brings its
+  result (`NotifyAlways`) or the agent judges (`NotifyJudged`); and the
+  firing outcome `FiringSkippedEnded`.
+- Package `agents`: `Session.Wake`, a session's `PendingWake`;
+  `Session.Outcome` and `SessionStatus.Outcome`, whether a turn a trigger
+  or a wake began was `TurnQuiet` or `TurnNotified`; `Session.Notice`,
+  what the agent last brought to the person; and `UserMessage.FiringID`
+  and `UserMessage.Wake`, the firing and the wake a message came from.
+- Package `agents`: `ToolWake` and `ToolNotify`, the names of the tools
+  an agent sets its next wake and brings a turn's result to the person
+  with.
+
+### Changed
+
+- **Breaking** Package `agents`: `ToolUse.Offer` reads every held call of
+  the `trigger` tool, a proposal of a routine or of a trigger that fires
+  on events (`Offer.On`), a change, a resume and a delete (each naming
+  its `Offer.TriggerID`), and the held call of the `wake` tool past its
+  row of looks (`Offer.At`, `Offer.After`, `Offer.Note`). Before, it read
+  a proposal alone and returned an error for the others; check
+  `Offer.Action` before wording an offer as a new routine. A proposal's
+  `Offer.Notify` holds the default the tool applies when the call leaves
+  it out.
+- Package `agents`: `ApplyTrigger`, `GetTrigger` and `DeleteTrigger`
+  refuse the name `hold` before any request, since its path is the
+  hold's.
+
 ## [0.9.1] - 2026-10-23
 
 ### Changed

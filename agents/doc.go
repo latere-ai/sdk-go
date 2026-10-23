@@ -149,7 +149,9 @@
 // so the first reading reads the logs of the sessions offers came from;
 // a reading given the whys of the last reads one page of triggers and one
 // session per session a watch came from. Client.SuspendTrigger pauses or
-// resumes one watch, keeping every other field of its trigger;
+// resumes one watch, keeping every other field of its trigger, and a
+// paused watch's Pause says who paused it, and for one its agent paused,
+// the sentence it gave;
 // Client.SetTriggerHold pauses every trigger of the person at once and
 // leaves each one's own pause as it was, and Client.GetTriggerHold reads
 // it. A Session names its pending

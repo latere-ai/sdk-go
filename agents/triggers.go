@@ -303,6 +303,11 @@ type TriggerStatus struct {
 	// for a trigger applied through the API. It is kept when the trigger
 	// is applied again.
 	Origin *TriggerOrigin `json:"origin,omitempty"`
+	// Paused is why and by whom the trigger was paused, which the API
+	// writes when an apply suspends it, keeps while it stays suspended
+	// and clears when it is resumed; nil while it runs, and for a trigger
+	// paused before the API began writing it.
+	Paused *TriggerPause `json:"paused,omitempty"`
 	// Spend is the trigger's week as of its latest firing that counts
 	// toward it: what its looks cost in the 7 days before that firing,
 	// and the pace they are on. Nil for a trigger that has not fired since
@@ -325,6 +330,30 @@ type TriggerOrigin struct {
 	// empty for a wake.
 	ConfirmedBy string `json:"confirmedBy,omitempty"`
 }
+
+// A TriggerPause is the pause of a suspended trigger: why, by whom and
+// when. A pause an agent made with its trigger tool names the session and
+// the call, and the sentence it gave; one applied through the API, as
+// SuspendTrigger and ChangeRoutine apply it, names neither.
+type TriggerPause struct {
+	// Why is the sentence the agent gave when its trigger tool paused the
+	// trigger; empty for a pause applied through the API.
+	Why string `json:"why,omitempty"`
+	// By is the subject the pause was applied as: the person who applied
+	// it through the API, or, for an agent's call, the person who started
+	// the session.
+	By string `json:"by"`
+	// SessionID and ToolUseID are the session and the call of its agent
+	// that paused the trigger; empty for a pause applied through the API.
+	SessionID string `json:"sessionId,omitempty"`
+	ToolUseID string `json:"toolUseId,omitempty"`
+	// At is when the trigger was paused.
+	At time.Time `json:"at"`
+}
+
+// ByAgent reports whether an agent's call paused the trigger, rather
+// than a person through the API; false for a nil pause.
+func (p *TriggerPause) ByAgent() bool { return p != nil && p.ToolUseID != "" }
 
 // TriggerOriginKind is which call of an agent made a trigger.
 type TriggerOriginKind string
@@ -357,6 +386,9 @@ type FiringCounts struct {
 	SkippedBusy int64 `json:"skippedBusy"`
 	// SkippedLate firings came later than MaxAge allows.
 	SkippedLate int64 `json:"skippedLate"`
+	// SkippedEnded firings were to continue a TriggerSession.Target that
+	// had ended or was gone, and started nothing.
+	SkippedEnded int64 `json:"skippedEnded"`
 	// Refused firings were refused, such as by the agent's owner's policy.
 	Refused int64 `json:"refused"`
 	// Failed firings failed to start or continue a session.

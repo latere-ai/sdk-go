@@ -33,6 +33,8 @@ func TestTriggersMatchTheSchemas(t *testing.T) {
 	d.checkModel(t, "PayloadMatch", reflect.TypeFor[PayloadMatch](), s["TriggerMatch"], true)
 	d.checkModel(t, "TriggerStatus", reflect.TypeFor[TriggerStatus](), s["ManifestStatus"], true)
 	d.checkModel(t, "TriggerOrigin", reflect.TypeFor[TriggerOrigin](), s["TriggerOrigin"], true)
+	d.checkModel(t, "TriggerPause", reflect.TypeFor[TriggerPause](), s["TriggerPause"], true)
+	d.checkModel(t, "TriggerHold", reflect.TypeFor[TriggerHold](), s["TriggerHold"], true)
 	d.checkModel(t, "FiringCounts", reflect.TypeFor[FiringCounts](), s["TriggerCounts"], true)
 	d.checkModel(t, "Firing", reflect.TypeFor[Firing](), s["Firing"], true)
 	d.checkModel(t, "FiringEvent", reflect.TypeFor[FiringEvent](), s["FiringEvent"], true)
@@ -102,6 +104,10 @@ func TestTriggerRequestsFitTheirSchemas(t *testing.T) {
 			})
 			return err
 		}, s["Trigger"], true},
+		{"SetTriggerHold", func() error {
+			_, err := c.SetTriggerHold(ctx, true)
+			return err
+		}, s["TriggerHoldRequest"], false},
 		{"FireTrigger", func() error {
 			_, err := c.FireTrigger(ctx, "weekly", &FireTriggerParams{Event: &TriggerEvent{
 				ID: "e1", Product: "github", Verb: "release.published", Resource: "r", Actor: "ann", Subject: "bob",
@@ -131,6 +137,8 @@ func TestTriggerEndpointsAreInTheDocument(t *testing.T) {
 		{"delete", "/triggers/{ref}"},
 		{"post", "/triggers/{ref}/fire"},
 		{"get", "/triggers/{ref}/firings"},
+		{"get", "/triggers/hold"},
+		{"put", "/triggers/hold"},
 	} {
 		if _, ok := d.Paths[e.path][e.method]; !ok {
 			t.Errorf("%s %s is not in the document", strings.ToUpper(e.method), e.path)

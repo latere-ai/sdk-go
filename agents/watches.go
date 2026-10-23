@@ -106,6 +106,11 @@ type Watch struct {
 	// Paused says it fires nothing until it is resumed. The hold of every
 	// trigger, which Client.GetTriggerHold reads, leaves it as it is.
 	Paused bool
+	// Pause is why and by whom a paused watch was paused: the sentence an
+	// agent gave when it paused the watch itself, with the session it did
+	// so in, or the person who paused it. Nil while it runs, and for a
+	// watch paused before the API began recording pauses.
+	Pause *TriggerPause
 	// Count is a wake's place in its session's row of wakes with no word
 	// from the person between them, PendingWake.Count; zero for the other
 	// kinds.
@@ -165,7 +170,7 @@ type WatchSession struct {
 func watchOf(t *Trigger, agent string) (*Watch, bool) {
 	w := &Watch{
 		TriggerID: t.Status.ID, Name: t.Metadata.Name, Title: t.Metadata.DisplayName, SetBy: SetByPerson, Origin: t.Status.Origin,
-		Notify: t.Spec.Session.Notify, Paused: t.Spec.Suspend, LastRunAt: t.Status.LastFiredAt, LastSessionID: t.Status.LastSessionID,
+		Notify: t.Spec.Session.Notify, Paused: t.Spec.Suspend, Pause: t.Status.Paused, LastRunAt: t.Status.LastFiredAt, LastSessionID: t.Status.LastSessionID,
 		CreatedAt: t.Status.CreatedAt, SkippedBudget: skippedBudgetOf(t), raw: t.raw,
 	}
 	if w.Notify == "" {

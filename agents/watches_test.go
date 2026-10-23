@@ -640,3 +640,52 @@ func TestAWatchCarriesTheWeekItCountsToward(t *testing.T) {
 		t.Error("a failed read of the trigger a wake counts toward read as a page")
 	}
 }
+
+// TestAPausedWatchSaysWhoPausedIt: a watch an agent paused reads the
+// sentence it gave, the person it paused for and the call; one a person
+// paused through the API reads them alone; one that runs reads none; and
+// a trigger reads the firings skipped for an ended target.
+func TestAPausedWatchSaysWhoPausedIt(t *testing.T) {
+	api, c := newWatchAPI(t)
+	api.pageSize = 10
+	suspend := func(spec map[string]any) { spec["suspend"] = true }
+	byAgent := map[string]any{"id": "trg_1", "paused": map[string]any{"why": "It reached 79 EUR.", "by": "alice", "sessionId": "ses_a", "toolUseId": "toolu_9",
+		"at": "2026-10-23T09:00:00Z"}}
+	byPerson := map[string]any{"id": "trg_2", "paused": map[string]any{"by": "alice", "at": "2026-10-23T10:00:00Z"},
+		"counts": map[string]any{"started": 1, "continued": 0, "held": 0, "filtered": 0, "skippedActive": 0, "skippedBusy": 0, "skippedLate": 0,
+			"skippedEnded": 4, "refused": 0, "failed": 0}}
+	api.triggers = []map[string]any{
+		routineTrigger(chat, "price", "Flight price", "Check the price.", byAgent, suspend),
+		routineTrigger(chat, "news", "News", "Read the news.", byPerson, suspend),
+		routineTrigger(chat, "inbox", "Inbox", "Look at the inbox.", map[string]any{"id": "trg_3"}, nil),
+	}
+	page, err := c.ListWatchesPage(t.Context(), &agents.ListWatchesParams{Agent: chat})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(page.Items) != 3 {
+		t.Fatalf("read %d watches", len(page.Items))
+	}
+	agent, person, running := page.Items[0].Pause, page.Items[1].Pause, page.Items[2].Pause
+	want := &agents.TriggerPause{Why: "It reached 79 EUR.", By: "alice", SessionID: "ses_a", ToolUseID: "toolu_9", At: time.Date(2026, 10, 23, 9, 0, 0, 0, time.UTC)}
+	if !reflect.DeepEqual(agent, want) || !agent.ByAgent() || !page.Items[0].Paused {
+		t.Errorf("a watch an agent paused reads %+v", agent)
+	}
+	if person == nil || person.By != "alice" || person.Why != "" || person.ByAgent() {
+		t.Errorf("a watch a person paused reads %+v", person)
+	}
+	if running != nil || running.ByAgent() {
+		t.Errorf("a running watch reads the pause %+v", running)
+	}
+	var tr agents.Trigger
+	raw, err := json.Marshal(api.triggers[1])
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := json.Unmarshal(raw, &tr); err != nil {
+		t.Fatal(err)
+	}
+	if tr.Status.Counts == nil || tr.Status.Counts.SkippedEnded != 4 || tr.Status.Paused == nil {
+		t.Errorf("the trigger reads %+v", tr.Status)
+	}
+}

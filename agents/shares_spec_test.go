@@ -19,8 +19,6 @@ import (
 var routesOutsideTheDocuments = map[string]string{
 	"get /v1/shares/{token}":                "the platform's read of a share, whose page SharedPage and Share follow",
 	"get /v1/shares/{token}/blobs/{digest}": "the platform's read of a file a share names, whose bytes FileReader reads",
-	"get /triggers/hold":                    "the read of the hold of every trigger of the caller, whose answer TriggerHold follows",
-	"put /triggers/hold":                    "the set of the hold of every trigger of the caller, which sends held and answers as the read",
 }
 
 // TestRoutesOutsideTheDocumentsAreStillOutside fails once a vendored

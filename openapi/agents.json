@@ -1206,6 +1206,8 @@
             "session.scope_changed": "#/components/schemas/Event.session.scope_changed",
             "session.status": "#/components/schemas/Event.session.status",
             "session.title_changed": "#/components/schemas/Event.session.title_changed",
+            "session.wake_cleared": "#/components/schemas/Event.session.wake_cleared",
+            "session.wake_set": "#/components/schemas/Event.session.wake_set",
             "thread.ended": "#/components/schemas/Event.thread.ended",
             "thread.message": "#/components/schemas/Event.thread.message",
             "thread.started": "#/components/schemas/Event.thread.started",
@@ -1291,6 +1293,12 @@
           },
           {
             "$ref": "#/components/schemas/Event.session.title_changed"
+          },
+          {
+            "$ref": "#/components/schemas/Event.session.wake_cleared"
+          },
+          {
+            "$ref": "#/components/schemas/Event.session.wake_set"
           },
           {
             "$ref": "#/components/schemas/Event.thread.ended"
@@ -1756,6 +1764,42 @@
           }
         ]
       },
+      "Event.session.wake_cleared": {
+        "allOf": [
+          {
+            "$ref": "#/components/schemas/EventEnvelope"
+          },
+          {
+            "properties": {
+              "payload": {
+                "$ref": "#/components/schemas/WakeCleared"
+              },
+              "type": {
+                "const": "session.wake_cleared"
+              }
+            },
+            "type": "object"
+          }
+        ]
+      },
+      "Event.session.wake_set": {
+        "allOf": [
+          {
+            "$ref": "#/components/schemas/EventEnvelope"
+          },
+          {
+            "properties": {
+              "payload": {
+                "$ref": "#/components/schemas/WakeSet"
+              },
+              "type": {
+                "const": "session.wake_set"
+              }
+            },
+            "type": "object"
+          }
+        ]
+      },
       "Event.thread.ended": {
         "allOf": [
           {
@@ -2022,6 +2066,8 @@
           "session.scope_changed",
           "session.status",
           "session.title_changed",
+          "session.wake_cleared",
+          "session.wake_set",
           "thread.ended",
           "thread.message",
           "thread.started",
@@ -2474,6 +2520,9 @@
           "owner": {
             "$ref": "#/components/schemas/Owner"
           },
+          "paused": {
+            "$ref": "#/components/schemas/TriggerPause"
+          },
           "version": {
             "type": "integer"
           }
@@ -2671,6 +2720,31 @@
             "description": "Any JSON value."
           }
         },
+        "type": "object"
+      },
+      "MessageWake": {
+        "properties": {
+          "count": {
+            "type": "integer"
+          },
+          "due_at": {
+            "format": "date-time",
+            "type": "string"
+          },
+          "set_at": {
+            "format": "date-time",
+            "type": "string"
+          },
+          "trigger_id": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "trigger_id",
+          "set_at",
+          "due_at",
+          "count"
+        ],
         "type": "object"
       },
       "ModelChange": {
@@ -2878,6 +2952,27 @@
         },
         "required": [
           "source"
+        ],
+        "type": "object"
+      },
+      "Notice": {
+        "properties": {
+          "at": {
+            "format": "date-time",
+            "type": "string"
+          },
+          "seq": {
+            "minimum": 0,
+            "type": "integer"
+          },
+          "title": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "title",
+          "seq",
+          "at"
         ],
         "type": "object"
       },
@@ -3835,6 +3930,12 @@
           "network": {
             "$ref": "#/components/schemas/Network"
           },
+          "notice": {
+            "$ref": "#/components/schemas/Notice"
+          },
+          "outcome": {
+            "type": "string"
+          },
           "parent": {
             "$ref": "#/components/schemas/Parent"
           },
@@ -3889,6 +3990,9 @@
           "updated_at": {
             "format": "date-time",
             "type": "string"
+          },
+          "wake": {
+            "$ref": "#/components/schemas/Wake"
           },
           "writer": {
             "$ref": "#/components/schemas/Writer"
@@ -4116,6 +4220,9 @@
             "$ref": "#/components/schemas/CheckpointRef"
           },
           "detail": {
+            "type": "string"
+          },
+          "outcome": {
             "type": "string"
           },
           "runner": {
@@ -4597,6 +4704,9 @@
           "skippedBusy": {
             "type": "integer"
           },
+          "skippedEnded": {
+            "type": "integer"
+          },
           "skippedLate": {
             "type": "integer"
           },
@@ -4612,8 +4722,42 @@
           "skippedActive",
           "skippedBusy",
           "skippedLate",
+          "skippedEnded",
           "refused",
           "failed"
+        ],
+        "type": "object"
+      },
+      "TriggerHold": {
+        "properties": {
+          "held": {
+            "type": "boolean"
+          },
+          "since": {
+            "format": "date-time",
+            "type": "string"
+          }
+        },
+        "required": [
+          "held"
+        ],
+        "type": "object"
+      },
+      "TriggerHoldRequest": {
+        "properties": {
+          "held": {
+            "anyOf": [
+              {
+                "type": "boolean"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          }
+        },
+        "required": [
+          "held"
         ],
         "type": "object"
       },
@@ -4687,8 +4831,36 @@
         ],
         "type": "object"
       },
+      "TriggerPause": {
+        "properties": {
+          "at": {
+            "format": "date-time",
+            "type": "string"
+          },
+          "by": {
+            "type": "string"
+          },
+          "sessionId": {
+            "type": "string"
+          },
+          "toolUseId": {
+            "type": "string"
+          },
+          "why": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "by",
+          "at"
+        ],
+        "type": "object"
+      },
       "TriggerSession": {
         "properties": {
+          "attended": {
+            "type": "boolean"
+          },
           "budget": {
             "$ref": "#/components/schemas/ManifestBudget"
           },
@@ -4714,6 +4886,9 @@
           "message": {
             "type": "string"
           },
+          "notify": {
+            "type": "string"
+          },
           "policy": {
             "type": "string"
           },
@@ -4722,6 +4897,9 @@
               "$ref": "#/components/schemas/ManifestSessionResource"
             },
             "type": "array"
+          },
+          "target": {
+            "type": "string"
           },
           "title": {
             "type": "string"
@@ -4736,6 +4914,10 @@
       "TriggerSpec": {
         "properties": {
           "agent": {
+            "type": "string"
+          },
+          "at": {
+            "format": "date-time",
             "type": "string"
           },
           "maxActive": {
@@ -4912,8 +5094,14 @@
           "firing_id": {
             "type": "string"
           },
+          "notify": {
+            "type": "string"
+          },
           "sender": {
             "$ref": "#/components/schemas/Sender"
+          },
+          "wake": {
+            "$ref": "#/components/schemas/MessageWake"
           }
         },
         "required": [
@@ -4972,6 +5160,83 @@
           "sender",
           "tool_use_id",
           "content"
+        ],
+        "type": "object"
+      },
+      "Wake": {
+        "properties": {
+          "at": {
+            "format": "date-time",
+            "type": "string"
+          },
+          "count": {
+            "type": "integer"
+          },
+          "title": {
+            "type": "string"
+          },
+          "trigger_id": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "trigger_id",
+          "at",
+          "title",
+          "count"
+        ],
+        "type": "object"
+      },
+      "WakeCleared": {
+        "properties": {
+          "reason": {
+            "type": "string"
+          },
+          "sender": {
+            "$ref": "#/components/schemas/Sender"
+          },
+          "tool_use_id": {
+            "type": "string"
+          },
+          "trigger_id": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "trigger_id",
+          "reason"
+        ],
+        "type": "object"
+      },
+      "WakeSet": {
+        "properties": {
+          "at": {
+            "format": "date-time",
+            "type": "string"
+          },
+          "count": {
+            "type": "integer"
+          },
+          "note": {
+            "type": "string"
+          },
+          "title": {
+            "type": "string"
+          },
+          "tool_use_id": {
+            "type": "string"
+          },
+          "trigger_id": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "trigger_id",
+          "at",
+          "title",
+          "note",
+          "tool_use_id",
+          "count"
         ],
         "type": "object"
       },
@@ -6904,7 +7169,7 @@
     },
     "/sessions/{id}/blobs/{digest}": {
       "get": {
-        "description": "Get a blob of a session: a message's file, an image an answer showed, a file an answer linked, the agent's bundle. The answer is read by the blob's leading bytes: PNG, JPEG, GIF or WebP is that image type with Content-Disposition inline, and any other blob, an SVG included, application/octet-stream with Content-Disposition attachment. A file an answer linked that is no such image is a download here whatever its type, which the media_type of its files.kept entry names. Both carry X-Content-Type-Options nosniff, Content-Security-Policy \"sandbox; default-src 'none'\", Cache-Control \"private, max-age=31536000, immutable\", since a blob's bytes never change under its digest and the answer depends on who may read the session, and the digest as ETag. A file a session keeps in its folder of the files store is read by its digest from there, with the server's own credential, so a session that ended stays readable, and is answered as it streams, with its Content-Length; a file the folder no longer holds is not_found, a read the files service fails files_unavailable, and a file whose every record was redacted not_found, and the file is deleted from the folder.",
+        "description": "Get a blob of a session: a message's file, an image an answer showed, a file an answer linked, the agent's bundle. A blob whose leading bytes are PNG, JPEG, GIF or WebP is answered as that image type with Content-Disposition inline. Any other blob, an SVG and an HTML page included, is answered with Content-Disposition attachment and the Content-Type of the file it is: the media_type its record gave it when it was kept, the first live user.message attachment or files.kept entry that names the digest, and for a blob no event records, such as the agent's bundle, the type its leading bytes give. Content-Length states the blob's length. Every answer carries X-Content-Type-Options nosniff, Content-Security-Policy \"sandbox; default-src 'none'\", so no label makes a blob a page of the API's origin, Cache-Control \"private, max-age=31536000, immutable\", since a blob's bytes never change under its digest and the answer depends on who may read the session, and the digest as ETag. HEAD answers the same headers without the bytes, so a client learns a file's type and length before it reads it. A file a session keeps in its folder of the files store is read by its digest from there, with the server's own credential, so a session that ended stays readable, and is answered as it streams; a file the folder no longer holds is not_found, a read the files service fails files_unavailable, and a file whose every record was redacted not_found, and the file is deleted from the folder.",
         "operationId": "getBlob",
         "parameters": [
           {
@@ -7809,6 +8074,7 @@
                           "refused": 0,
                           "skippedActive": 0,
                           "skippedBusy": 0,
+                          "skippedEnded": 0,
                           "skippedLate": 0,
                           "started": 0
                         },
@@ -7853,9 +8119,76 @@
         ]
       }
     },
+    "/triggers/hold": {
+      "get": {
+        "description": "The caller's hold over every trigger they own, in the context their token names: {held, since}, since when it is held. trigger.hold is asked with the owner, the caller.",
+        "operationId": "getTriggerHold",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "example": {
+                  "held": false
+                },
+                "schema": {
+                  "$ref": "#/components/schemas/TriggerHold"
+                }
+              }
+            },
+            "description": "OK"
+          },
+          "default": {
+            "$ref": "#/components/responses/Error"
+          }
+        },
+        "summary": "Read the trigger hold",
+        "x-topos-actions": [
+          "trigger.hold"
+        ]
+      },
+      "put": {
+        "description": "Hold every trigger the caller owns, {\"held\": true}, or release them, {\"held\": false}, and answer as getTriggerHold does; a second hold keeps the first since. While held, the minute loop fires none of their triggers and records nothing, the fire route answers conflict for each, and a one-shot whose time passes keeps it. On release a schedule starts from then and fires nothing it missed, and a one-shot fires within the minute, or is skipped_late past its maxAge, a wake's message saying when it was due. A session's trigger and wake calls go on as without the hold, and their results say every trigger is held. trigger.hold is asked with the owner, the caller, and held.",
+        "operationId": "setTriggerHold",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "example": {
+                "held": true
+              },
+              "schema": {
+                "$ref": "#/components/schemas/TriggerHoldRequest"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "example": {
+                  "held": true,
+                  "since": "2026-09-22T12:50:00Z"
+                },
+                "schema": {
+                  "$ref": "#/components/schemas/TriggerHold"
+                }
+              }
+            },
+            "description": "OK"
+          },
+          "default": {
+            "$ref": "#/components/responses/Error"
+          }
+        },
+        "summary": "Set the trigger hold",
+        "x-topos-actions": [
+          "trigger.hold"
+        ]
+      }
+    },
     "/triggers/{name}": {
       "put": {
-        "description": "Apply a Trigger manifest to the caller's own trigger of the name; the caller becomes its owner. The body is one Trigger manifest of topos.latere.ai/v1. It fires on spec.schedule, a five-field cron expression or @hourly, @daily, @weekly read in spec.timeZone, or on the events spec.on selects: product exactly, verbs and resources each exact or a prefix ending in *, and match rules {path, in} on the payload. spec.session.message, title and key, and a repository's url and ref, are templates of {{event.*}}, {{trigger.id}}, {{trigger.name}}, {{firing.id}} and {{firing.time}}; each value is cut at 16384 bytes and a message past 65536 bytes refuses its firing. spec.session.policy new starts a session per firing, skipped while the key's session is active under skipIfActive; continue sends each firing to the key's open session, held while it waits for a person. At most spec.maxActive sessions, 5 by default and 100 at most, are active at once. The caller becomes the trigger's owner, the initiator of every session it starts, and a firing is asked of the authorizer as the owner in the context the caller's token names. trigger.create and trigger.update carry the trigger's name, its agent and the filter applied as on, and, when spec.session.machine names a person's own computer, {kind: device, environment, workdir}, machine device with environment and workdir beside them, as session.create carries them.",
+        "description": "Apply a Trigger manifest to the caller's own trigger of the name; the caller becomes its owner. The body is one Trigger manifest of topos.latere.ai/v1. It fires on spec.schedule, a five-field cron expression or @hourly, @daily, @weekly read in spec.timeZone, or on the events spec.on selects: product exactly, verbs and resources each exact or a prefix ending in *, and match rules {path, in} on the payload. spec.session.message, title and key, and a repository's url and ref, are templates of {{event.*}}, {{trigger.id}}, {{trigger.name}}, {{firing.id}} and {{firing.time}}; each value is cut at 16384 bytes and a message past 65536 bytes refuses its firing. spec.session.policy new starts a session per firing, skipped while the key's session is active under skipIfActive; continue sends each firing to the key's open session, held while it waits for a person. At most spec.maxActive sessions, 5 by default and 100 at most, are active at once. The caller becomes the trigger's owner, the initiator of every session it starts, and a firing is asked of the authorizer as the owner in the context the caller's token names. trigger.create and trigger.update carry the trigger's name, its agent and the filter applied as on, and, when spec.session.machine names a person's own computer, {kind: device, environment, workdir}, machine device with environment and workdir beside them, as session.create carries them. spec.at, an RFC 3339 time with an offset in place of schedule and on, fires the trigger once, and its firing spends it: the server deletes it with the firing that started, continued, skipped or refused, and keeps it while that firing is held or runs again after it failed; trigger.create and trigger.update carry at. spec.session.target, under policy continue and beside no key, names the open session of spec.agent every firing sends its message to, which the caller may send to; a firing whose target has ended or is gone is skipped_ended. A session's wake is such a trigger, applied by the session's wake tool as the session's initiator with status.origin {kind: wake}: at least 10 minutes and at most 168 hours ahead and inside its session's life, and skipped_late past 24 hours; its firing's user.message carries wake {trigger_id, set_at, due_at, count}, count from 1. status.paused {why, by, sessionId, toolUseId, at} says who suspended the trigger and when, with the agent's why and its call for a pause a session's call made; it is kept while the trigger stays suspended and cleared when it resumes. spec.session.attended makes each session a firing starts attended, so its questions wait for the owner; session.create is asked with attended. spec.session.notify is always, the default, or judged: a firing of a judged trigger sends its message with notify judged, and the turn it begins records outcome quiet on its closing status unless the agent calls its notify tool or waits for the person; judged is refused for an agent whose latest version does not name notify. trigger.create and trigger.update carry notify.",
         "operationId": "applyTrigger",
         "parameters": [
           {
@@ -7938,6 +8271,7 @@
                       "refused": 0,
                       "skippedActive": 0,
                       "skippedBusy": 0,
+                      "skippedEnded": 0,
                       "skippedLate": 0,
                       "started": 0
                     },
@@ -7989,6 +8323,7 @@
                       "refused": 0,
                       "skippedActive": 0,
                       "skippedBusy": 0,
+                      "skippedEnded": 0,
                       "skippedLate": 0,
                       "started": 0
                     },
@@ -8019,7 +8354,7 @@
     },
     "/triggers/{ref}": {
       "delete": {
-        "description": "Delete a trigger with its firings; the sessions it started keep running.",
+        "description": "Delete a trigger with its firings; the sessions it started keep running. A session's wake deleted here is recorded in that session as session.wake_cleared with reason canceled and the sender.",
         "operationId": "deleteTrigger",
         "parameters": [
           {
@@ -8095,6 +8430,7 @@
                       "refused": 0,
                       "skippedActive": 0,
                       "skippedBusy": 0,
+                      "skippedEnded": 0,
                       "skippedLate": 0,
                       "started": 2
                     },
@@ -8125,7 +8461,7 @@
     },
     "/triggers/{ref}/fire": {
       "post": {
-        "description": "An event trigger takes one envelope {id, product, verb, resource, actor, subject, time, payload}: id is the producer's id of the delivery, at most 200 characters, unique per product, product lowercase, time RFC 3339, payload an object. A schedule trigger takes an empty body and fires now; send an Idempotency-Key to fire it once. The answer is the firing {id, trigger_id, origin, event, key, outcome, reason, session_id, received_at}, where outcome is started, continued, held, filtered, skipped_active, skipped_busy, skipped_late, refused or failed. A redelivery of an event answers its first firing and starts nothing; a failed firing answers 503 and a redelivery runs it again. An event outside spec.on is filtered, counted and stored nowhere. A suspended trigger answers conflict. The firing's session.create and session.send are asked as the trigger's owner.",
+        "description": "An event trigger takes one envelope {id, product, verb, resource, actor, subject, time, payload}: id is the producer's id of the delivery, at most 200 characters, unique per product, product lowercase, time RFC 3339, payload an object. A schedule trigger takes an empty body and fires now; send an Idempotency-Key to fire it once. The answer is the firing {id, trigger_id, origin, event, key, outcome, reason, session_id, received_at}, where outcome is started, continued, held, filtered, skipped_active, skipped_busy, skipped_late, skipped_ended, refused or failed. A redelivery of an event answers its first firing and starts nothing; a failed firing answers 503 and a redelivery runs it again. An event outside spec.on is filtered, counted and stored nowhere. A suspended trigger answers conflict. The firing's session.create and session.send are asked as the trigger's owner.",
         "operationId": "fireTrigger",
         "parameters": [
           {

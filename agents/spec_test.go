@@ -149,15 +149,6 @@ var leftOut = map[string]string{
 // takes them as read, and TestFieldsAheadOfTheDocumentAreStillAhead fails
 // once the document describes one, so the model is then held to it.
 var aheadOfTheDocument = map[string]ahead{
-	"Session.wake":               {"Session", "a session's pending wake"},
-	"Session.outcome":            {"Session", "whether the latest turn a trigger began brought anything to the person"},
-	"Session.notice":             {"Session", "what the agent last brought to the person"},
-	"SessionStatus.outcome":      {"event:session.status", "the outcome of the turn the idle status ends"},
-	"UserMessage.wake":           {"event:user.message", "the wake a message came from"},
-	"TriggerSpec.at":             {"TriggerSpec", "the time a trigger that fires once fires at"},
-	"TriggerSession.target":      {"TriggerSession", "the session every firing continues"},
-	"TriggerSession.attended":    {"TriggerSession", "whether a firing's sessions wait for their owner's answers"},
-	"TriggerSession.notify":      {"TriggerSession", "whether every turn a firing begins brings its result"},
 	"TriggerSpec.budget":         {"TriggerSpec", "a trigger's weekly allowance"},
 	"TriggerStatus.spend":        {"ManifestStatus", "a trigger's week as of its latest firing"},
 	"FiringCounts.skippedBudget": {"TriggerCounts", "the firings a trigger's allowance skipped"},

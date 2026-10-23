@@ -46,7 +46,7 @@ minor version may break code, and every such change is marked **Breaking**.
 
 ### Changed
 
-- **Breaking** Package `agents`: `ToolUse.Offer` reads every held call of
+- **Breaking:** Package `agents`: `ToolUse.Offer` reads every held call of
   the `trigger` tool, a proposal of a routine or of a trigger that fires
   on events (`Offer.On`), a change, a resume and a delete (each naming
   its `Offer.TriggerID`), and the held call of the `wake` tool past its

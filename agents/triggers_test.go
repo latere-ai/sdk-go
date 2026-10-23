@@ -367,3 +367,70 @@ func TestHoldNamesNoTrigger(t *testing.T) {
 		t.Errorf("sent %+v", *calls)
 	}
 }
+
+// TestSuspendKeepsEveryOtherField: a pause applies the trigger again by
+// its name with suspend set and no status, every other field as the API
+// answered it, those the SDK does not model and large numbers included;
+// a resume takes suspend off; a trigger that is not there is not applied.
+func TestSuspendKeepsEveryOtherField(t *testing.T) {
+	const stored = `{"apiVersion":"topos.latere.ai/v1","kind":"Trigger","metadata":{"name":"event-3f2a9c1b7d4e5f60a1b2","displayName":"Retry test on main",
+"labels":{"applied-by":"latere-chat"}},"spec":{"agent":"agent_1","on":{"product":"github","verbs":["push"]},"maxActive":123456789012345678,
+"skipIfActive":false,"session":{"message":"Run the retry test.","notify":"judged","later":{"kept":true}}%s},
+"status":{"id":"trg_3","origin":{"kind":"proposal","sessionId":"ses_a","toolUseId":"toolu_2"}}}`
+	c, calls := fakeAPI(t, map[string]string{
+		"GET /v1/agents/triggers/trg_3":                      fmt.Sprintf(stored, ""),
+		"PUT /v1/agents/triggers/event-3f2a9c1b7d4e5f60a1b2": fmt.Sprintf(stored, `,"suspend":true`),
+	})
+	got, err := c.SuspendTrigger(t.Context(), "trg_3", true)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !got.Spec.Suspend || got.Status.Origin == nil {
+		t.Errorf("answered %+v", got)
+	}
+	put := (*calls)[1]
+	spec, _ := put.Body["spec"].(map[string]any)
+	session, _ := spec["session"].(map[string]any)
+	if put.Method != http.MethodPut || spec["suspend"] != true || spec["on"] == nil || session["later"] == nil || session["notify"] != "judged" {
+		t.Errorf("applied %+v", put)
+	}
+	if _, has := put.Body["status"]; has {
+		t.Errorf("applied the status %v", put.Body["status"])
+	}
+	if put.Raw == nil || !strings.Contains(string(put.Raw), `"maxActive":123456789012345678,`) {
+		t.Errorf("applied maxActive other than as written: %s", put.Raw)
+	}
+
+	c, calls = fakeAPI(t, map[string]string{
+		"GET /v1/agents/triggers/trg_3":                      fmt.Sprintf(stored, `,"suspend":true`),
+		"PUT /v1/agents/triggers/event-3f2a9c1b7d4e5f60a1b2": fmt.Sprintf(stored, ""),
+	})
+	if got, err := c.SuspendTrigger(t.Context(), "trg_3", false); err != nil || got.Spec.Suspend {
+		t.Fatalf("resumed as %+v, %v", got, err)
+	}
+	if spec, _ := (*calls)[1].Body["spec"].(map[string]any); spec["suspend"] != nil {
+		t.Errorf("a resume applied suspend %v", spec["suspend"])
+	}
+
+	if _, err := c.SuspendTrigger(t.Context(), "trg_missing", true); !errors.Is(err, latere.ErrNotFound) {
+		t.Errorf("a missing trigger: %v", err)
+	}
+	c, calls = fakeAPI(t, map[string]string{"GET /v1/agents/triggers/trg_3": fmt.Sprintf(stored, "")})
+	if _, err := c.SuspendTrigger(t.Context(), "trg_3", true); !errors.Is(err, latere.ErrNotFound) || len(*calls) != 2 {
+		t.Errorf("a refused apply: %v, after %+v", err, *calls)
+	}
+	for name, answer := range map[string]string{
+		"no name":  `{"metadata":{},"spec":{"agent":"a","session":{"message":"m"}}}`,
+		"no spec":  `{"metadata":{"name":"weekly"},"spec":null}`,
+		"the hold": `{"metadata":{"name":"hold"},"spec":{"agent":"a","session":{"message":"m"}}}`,
+		"null":     `null`,
+	} {
+		c, calls := fakeAPI(t, map[string]string{"GET /v1/agents/triggers/trg_1": answer})
+		if _, err := c.SuspendTrigger(t.Context(), "trg_1", true); err == nil {
+			t.Errorf("a trigger answered with %s was applied", name)
+		}
+		if len(*calls) != 1 {
+			t.Errorf("%s: sent %+v", name, *calls)
+		}
+	}
+}

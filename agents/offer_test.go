@@ -24,7 +24,7 @@ func TestAnOfferIsReadFromItsCall(t *testing.T) {
 		t.Fatal(err)
 	}
 	want := &agents.Offer{ToolUseID: "toolu_1", Action: agents.OfferPropose, Name: "Weekly sign-ups", Ask: "Count the sign-ups.", Why: "Every Monday at 9:00, Berlin time, I count them.",
-		Schedule: &agents.RoutineSchedule{Days: []time.Weekday{time.Monday}, Hour: 9, Zone: "Europe/Berlin"}, Notify: agents.NotifyAlways}
+		Schedule: &agents.RoutineSchedule{Days: []time.Weekday{time.Monday}, Hour: 9, Zone: "Europe/Berlin"}}
 	if !reflect.DeepEqual(o, want) {
 		t.Fatalf("the offer is %+v, want %+v", o, want)
 	}
@@ -45,9 +45,9 @@ func TestAnOfferIsReadFromItsCall(t *testing.T) {
 }
 
 // TestEveryHeldCallReadsAsItsOffer: a proposal of an event trigger reads
-// its filter and the tool's default of judged; a change reads the trigger
-// it changes and what it sets, keeping notify when it leaves it out; a
-// resume and a delete read their trigger alone.
+// its filter, and its notify only when it names one; a change reads the
+// trigger it changes and what it sets; a resume and a delete read their
+// trigger alone.
 func TestEveryHeldCallReadsAsItsOffer(t *testing.T) {
 	for name, c := range map[string]struct {
 		input string
@@ -57,8 +57,7 @@ func TestEveryHeldCallReadsAsItsOffer(t *testing.T) {
 			`{"action":"propose","name":"Retry test on main","ask":"Run the retry test.","why":"After each push to main I run it and tell you only if it fails.",
 "on":{"product":"github","verbs":["push"],"resources":["acme/field-notes"],"match":[{"path":"payload.ref","in":["refs/heads/main"]}]}}`,
 			agents.Offer{Action: agents.OfferPropose, Name: "Retry test on main", Ask: "Run the retry test.", Why: "After each push to main I run it and tell you only if it fails.",
-				On:     &agents.EventFilter{Product: "github", Verbs: []string{"push"}, Resources: []string{"acme/field-notes"}, Match: []agents.PayloadMatch{{Path: "payload.ref", In: []string{"refs/heads/main"}}}},
-				Notify: agents.NotifyJudged},
+				On: &agents.EventFilter{Product: "github", Verbs: []string{"push"}, Resources: []string{"acme/field-notes"}, Match: []agents.PayloadMatch{{Path: "payload.ref", In: []string{"refs/heads/main"}}}}},
 		},
 		"an event that always tells": {
 			`{"action":"propose","name":"Releases","ask":"Summarize it.","why":"Each release.","on":{"product":"github","verbs":["release.published"]},"notify":"always"}`,

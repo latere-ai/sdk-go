@@ -32,9 +32,10 @@ const (
 	// read and change it by the watch's Name.
 	WatchRoutine WatchKind = "routine"
 	// WatchEvent is a trigger that fires on the events its On selects,
-	// which an agent offered and the person accepted. It is written in a
-	// routine's shape, so ChangeRoutine pauses and resumes it by the
-	// watch's Name.
+	// which an agent offered and the person accepted: events no routine
+	// starts from, such as a repository's pushes. It carries the
+	// RoutineLabel of its agent under a name no routine has, so the
+	// routine methods leave it alone.
 	WatchEvent WatchKind = "event"
 	// WatchWake is a wake an agent set in a session: a trigger that fires
 	// once, at NextAt, and sends the agent's note back to that session.
@@ -57,25 +58,25 @@ const (
 )
 
 // A Watch is one piece of standing work as Client.ListWatches reads it
-// from its trigger. Delete any watch with Client.DeleteTrigger and its
-// TriggerID; pause or resume a routine or an event watch with
-// Client.ChangeRoutine and its Name.
+// from its trigger. Pause or resume any watch with Client.SuspendTrigger
+// and delete it with Client.DeleteTrigger, by its TriggerID.
 type Watch struct {
 	// Kind is what kind of watch it is.
 	Kind WatchKind
 	// TriggerID is the trigger's id, which each session it starts names as
 	// its TriggerID.
 	TriggerID string
-	// Name is the trigger's name: a routine's, RoutinePrefix and 20
-	// hexadecimal digits, for a routine and an event watch.
+	// Name is the trigger's name, which the routine methods take for a
+	// routine.
 	Name string
-	// Title is its name as a person reads it: a routine's title, or the
-	// line an agent wrote for a wake.
+	// Title is its name as a person reads it: a routine's title, the name
+	// an agent offered a trigger under, or the line it wrote for a wake.
 	Title string
 	// Why is the sentence that says why it exists: what the agent wrote
 	// when it offered it, for one set by an offer; the routine's
-	// instruction, for one the person made, and for an offer whose call
-	// its session's log no longer holds; and a wake's Title.
+	// instruction, for one the person made; and a wake's Title. For an
+	// offer whose call its session's log no longer holds, it is the
+	// routine's instruction, or empty for an event watch.
 	Why string
 	// SetBy is who set it.
 	SetBy SetBy
@@ -134,10 +135,11 @@ type WatchSession struct {
 }
 
 // watchOf reads t as a watch of agent, and reports false when it is none:
-// a wake whose agent is read with its session, a routine of agent, or a
-// trigger of a routine's shape that fires on events of a product no
-// routine starts from. Why holds the routine's instruction for a routine
-// or an event watch, which the offer's own sentence replaces once read.
+// a wake, whose agent is read with its session; a routine of agent; or a
+// trigger labeled as agent's that an agent offered on events no routine
+// starts from, which is written under a name of its own so no program
+// reads it as a routine. Why holds the routine's instruction for a
+// routine, which the offer's own sentence replaces once read.
 func watchOf(t *Trigger, agent string) (*Watch, bool) {
 	w := &Watch{
 		TriggerID: t.Status.ID, Name: t.Metadata.Name, Title: t.Metadata.DisplayName, SetBy: SetByPerson, Origin: t.Status.Origin,
@@ -147,7 +149,11 @@ func watchOf(t *Trigger, agent string) (*Watch, bool) {
 	if w.Notify == "" {
 		w.Notify = NotifyAlways
 	}
-	if o := t.Status.Origin; o != nil && o.Kind == TriggerFromWake {
+	if w.Title == "" {
+		w.Title = w.Name
+	}
+	o := t.Status.Origin
+	if o != nil && o.Kind == TriggerFromWake {
 		w.Kind, w.SetBy, w.Why, w.Notify = WatchWake, SetByAgent, w.Title, NotifyJudged
 		w.Session = &WatchSession{ID: o.SessionID}
 		if at := t.Spec.At; !at.IsZero() && !w.Paused {
@@ -155,23 +161,19 @@ func watchOf(t *Trigger, agent string) (*Watch, bool) {
 		}
 		return w, true
 	}
-	r, ok := RoutineOf(t, agent)
-	if !ok {
-		return nil, false
-	}
-	w.Title, w.Why = r.Title, r.Instruction
-	if o := t.Status.Origin; o != nil && o.Kind == TriggerFromProposal {
+	offered := o != nil && o.Kind == TriggerFromProposal
+	if offered {
 		w.SetBy = SetByOffer
 		w.Session = &WatchSession{ID: o.SessionID}
 	}
-	if t.Spec.On != nil && r.Starts == StartsOnSchedule {
-		// RoutineOf reads events of a product no routine starts from as a
-		// schedule set elsewhere; an agent's offer of a trigger that fires
-		// on events is written that way.
-		w.Kind, w.On = WatchEvent, t.Spec.On
+	if r, ok := RoutineOf(t, agent); ok {
+		w.Kind, w.Title, w.Why, w.Starts, w.Schedule, w.NextAt = WatchRoutine, r.Title, r.Instruction, r.Starts, r.Schedule, r.NextRunAt
 		return w, true
 	}
-	w.Kind, w.Starts, w.Schedule, w.NextAt = WatchRoutine, r.Starts, r.Schedule, r.NextRunAt
+	if !offered || t.Spec.On == nil || agent == "" || t.Metadata.Labels[RoutineLabel] != agent {
+		return nil, false
+	}
+	w.Kind, w.On = WatchEvent, t.Spec.On
 	return w, true
 }
 

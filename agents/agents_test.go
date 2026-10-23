@@ -22,6 +22,9 @@ import (
 type call struct {
 	Method, Path, Query, Key string
 	Body                     map[string]any
+	// Raw is the body as sent, for what decoding into Body would change,
+	// such as a large number.
+	Raw []byte
 }
 
 // fakeAPI answers each request with the body routes holds for its method
@@ -34,6 +37,7 @@ func fakeAPI(t *testing.T, routes map[string]string) (*agents.Client, *[]call) {
 		if raw, err := io.ReadAll(r.Body); err != nil {
 			t.Error(err)
 		} else if len(raw) > 0 {
+			c.Raw = raw
 			if err := json.Unmarshal(raw, &c.Body); err != nil {
 				t.Errorf("a body that is not JSON: %s", raw)
 			}

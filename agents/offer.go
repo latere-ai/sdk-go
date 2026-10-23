@@ -95,9 +95,9 @@ type Offer struct {
 	// and a change of what it fires on.
 	On *EventFilter
 	// Notify is whether every run would bring its result to the person, or
-	// the agent would judge. A proposal that leaves it out has the tool's
-	// default, NotifyAlways for a schedule and NotifyJudged for events; a
-	// change that leaves it out keeps the trigger's, and Notify is empty.
+	// the agent would judge, for a proposal or a change that names it;
+	// empty when the call leaves it out, so a proposal's trigger takes the
+	// API's default and a change keeps the trigger's.
 	Notify NotifyPolicy
 	// At is when a wake would fire, for one set at a time; nil for one set
 	// After a while.
@@ -163,13 +163,6 @@ func (t *ToolUse) triggerOffer() (*Offer, error) {
 	}
 	if in.Schedule != "" {
 		o.Schedule = routine.ParseSchedule(in.Schedule, in.TimeZone)
-	}
-	if o.Notify == "" && o.Action == OfferPropose {
-		// The tool's default, which the trigger is made with.
-		o.Notify = NotifyAlways
-		if in.On != nil {
-			o.Notify = NotifyJudged
-		}
 	}
 	return o, nil
 }

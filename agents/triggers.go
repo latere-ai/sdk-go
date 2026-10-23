@@ -4,9 +4,11 @@
 package agents
 
 import (
+	"bytes"
 	"context"
 	"encoding/json"
 	"errors"
+	"fmt"
 	"iter"
 	"net/http"
 	"net/url"
@@ -572,6 +574,51 @@ func (c *Client) DeleteTrigger(ctx context.Context, ref string) error {
 		return err
 	}
 	return c.cfg.Do(ctx, &latere.Request{Method: http.MethodDelete, Path: triggerPath(ref, "")}, nil)
+}
+
+// SuspendTrigger pauses the trigger ref names, by its id or its name, or
+// with suspend false resumes it, and returns it as stored: a paused
+// trigger fires nothing until it is resumed, and a resumed schedule fires
+// from its next time on. It reads the trigger and applies it again with
+// its spec's suspend set, written over the JSON the API answered, so every
+// other field is kept as it was, those this package does not model among
+// them. It pauses any watch, an event trigger an agent offered among
+// them; ChangeRoutine pauses a routine the same way.
+//
+// A pause is read, then written: a change made elsewhere between the two
+// is replaced by this one.
+func (c *Client) SuspendTrigger(ctx context.Context, ref string, suspend bool) (*Trigger, error) {
+	t, err := c.GetTrigger(ctx, ref)
+	if err != nil {
+		return nil, err
+	}
+	if t.Metadata.Name == "" || t.Metadata.Name == holdRef {
+		return nil, fmt.Errorf("agents: the API answered the trigger %s with the name %q", ref, t.Metadata.Name)
+	}
+	var m map[string]any
+	dec := json.NewDecoder(bytes.NewReader(t.RawJSON()))
+	// Numbers stay as they were written, so a large one is not rounded to
+	// a float's precision.
+	dec.UseNumber()
+	// The answer already decoded as a Trigger, so it is a JSON object or
+	// null, and decodes into a map without an error; null leaves the map
+	// nil, refused below for the spec it lacks.
+	_ = dec.Decode(&m)
+	spec, ok := m["spec"].(map[string]any)
+	if !ok {
+		return nil, fmt.Errorf("agents: the API answered the trigger %s without a spec", ref)
+	}
+	if suspend {
+		spec["suspend"] = true
+	} else {
+		delete(spec, "suspend")
+	}
+	delete(m, "status")
+	var out Trigger
+	if err := c.cfg.Do(ctx, &latere.Request{Method: http.MethodPut, Path: triggerPath(t.Metadata.Name, ""), Body: m}, &out); err != nil {
+		return nil, err
+	}
+	return &out, nil
 }
 
 // A TriggerHold is whether every trigger of the caller is held: while it

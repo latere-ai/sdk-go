@@ -147,6 +147,23 @@ func routineTrigger(agent, key, title, message string, status map[string]any, ch
 		"metadata": map[string]any{"name": agents.RoutineName(key), "displayName": title, "labels": map[string]any{agents.RoutineLabel: agent}}}
 }
 
+// eventName is the name of the trigger of an offer on events no routine
+// starts from, made with key: the routine's digits under "event-".
+func eventName(key string) string {
+	return "event-" + strings.TrimPrefix(agents.RoutineName(key), agents.RoutinePrefix)
+}
+
+// eventTrigger is a trigger an agent offered on a repository's pushes,
+// which no routine starts from, as the API writes it: a routine's label,
+// title and ask under a name of its own, with the event after the ask.
+func eventTrigger(agent, key string, status map[string]any) map[string]any {
+	return map[string]any{"apiVersion": "topos.latere.ai/v1", "kind": "Trigger", "status": status,
+		"metadata": map[string]any{"name": eventName(key), "displayName": "Retry test on main", "labels": map[string]any{agents.RoutineLabel: agent}},
+		"spec": map[string]any{"agent": "agent_1", "skipIfActive": false,
+			"on":      map[string]any{"product": "github", "verbs": []any{"push"}, "resources": []any{"acme/field-notes"}},
+			"session": map[string]any{"message": "Run the retry test.\n\nThe event that started this run:\nProduct: {{event.product}}", "title": "Retry test on main"}}}
+}
+
 // wakeTrigger is a wake an agent set in session.
 func wakeTrigger(id, session, toolUse, title string) map[string]any {
 	return map[string]any{"apiVersion": "topos.latere.ai/v1", "kind": "Trigger",
@@ -205,12 +222,9 @@ func TestWatchesAreReadInOnePass(t *testing.T) {
 			map[string]any{"id": "trg_1", "createdAt": "2026-10-01T09:00:00Z", "nextFireAt": "2026-10-26T08:00:00Z"}, nil),
 		routineTrigger(chat, "offered", "Monday plan", "Plan the week.", offered("trg_2", "ses_a", "toolu_1", "2026-10-22T09:02:00Z"),
 			func(spec map[string]any) { spec["suspend"] = true }),
-		routineTrigger(chat, "event", "Retry test on main", "Run the retry test.", offered("trg_3", "ses_a", "toolu_2", "2026-10-22T09:06:00Z"),
-			func(spec map[string]any) {
-				delete(spec, "schedule")
-				delete(spec, "timeZone")
-				spec["on"] = map[string]any{"product": "github", "verbs": []any{"push"}, "resources": []any{"acme/field-notes"}}
-			}),
+		eventTrigger(chat, "event", offered("trg_3", "ses_a", "toolu_2", "2026-10-22T09:06:00Z")),
+		eventTrigger("release-notes", "theirs", offered("trg_9", "ses_a", "toolu_9", "2026-10-22T09:06:00Z")),
+		eventTrigger(chat, "unoffered", map[string]any{"id": "trg_10"}),
 		wakeTrigger("trg_4", "ses_b", "toolu_3", "Whether the refund arrived"),
 		wakeTrigger("trg_5", "ses_c", "toolu_4", "Whether the build passed"),
 		{"apiVersion": "topos.latere.ai/v1", "kind": "Trigger", "metadata": map[string]any{"name": "weekly-digest"},
@@ -257,7 +271,7 @@ func TestWatchesAreReadInOnePass(t *testing.T) {
 			Session: &agents.WatchSession{ID: "ses_a", Title: "Plan my week"}, Starts: agents.StartsOnSchedule,
 			Schedule: &agents.RoutineSchedule{Days: []time.Weekday{time.Monday}, Hour: 9, Zone: "Europe/Berlin"}, Notify: agents.NotifyAlways, Paused: true,
 			CreatedAt: *at("2026-10-22T09:02:00Z")},
-		{Kind: agents.WatchEvent, TriggerID: "trg_3", Name: agents.RoutineName("event"), Title: "Retry test on main", Why: "After each push to main I run it and tell you if it fails.",
+		{Kind: agents.WatchEvent, TriggerID: "trg_3", Name: eventName("event"), Title: "Retry test on main", Why: "After each push to main I run it and tell you if it fails.",
 			SetBy:   agents.SetByOffer,
 			Origin:  &agents.TriggerOrigin{Kind: agents.TriggerFromProposal, SessionID: "ses_a", ToolUseID: "toolu_2", ConfirmedBy: "alice"},
 			Session: &agents.WatchSession{ID: "ses_a", Title: "Plan my week"}, On: &agents.EventFilter{Product: "github", Verbs: []string{"push"}, Resources: []string{"acme/field-notes"}},
@@ -368,22 +382,27 @@ func TestALongLogIsReadUpToTheOffer(t *testing.T) {
 }
 
 // TestASessionGoneLeavesItsTitleEmpty: an offer whose session was deleted
-// reads with the routine's instruction as its why and no title, and a
-// wake whose session is gone is left out.
+// reads with no title, and with the routine's instruction as its why, or
+// none for an event watch; a wake whose session is gone is left out.
 func TestASessionGoneLeavesItsTitleEmpty(t *testing.T) {
 	api, c := newWatchAPI(t)
 	api.triggers = []map[string]any{
 		routineTrigger(chat, "offered", "Monday plan", "Plan the week.", offered("trg_1", "ses_gone", "toolu_1", "2026-10-22T09:02:00Z"), nil),
 		wakeTrigger("trg_2", "ses_gone2", "toolu_2", "Whether the refund arrived"),
 	}
+	api.pageSize = 3
+	api.triggers = append(api.triggers, eventTrigger(chat, "event", offered("trg_3", "ses_gone", "toolu_3", "2026-10-22T09:02:00Z")))
 	page, err := c.ListWatchesPage(t.Context(), &agents.ListWatchesParams{Agent: chat})
 	if err != nil {
 		t.Fatal(err)
 	}
-	if len(page.Items) != 1 {
+	if len(page.Items) != 2 {
 		t.Fatalf("read %d watches: %+v", len(page.Items), page.Items)
 	}
 	if w := page.Items[0]; w.TriggerID != "trg_1" || w.Why != "Plan the week." || w.Session == nil || *w.Session != (agents.WatchSession{ID: "ses_gone"}) {
+		t.Errorf("read %+v, its session %+v", w, w.Session)
+	}
+	if w := page.Items[1]; w.TriggerID != "trg_3" || w.Kind != agents.WatchEvent || w.Why != "" || w.Session == nil || w.Session.Title != "" {
 		t.Errorf("read %+v, its session %+v", w, w.Session)
 	}
 }
@@ -447,33 +466,6 @@ func TestAFailedReadFailsTheWatches(t *testing.T) {
 	api.change(func() { api.failing = nil })
 	if page, err := c.ListWatchesPage(t.Context(), &agents.ListWatchesParams{Agent: chat}); err != nil || page.Items[0].Why != "Weekly." {
 		t.Errorf("the reading after the failures is %+v, %v", page, err)
-	}
-}
-
-// TestAnEventWatchPausesAsARoutine: ChangeRoutine pauses an event watch by
-// its name and keeps what it fires on and the offer that made it.
-func TestAnEventWatchPausesAsARoutine(t *testing.T) {
-	tp, c := newTopos(t)
-	r := create(t, c, weekly(), "k")
-	tp.edit(r.Name, func(spec, _ map[string]any) {
-		delete(spec, "schedule")
-		delete(spec, "timeZone")
-		spec["on"] = map[string]any{"product": "github", "verbs": []any{"push"}}
-	})
-	tp.mu.Lock()
-	tp.triggers[r.Name]["status"].(map[string]any)["origin"] = map[string]any{"kind": "proposal", "sessionId": "ses_a", "toolUseId": "toolu_1"}
-	tp.mu.Unlock()
-	paused := true
-	got, err := c.ChangeRoutine(t.Context(), chat, r.Name, &agents.ChangeRoutineParams{Paused: &paused})
-	if err != nil {
-		t.Fatal(err)
-	}
-	spec := tp.manifest(r.Name)["spec"].(map[string]any)
-	if on, _ := spec["on"].(map[string]any); on["product"] != "github" || spec["suspend"] != true || spec["schedule"] != nil {
-		t.Errorf("the pause wrote %v", spec)
-	}
-	if !got.Paused || got.Origin == nil || got.Origin.SessionID != "ses_a" {
-		t.Errorf("the paused watch reads %+v", got)
 	}
 }
 

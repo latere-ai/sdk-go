@@ -3,9 +3,9 @@
 
 // Package routine holds the shape of a routine's trigger, and nothing that
 // sends it: the label and the name the trigger carries, the name made from
-// a create's key, the manifest's fields, reading a trigger back as a
-// routine, and the checks a routine's title, instruction and schedule must
-// pass. It also holds the shape of the trigger an agent's offer on events
+// a create's key, the manifest's fields, its weekly allowance among them,
+// reading a trigger back as a routine, and the checks a routine's title,
+// instruction, schedule and allowance must pass. It also holds the shape of the trigger an agent's offer on events
 // no routine starts from is written as: its name, the words after its ask,
 // and reading it back.
 //
@@ -161,6 +161,15 @@ type Fields struct {
 	Schedule *Schedule
 	// Paused says the routine runs nothing until it is resumed.
 	Paused bool
+	// PerWeekMicroUSD is the routine's weekly allowance, the trigger's
+	// spec.budget.perWeek, in millionths of a US dollar: the most the runs
+	// counted toward it may cost in a rolling 7 days. Once they have, the
+	// API starts no run until the oldest leave the 7 days. Nil keeps the
+	// allowance the stored trigger has, none for a new routine, and zero
+	// takes it off. Read sets it to the trigger's allowance, nil for a
+	// trigger with none, so a shape that does not carry the allowance
+	// keeps it through a change.
+	PerWeekMicroUSD *int64
 }
 
 // Name returns the name of the trigger a routine made with key is written
@@ -243,6 +252,9 @@ type Trigger struct {
 	// Message and Title are its spec.session's.
 	Message, Title string
 	Suspend        bool
+	// PerWeekMicroUSD is its spec.budget.perWeek, its weekly allowance in
+	// millionths of a US dollar; zero for a trigger with none.
+	PerWeekMicroUSD int64
 }
 
 // Read reads t as a routine of agent, and reports false when it is none: a
@@ -275,6 +287,10 @@ func Read(t Trigger, agent string) (Fields, bool) {
 		message = strings.TrimSuffix(message, suffix)
 	}
 	f := Fields{Title: title, Instruction: unescapeTemplate(message), Starts: starts, Paused: t.Suspend}
+	if t.PerWeekMicroUSD > 0 {
+		perWeek := t.PerWeekMicroUSD
+		f.PerWeekMicroUSD = &perWeek
+	}
 	if t.Schedule != "" {
 		f.Schedule = ParseSchedule(t.Schedule, t.TimeZone)
 	}
@@ -303,6 +319,9 @@ var (
 	// ErrStartsInvalid matches a Start that is none of OnSchedule, FromLink
 	// and FromEmail.
 	ErrStartsInvalid = errors.New("routine: the routine starts in no way a routine starts")
+	// ErrAllowanceInvalid matches a weekly allowance below zero. Zero is
+	// none: it takes an allowance off.
+	ErrAllowanceInvalid = errors.New("routine: the weekly allowance is below zero")
 )
 
 // CheckTitle returns the title trimmed, or an error matching
@@ -361,6 +380,15 @@ func CheckSchedule(s Schedule) (Schedule, error) {
 	return Schedule{Days: days, Hour: s.Hour, Minute: s.Minute, Zone: s.Zone}, nil
 }
 
+// CheckAllowance returns an error matching ErrAllowanceInvalid for a
+// weekly allowance, in millionths of a US dollar, below zero.
+func CheckAllowance(perWeekMicroUSD int64) error {
+	if perWeekMicroUSD < 0 {
+		return fmt.Errorf("%w: %d", ErrAllowanceInvalid, perWeekMicroUSD)
+	}
+	return nil
+}
+
 // CheckStarts returns an error matching ErrStartsInvalid for a Start that
 // is none of the three.
 func CheckStarts(s Start) error {
@@ -372,14 +400,19 @@ func CheckStarts(s Start) error {
 }
 
 // New returns the fields of a new routine trimmed and checked: Starts is
-// OnSchedule when empty, and a routine on a schedule names one. An error
-// matches one of the check errors.
+// OnSchedule when empty, a routine on a schedule names one, and an
+// allowance is not below zero. An error matches one of the check errors.
 func New(f Fields) (Fields, error) {
 	if f.Starts == "" {
 		f.Starts = OnSchedule
 	}
 	if err := CheckStarts(f.Starts); err != nil {
 		return Fields{}, err
+	}
+	if f.PerWeekMicroUSD != nil {
+		if err := CheckAllowance(*f.PerWeekMicroUSD); err != nil {
+			return Fields{}, err
+		}
 	}
 	var err error
 	if f.Title, err = CheckTitle(f.Title); err != nil {
@@ -418,13 +451,41 @@ func member(m map[string]any, key string) (map[string]any, error) {
 	}
 }
 
+// WriteAllowance writes a weekly allowance into spec, a trigger's spec as
+// a JSON object: perWeekMicroUSD as its budget.perWeek, or, at zero, the
+// trigger's allowance taken off, and its budget with it once nothing else
+// is in it. Any other member of the budget is kept. It returns an error
+// when the spec's budget is not an object.
+func WriteAllowance(spec map[string]any, perWeekMicroUSD int64) error {
+	if perWeekMicroUSD == 0 {
+		budget, ok := spec["budget"].(map[string]any)
+		if !ok {
+			// No budget, or one of no shape a trigger has, holds no
+			// allowance to take off.
+			return nil
+		}
+		delete(budget, "perWeek")
+		if len(budget) == 0 {
+			delete(spec, "budget")
+		}
+		return nil
+	}
+	budget, err := member(spec, "budget")
+	if err != nil {
+		return err
+	}
+	budget["perWeek"] = perWeekMicroUSD
+	return nil
+}
+
 // Manifest returns the trigger manifest of the routine of agent named name,
 // the agent by its name, which the API reads in the context of whoever
 // applies it. It writes f over stored, the trigger's JSON as the API
 // answered it, or over nothing for a new routine, and leaves the status
 // out. Everything else stored holds, its other labels, its annotations and
 // the spec's other fields among them, is written back as it was, so a
-// change undoes nothing set another way. f is written as it is: New and
+// change undoes nothing set another way; an f whose PerWeekMicroUSD is nil
+// keeps the stored allowance with the rest. f is written as it is: New and
 // the checks are the caller's to apply first.
 func Manifest(agent, name string, stored json.RawMessage, f Fields) (json.RawMessage, error) {
 	m := map[string]any{}
@@ -486,6 +547,11 @@ func Manifest(agent, name string, stored json.RawMessage, f Fields) (json.RawMes
 		spec["suspend"] = true
 	} else {
 		delete(spec, "suspend")
+	}
+	if f.PerWeekMicroUSD != nil {
+		if err := WriteAllowance(spec, *f.PerWeekMicroUSD); err != nil {
+			return nil, err
+		}
 	}
 	b, err := json.Marshal(m)
 	if err != nil {

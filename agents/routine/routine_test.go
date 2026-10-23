@@ -225,3 +225,83 @@ func TestItImportsTheStandardLibraryAlone(t *testing.T) {
 		}
 	}
 }
+
+// TestTheAllowanceIsWrittenAndKept: a new routine's allowance is its
+// spec.budget.perWeek, read back by Read; a change whose fields carry none
+// keeps the stored allowance and the budget's other members; zero takes
+// it off, and the budget with it once nothing else is in it; an allowance
+// below zero is refused by New and CheckAllowance.
+func TestTheAllowanceIsWrittenAndKept(t *testing.T) {
+	perWeek := int64(2_500_000)
+	f, err := routine.New(routine.Fields{Title: "Inbox", Instruction: "Look at the inbox.", Schedule: &monday, PerWeekMicroUSD: &perWeek})
+	if err != nil {
+		t.Fatal(err)
+	}
+	name := routine.Name("key-allowance")
+	b, err := routine.Manifest("latere-chat", name, nil, f)
+	if err != nil {
+		t.Fatal(err)
+	}
+	spec := decode(t, b)["spec"].(map[string]any)
+	if budget, _ := spec["budget"].(map[string]any); budget["perWeek"] != float64(2_500_000) || len(budget) != 1 {
+		t.Fatalf("the allowance is written as %v", spec["budget"])
+	}
+	read, ok := routine.Read(routine.Trigger{Name: name, Labels: map[string]string{routine.Label: "latere-chat"}, Schedule: "0 9 * * 1",
+		TimeZone: "Europe/Berlin", Message: "Look at the inbox.", Title: "Inbox", PerWeekMicroUSD: 2_500_000}, "latere-chat")
+	if !ok || read.PerWeekMicroUSD == nil || *read.PerWeekMicroUSD != 2_500_000 {
+		t.Fatalf("the allowance reads back as %+v, %v", read, ok)
+	}
+	if read, _ := routine.Read(routine.Trigger{Name: name, Labels: map[string]string{routine.Label: "latere-chat"}, Message: "m"}, "latere-chat"); read.PerWeekMicroUSD != nil {
+		t.Errorf("a trigger with no allowance reads as one of %d", *read.PerWeekMicroUSD)
+	}
+
+	stored := json.RawMessage(`{"apiVersion":"topos.latere.ai/v1","kind":"Trigger","metadata":{"name":"` + name + `"},
+"spec":{"agent":"latere-chat","schedule":"0 9 * * 1","timeZone":"Europe/Berlin","budget":{"perWeek":9007199254740993,"later":"kept"},
+"session":{"message":"Look at the inbox.","title":"Inbox"}}}`)
+	kept, err := routine.Manifest("latere-chat", name, stored, routine.Fields{Title: "Inbox", Instruction: "Look at the inbox.", Starts: routine.OnSchedule})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !strings.Contains(string(kept), `"budget":{"later":"kept","perWeek":9007199254740993}`) {
+		t.Errorf("a change that names no allowance wrote %s", kept)
+	}
+	zero := int64(0)
+	off, err := routine.Manifest("latere-chat", name, stored, routine.Fields{Title: "Inbox", Instruction: "Look at the inbox.", Starts: routine.OnSchedule, PerWeekMicroUSD: &zero})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if budget := decode(t, off)["spec"].(map[string]any)["budget"].(map[string]any); budget["perWeek"] != nil || budget["later"] != "kept" {
+		t.Errorf("taking the allowance off left the budget %v", budget)
+	}
+	only := json.RawMessage(`{"spec":{"agent":"latere-chat","budget":{"perWeek":1},"session":{"message":"m"}}}`)
+	if b, err := routine.Manifest("latere-chat", name, only, routine.Fields{Title: "Inbox", Instruction: "m", PerWeekMicroUSD: &zero}); err != nil || strings.Contains(string(b), "budget") {
+		t.Errorf("taking the only allowance off wrote %s, %v", b, err)
+	}
+	if _, err := routine.Manifest("latere-chat", name, json.RawMessage(`{"spec":{"budget":"none"}}`), routine.Fields{Title: "Inbox", Instruction: "m", PerWeekMicroUSD: &perWeek}); err == nil {
+		t.Error("an allowance was written into a budget that is no object")
+	}
+
+	below := int64(-1)
+	if _, err := routine.New(routine.Fields{Title: "Inbox", Instruction: "m", Schedule: &monday, PerWeekMicroUSD: &below}); !errors.Is(err, routine.ErrAllowanceInvalid) {
+		t.Errorf("an allowance below zero: %v", err)
+	}
+	if err := routine.CheckAllowance(0); err != nil {
+		t.Errorf("no allowance: %v", err)
+	}
+}
+
+// TestWriteAllowance: the allowance is written into a spec of its own,
+// and taking it off a spec without one changes nothing.
+func TestWriteAllowance(t *testing.T) {
+	spec := map[string]any{"agent": "a"}
+	if err := routine.WriteAllowance(spec, 0); err != nil || len(spec) != 1 {
+		t.Errorf("taking off no allowance left %v, %v", spec, err)
+	}
+	if err := routine.WriteAllowance(spec, 7); err != nil || spec["budget"].(map[string]any)["perWeek"] != int64(7) {
+		t.Errorf("the allowance is written as %v, %v", spec, err)
+	}
+	spec["budget"] = "none"
+	if err := routine.WriteAllowance(spec, 0); err != nil || spec["budget"] != "none" {
+		t.Errorf("taking off from a budget that is no object left %v, %v", spec, err)
+	}
+}

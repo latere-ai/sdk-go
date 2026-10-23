@@ -19,9 +19,9 @@ type ContextReport struct {
 	// Source is where Used came from.
 	Source ContextSource `json:"source"`
 	// Parts are what the request was made of, in the order of the
-	// ContextPartKind constants, the last ContextFree. The parts but
+	// ReportPartKind constants, the last ContextFree. The parts but
 	// ContextFree sum to Used.
-	Parts []ContextPart `json:"parts"`
+	Parts []ReportPart `json:"parts"`
 }
 
 // UsedFraction returns the share of the window the request used, Used
@@ -36,60 +36,60 @@ func (r *ContextReport) UsedFraction() (float64, bool) {
 	return min(max(f, 0), 1), true
 }
 
-// PartsInOrder returns the parts in the order the ContextPartKind
+// PartsInOrder returns the parts in the order the ReportPartKind
 // constants are declared, ContextFree last, followed by any part of a kind
 // this version of the package does not know, in the order the API
 // answered them. The API answers the parts in that order already; a
 // program that draws them as one bar calls this so its order never
 // depends on it. The report's own Parts are left as they are.
-func (r *ContextReport) PartsInOrder() []ContextPart {
+func (r *ContextReport) PartsInOrder() []ReportPart {
 	if r == nil {
 		return nil
 	}
-	rank := func(k ContextPartKind) int {
+	rank := func(k ReportPartKind) int {
 		if i := slices.Index(contextPartOrder, k); i >= 0 {
 			return i
 		}
 		return len(contextPartOrder)
 	}
 	parts := slices.Clone(r.Parts)
-	slices.SortStableFunc(parts, func(a, b ContextPart) int { return rank(a.Part) - rank(b.Part) })
+	slices.SortStableFunc(parts, func(a, b ReportPart) int { return rank(a.Part) - rank(b.Part) })
 	return parts
 }
 
-// A ContextPart is one part of what a model request was made of.
-type ContextPart struct {
+// A ReportPart is one part of what a model request was made of.
+type ReportPart struct {
 	// Part is which part it is.
-	Part ContextPartKind `json:"part"`
+	Part ReportPartKind `json:"part"`
 	// Tokens is how many tokens of the window it took: for each part but
 	// ContextFree, the harness's estimate of it, scaled so those parts sum
 	// to the report's Used; for ContextFree, the window less Used.
 	Tokens int64 `json:"tokens"`
 }
 
-// ContextPartKind is which part of a model request a ContextPart is.
-type ContextPartKind string
+// ReportPartKind is which part of a model request a ReportPart is.
+type ReportPartKind string
 
 // The parts of a ContextReport, in the order a request holds them.
 const (
 	// ContextInstructions is the system prompt, the date included.
-	ContextInstructions ContextPartKind = "instructions"
+	ContextInstructions ReportPartKind = "instructions"
 	// ContextTools is the tool definitions.
-	ContextTools ContextPartKind = "tools"
+	ContextTools ReportPartKind = "tools"
 	// ContextMessages is the conversation.
-	ContextMessages ContextPartKind = "messages"
+	ContextMessages ReportPartKind = "messages"
 	// ContextFiles is the files people brought into a message that the
 	// request carries.
-	ContextFiles ContextPartKind = "files"
+	ContextFiles ReportPartKind = "files"
 	// ContextSummary is the summary of the history compacted away.
-	ContextSummary ContextPartKind = "summary"
+	ContextSummary ReportPartKind = "summary"
 	// ContextFree is what the window had left: Window less Used, never
 	// below zero.
-	ContextFree ContextPartKind = "free"
+	ContextFree ReportPartKind = "free"
 )
 
 // contextPartOrder is the order PartsInOrder puts the parts in.
-var contextPartOrder = []ContextPartKind{ContextInstructions, ContextTools, ContextMessages, ContextFiles, ContextSummary, ContextFree}
+var contextPartOrder = []ReportPartKind{ContextInstructions, ContextTools, ContextMessages, ContextFiles, ContextSummary, ContextFree}
 
 // ContextSource is where a ContextReport's Used came from.
 type ContextSource string

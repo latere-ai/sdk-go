@@ -38,7 +38,7 @@ minor version may break code, and every such change is marked **Breaking**.
   its `ModelRequest` payload, the request's model, `Usage` and cost, whose
   `Context` is a `ContextReport`: the model's window, the tokens used and
   their `ContextSource` (`ContextFromProvider` or `ContextEstimated`), and
-  the `ContextPart`s that fill it by `ContextPartKind`
+  the `ReportPart`s that fill it by `ReportPartKind`
   (`ContextInstructions` through `ContextFree`), with `UsedFraction` and
   `PartsInOrder`.
 - Package `agents/routine`: `Fields.PerWeekMicroUSD` and

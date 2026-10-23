@@ -30,7 +30,7 @@ func TestASessionReadsItsContextReport(t *testing.T) {
 	if f, ok := r.UsedFraction(); !ok || f != 0.25 {
 		t.Errorf("the used share is %v, %v", f, ok)
 	}
-	want := []agents.ContextPart{
+	want := []agents.ReportPart{
 		{Part: agents.ContextInstructions, Tokens: 6000}, {Part: agents.ContextTools, Tokens: 9000}, {Part: agents.ContextMessages, Tokens: 30000},
 		{Part: agents.ContextFiles, Tokens: 4000}, {Part: agents.ContextSummary, Tokens: 1000}, {Part: agents.ContextFree, Tokens: 150000},
 	}
@@ -58,12 +58,12 @@ func TestTheUsedShareAndThePartsInOrder(t *testing.T) {
 			t.Errorf("%s: the used share is %v, %v", name, got, ok)
 		}
 	}
-	r := &agents.ContextReport{Window: 100, Used: 60, Parts: []agents.ContextPart{
+	r := &agents.ContextReport{Window: 100, Used: 60, Parts: []agents.ReportPart{
 		{Part: agents.ContextFree, Tokens: 40}, {Part: "skills", Tokens: 5}, {Part: agents.ContextMessages, Tokens: 40},
 		{Part: agents.ContextInstructions, Tokens: 15}, {Part: "memory", Tokens: 0},
 	}}
-	before := append([]agents.ContextPart(nil), r.Parts...)
-	want := []agents.ContextPart{
+	before := append([]agents.ReportPart(nil), r.Parts...)
+	want := []agents.ReportPart{
 		{Part: agents.ContextInstructions, Tokens: 15}, {Part: agents.ContextMessages, Tokens: 40}, {Part: agents.ContextFree, Tokens: 40},
 		{Part: "skills", Tokens: 5}, {Part: "memory", Tokens: 0},
 	}

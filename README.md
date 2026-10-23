@@ -172,11 +172,12 @@ and changes the same ones; Latere Chat's are those of its managed agent,
 
 ```go
 r, err := ag.CreateRoutine(ctx, &agents.CreateRoutineParams{
-	Agent:          "latere-chat",
-	Title:          "Weekly news",
-	Instruction:    "Summarize this week's news on climate policy.",
-	Schedule:       &agents.RoutineSchedule{Days: []time.Weekday{time.Monday, time.Thursday}, Hour: 9, Zone: "Europe/Berlin"},
-	IdempotencyKey: key, // the same key never makes a second routine
+	Agent:           "latere-chat",
+	Title:           "Weekly news",
+	Instruction:     "Summarize this week's news on climate policy.",
+	Schedule:        &agents.RoutineSchedule{Days: []time.Weekday{time.Monday, time.Thursday}, Hour: 9, Zone: "Europe/Berlin"},
+	PerWeekMicroUSD: 1_000_000, // at most $1 a week
+	IdempotencyKey:  key,       // the same key never makes a second routine
 })
 if errors.Is(err, agents.ErrRoutineTitleMissing) {
 	// say so to the person; nothing was sent
@@ -197,11 +198,26 @@ caller's context first: a program signed in as a person makes a managed
 agent exist with `account.ApplyManagedAgent`. A routine's runs are the
 sessions `ListSessions` lists with `Trigger: r.TriggerID`.
 
+A routine may have a weekly allowance, `PerWeekMicroUSD`, in millionths
+of a US dollar: the most its runs, and the looks of the wakes set in the
+sessions it started, may cost in a rolling 7 days. The API counts that
+spend at each firing, and a firing while it is at the allowance starts
+nothing and records `agents.FiringSkippedBudget`; once the oldest runs
+leave the 7 days, the next firing runs, with nothing to resume. A change
+that names no allowance keeps the one the routine has, and zero takes it
+off. `r.Spend` is the routine's week as of its latest run, a
+`TriggerSpend`: what it cost, the allowance, a run's mean cost and what
+the window is on course to cost, with `AheadOfPace` and `AtAllowance`
+to say how it stands. `r.SkippedBudget` counts the runs the allowance
+skipped.
+
 The shape itself, the manifest, the name a key makes and the checks, is
 package `agents/routine`, which imports the standard library alone. A
 server that applies a routine on a person's behalf, such as one an agent
 offered and the person accepted, writes it with `routine.Manifest`, so
-what it makes is a routine every client reads as one. The package holds
+what it makes is a routine every client reads as one, and
+`routine.WriteAllowance` writes an allowance into any trigger's spec. The
+package holds
 the other shape an offer is written in too: an offer on events no
 routine starts from (`routine.StartsOn` says which) is named
 `routine.EventName(routine.OfferKey(session, call))`, its message is
@@ -214,8 +230,9 @@ own: a routine or an event trigger it offered and the person accepted,
 and a wake, a trigger that fires once and sends the agent's note back to
 the session it set it in. `ListWatches` reads all of them as `Watch`es,
 each with its kind, when it looks next, the sentence of why it exists,
-who set it, the session it came from, whether it is paused, and a wake's
-place in its row of looks:
+who set it, the session it came from, whether it is paused, a wake's
+place in its row of looks, and the week of the trigger its looks count
+toward:
 
 ```go
 whys := map[string]string{} // keep between readings
@@ -225,6 +242,9 @@ for w, err := range ag.ListWatches(ctx, &agents.ListWatchesParams{Agent: "latere
 	}
 	whys[w.TriggerID] = w.Why
 	fmt.Println(w.Kind, w.Title, w.Why, w.SetBy, w.NextAt)
+	if w.Spend.AheadOfPace() {
+		fmt.Println("on course past its allowance of", w.PerWeekMicroUSD)
+	}
 }
 
 hold, err := ag.SetTriggerHold(ctx, true) // pause everything at once
@@ -240,12 +260,43 @@ repository's pushes, carries its agent's label under a name of
 `routine.EventName`'s shape, so `ListRoutines` leaves it out and
 `ListWatches` reads it. Pause or
 resume any watch with `SuspendTrigger`, which keeps every other field of
-its trigger, and delete one with `DeleteTrigger`. `GetTriggerHold` and
+its trigger, set or take off its weekly allowance with
+`SetTriggerAllowance` the same way, and delete one with `DeleteTrigger`.
+
+A watch's looks count toward one trigger's allowance, `w.CountsToward`:
+its own, for a routine or an event trigger, and for a wake, the trigger
+that started the wake's session, none when a person started it. Its
+`PerWeekMicroUSD` and `Spend` are that trigger's, so a wake shows the
+week of the routine whose conversation it looks again in; that trigger
+is read from the page, or once per page when it is on another. A
+woken turn's `UserMessage` carries the same week as a `FiringSpend`, as
+the firing found it, which the agent read before the message. An offer
+read with `ToolUse.Offer` carries the allowance the agent asked for, its
+estimate of a week of looks, as it wrote it (`PerWeekUSD`, such as
+`"1.50"`) and in millionths of a dollar (`PerWeekMicroUSD`), for the
+person to read before they allow it. `GetTriggerHold` and
 `SetTriggerHold` read and set the hold of every trigger of the person,
 which leaves each one's own pause as it was. A `Session` names its pending `Wake`, the `Outcome` of its
 latest turn a trigger began, `agents.TurnQuiet` or `agents.TurnNotified`,
 and the latest `Notice` its agent brought the person; the idle
-`SessionStatus` that ends such a turn carries the outcome too.
+`SessionStatus` that ends such a turn carries the outcome too. A
+`ToolUse` and an `ApprovalRequested` say whether a person began their
+turn, `Attended`: false on a turn a trigger or a wake began, which
+nobody watches.
+
+A `Session`'s `ContextReport` says how full its context is and what
+fills it, from the latest model request of its own thread; each
+`EventModelRequest`'s `ModelRequest` carries the same report for that
+request as its `Context`:
+
+```go
+if full, ok := s.ContextReport.UsedFraction(); ok {
+	fmt.Printf("%.0f%% of %d tokens\n", full*100, s.ContextReport.Window)
+	for _, p := range s.ContextReport.PartsInOrder() {
+		fmt.Println(p.Part, p.Tokens) // instructions, tools, messages, files, summary, free
+	}
+}
+```
 
 ### Searching
 

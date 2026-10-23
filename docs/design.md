@@ -389,6 +389,21 @@ way. Only the routine's own paths are written, and the status is left
 out. The API takes no precondition on an apply, so a change made
 elsewhere between the read and the write is replaced; the docs say so.
 
+A routine's weekly allowance, the trigger's `spec.budget.perWeek`, is a
+field of `routine.Fields` like the others, but a pointer: nil keeps the
+allowance the stored trigger has, and zero takes it off. Nil has to mean
+keep, because a server reads a stored trigger into `routine.Trigger`
+itself before it writes a change over it, as Topos does for a change its
+agent offered: if a missing allowance meant none, the first build of
+such a server against a version that has the field would take every
+allowance off on its next change. `Read` fills the pointer from the trigger, so a
+shape that carries the allowance writes the same value back.
+`WriteAllowance` is exported for the triggers that are no routine, such
+as an offer's event trigger, which that server writes into the document
+itself, and for `agents.SetTriggerAllowance`, which sets the allowance
+of any trigger over the JSON the API answered, as `SuspendTrigger` sets
+its pause.
+
 The agent a routine names must exist before its trigger is applied. The
 `agents` package does not reach into `account` to make it exist: which
 agent, and when to bring it to its live version, is the program's
@@ -422,9 +437,15 @@ Three things a watch shows are not on its trigger, and each costs a read:
 - A wake's agent is not on its trigger, which names its agent by id and
   carries no routine label, and its place in its row of looks is the
   session's: the wake's session answers both.
+- A wake's looks count toward the allowance of the trigger that started
+  its session, which only the session names; the same read answers it.
+  That trigger's allowance and week are on the page when it is newer
+  than the triggers before it, and are read once per page otherwise,
+  after the sessions, since the session names which.
 
 So a page of watches reads the page of triggers, each session a watch
-came from once, and each log once, at most four reads at once, so a page
+came from once, each log once, and each trigger a wake counts toward
+that is not on the page once, at most four reads at once, so a page
 takes about as long as its slowest read rather than the sum of them. An
 offer's why never changes, since the trigger keeps the call that made it
 across later applies, so `KnownWhys` takes the whys of an earlier
@@ -449,6 +470,36 @@ The offers themselves are read from the held call alone, by
 `ToolUse.Offer`, which sends nothing: a client finds a held call in the
 log it already follows, and reads the trigger a change, a resume or a
 delete names with `GetTrigger` only when it words one.
+
+## A watch's week and a conversation's context
+
+The API counts what a trigger's looks cost over a rolling 7 days and
+writes it in two places: on the trigger's status, in the manifest's
+camel case, and on the message of each firing, in the log's snake case,
+with the trigger the look counts toward. They are two types,
+`TriggerSpend` and `FiringSpend`, rather than one with a decoder that
+reads both cases: each is held to its own schema once the document
+describes it, and a program never wonders which spelling a value came
+from. Both answer `AheadOfPace`, the comparison the API tells the agent,
+so a program shows the same verdict the agent read.
+
+Every amount is an integer of millionths of a US dollar, the unit the
+API counts in, named `...MicroUSD` as a session's spend is. The one
+amount an agent writes is the allowance it asks for in an offer, a
+decimal of dollars; `Offer` keeps it as written, for wording, and in
+millionths, parsed as digits rather than as a float, so 0.1 is exactly
+100000.
+
+`Attended` on a tool call and an approval is a `*bool`: false says a
+person began no part of the turn, and nil says the event was written
+before the API recorded it, which a program must not read as either.
+
+A `ContextReport` is the same shape on a model request and on the
+session, so it is one type, with two helpers a client would otherwise
+write itself: the share of the window used, capped at the whole window
+and unknown when the catalog names no window, and the parts in their
+order, so a bar drawn from them keeps its order whatever order a later
+API answers.
 
 ## A page an agent made
 

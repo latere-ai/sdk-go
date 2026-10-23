@@ -7,6 +7,42 @@ minor version may break code, and every such change is marked **Breaking**.
 
 ## [Unreleased]
 
+### Added
+
+- Package `agents`: a trigger's weekly allowance. `TriggerSpec.Budget`, a
+  `TriggerAllowance` in millionths of a US dollar, is the most the
+  trigger's looks may cost in a rolling 7 days; a firing while the week's
+  spend is at it starts nothing and records `FiringSkippedBudget`,
+  counted as `FiringCounts.SkippedBudget`. `TriggerStatus.Spend`, a
+  `TriggerSpend`, is the week as of the latest firing: the spend, the
+  allowance, a look's mean cost, the looks expected and the projection,
+  with `AheadOfPace` and `AtAllowance`. `SetTriggerAllowance` sets or
+  takes off the allowance of any trigger, keeping every other field.
+- Package `agents`: routines carry the allowance.
+  `CreateRoutineParams.PerWeekMicroUSD` sets it,
+  `ChangeRoutineParams.PerWeekMicroUSD` changes it or, at zero, takes it
+  off, and a change that names none keeps it. `Routine.PerWeekMicroUSD`,
+  `Routine.Spend` and `Routine.SkippedBudget` read it back, and
+  `ErrAllowanceInvalid` matches an allowance below zero.
+- Package `agents`: `Watch.CountsToward`, `Watch.PerWeekMicroUSD`,
+  `Watch.Spend` and `Watch.SkippedBudget`. A wake carries the allowance
+  and week of the trigger that started its session, which `ListWatches`
+  reads from the page or, once per page, from the API.
+- Package `agents`: `UserMessage.Spend`, the `FiringSpend` a woken turn's
+  message carries, and `ToolUse.Attended` and
+  `ApprovalRequested.Attended`, whether a person began the turn.
+- Package `agents`: `Offer.PerWeekUSD` and `Offer.PerWeekMicroUSD`, the
+  weekly allowance a held `trigger` call asks for, as the agent wrote it
+  and in millionths of a dollar.
+- Package `agents`: `Session.ContextReport` and `EventModelRequest` with
+  its `ModelRequest` payload, whose `Context` is a `ContextReport`: the
+  model's window, the tokens used and their `ContextSource`, and the
+  parts that fill it, with `UsedFraction` and `PartsInOrder`.
+- Package `agents/routine`: `Fields.PerWeekMicroUSD` and
+  `Trigger.PerWeekMicroUSD`, written as `spec.budget.perWeek` by
+  `Manifest`, which keeps the stored allowance when the fields carry
+  none; `WriteAllowance`, `CheckAllowance` and `ErrAllowanceInvalid`.
+
 ## [0.10.0] - 2026-10-23
 
 ### Added

@@ -121,6 +121,10 @@ type SessionStatus struct {
 	StopReason StopReason `json:"stop_reason,omitempty"`
 	// Detail explains the stop, when there is more to say.
 	Detail string `json:"detail,omitempty"`
+	// Outcome is whether the turn that stopped brought anything to the
+	// person, on the idle status that ends a turn a trigger or a wake
+	// began; empty otherwise.
+	Outcome TurnOutcome `json:"outcome,omitempty"`
 }
 
 // A ContentBlock is one part of a message.
@@ -436,6 +440,25 @@ type UserMessage struct {
 	// Attachments are the files the message carries, as the session keeps
 	// them.
 	Attachments []Attachment `json:"attachments,omitempty"`
+	// FiringID is the firing that sent the message, for a message a
+	// trigger sent; its turn is one a trigger began.
+	FiringID string `json:"firing_id,omitempty"`
+	// Wake is the wake that sent the message, whose content is the note
+	// the agent wrote to itself; nil for any other message.
+	Wake *WakeFiring `json:"wake,omitempty"`
+}
+
+// A WakeFiring is the wake a message came from.
+type WakeFiring struct {
+	// TriggerID is the wake's trigger, gone once it fired.
+	TriggerID string `json:"trigger_id"`
+	// SetAt is when the agent set it, and DueAt when it was to fire; a
+	// wake held while every trigger was fires after DueAt.
+	SetAt time.Time `json:"set_at"`
+	DueAt time.Time `json:"due_at"`
+	// Count is the wake's place in a row of wakes with no word from the
+	// person who started the session between them, from 1.
+	Count int `json:"count"`
 }
 
 // An Attachment is a file a message carries, as the session keeps it:

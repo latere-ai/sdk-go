@@ -79,7 +79,7 @@ type TriggerMetadata struct {
 }
 
 // TriggerSpec is what a trigger fires on and the session each firing
-// starts or continues. A trigger sets Schedule or On, never both.
+// starts or continues. A trigger sets one of Schedule, On and At.
 type TriggerSpec struct {
 	// Agent is the agent the sessions run, by name or id. The API answers
 	// the agent's id, and a trigger always runs the agent's latest version.
@@ -91,6 +91,11 @@ type TriggerSpec struct {
 	TimeZone string `json:"timeZone,omitempty"`
 	// On selects the events the trigger fires on.
 	On *EventFilter `json:"on,omitempty"`
+	// At fires the trigger once, at this time, which must not have
+	// passed. The API deletes the trigger once that firing started,
+	// continued, was skipped or was refused; the session it reached keeps
+	// what it did. A wake an agent set is such a trigger.
+	At time.Time `json:"at,omitzero"`
 	// Session is the session a firing starts, or the message it sends to
 	// the open session its key names.
 	Session TriggerSession `json:"session"`
@@ -156,9 +161,38 @@ type TriggerSession struct {
 	// Limits bound how long the session and each turn may take.
 	Limits *SessionLimits `json:"limits,omitempty"`
 	// EndOnIdle ends the session once it stops working instead of leaving
-	// it open; the API's default when nil.
+	// it open; the API's default when nil. A session with a pending wake
+	// stays open for it.
 	EndOnIdle *bool `json:"endOnIdle,omitempty"`
+	// Target is the open session, "ses_" and a ULID, every firing sends
+	// Message to, for SessionPolicyContinue, in place of the session Key
+	// would name; a trigger sets Target or Key, never both. A firing whose
+	// target has ended is FiringSkippedEnded and starts nothing.
+	Target string `json:"target,omitempty"`
+	// Attended starts each session a firing starts as attended, so its
+	// questions wait for the trigger's owner instead of being answered at
+	// once as unanswered. A session Target names keeps its own.
+	Attended bool `json:"attended,omitempty"`
+	// Notify is whether every turn a firing begins brings its result to
+	// the person, or the agent judges; NotifyAlways when empty. A wake's
+	// turn is judged whatever it says.
+	Notify NotifyPolicy `json:"notify,omitempty"`
 }
+
+// NotifyPolicy is whether the turns a trigger begins bring their result
+// to the person every time, or only when the agent judges they should.
+type NotifyPolicy string
+
+// The notify policies of TriggerSession.
+const (
+	// NotifyAlways brings every turn's result to the person: the turn's
+	// outcome is TurnNotified.
+	NotifyAlways NotifyPolicy = "always"
+	// NotifyJudged lets the agent decide with its notify tool: a turn that
+	// calls it, or waits for the person, is TurnNotified, and one that
+	// ends without either TurnQuiet. The agent must have the notify tool.
+	NotifyJudged NotifyPolicy = "judged"
+)
 
 // SessionPolicy is whether a firing starts a session or continues one.
 type SessionPolicy string
@@ -246,7 +280,42 @@ type TriggerStatus struct {
 	NextFireAt *time.Time `json:"nextFireAt,omitempty"`
 	// Counts is how many firings came to each outcome.
 	Counts *FiringCounts `json:"counts,omitempty"`
+	// Origin is the call of a session's agent that made the trigger; nil
+	// for a trigger applied through the API. It is kept when the trigger
+	// is applied again.
+	Origin *TriggerOrigin `json:"origin,omitempty"`
 }
+
+// A TriggerOrigin is the call of a session's agent that made a trigger:
+// an offer the person accepted, or a wake the agent set.
+type TriggerOrigin struct {
+	// Kind is which call made it.
+	Kind TriggerOriginKind `json:"kind"`
+	// SessionID is the session whose agent made the call.
+	SessionID string `json:"sessionId"`
+	// ToolUseID is the call, the ToolUseID of the ToolUse in that
+	// session's log. An offer's call holds what the agent wrote of why,
+	// which the trigger does not keep.
+	ToolUseID string `json:"toolUseId"`
+	// ConfirmedBy is the subject of the person who accepted an offer;
+	// empty for a wake.
+	ConfirmedBy string `json:"confirmedBy,omitempty"`
+}
+
+// TriggerOriginKind is which call of an agent made a trigger.
+type TriggerOriginKind string
+
+// The kinds of TriggerOrigin.
+const (
+	// TriggerFromProposal is an offer of the agent's trigger tool, made
+	// when the person who started the session accepted it, and owned by
+	// them.
+	TriggerFromProposal TriggerOriginKind = "proposal"
+	// TriggerFromWake is a wake the agent set with its wake tool: a
+	// trigger that fires once, At its time, and sends the agent's note to
+	// the session that set it.
+	TriggerFromWake TriggerOriginKind = "wake"
+)
 
 // FiringCounts counts a trigger's firings by outcome.
 type FiringCounts struct {
@@ -357,6 +426,9 @@ const (
 	FiringSkippedBusy FiringOutcome = "skipped_busy"
 	// FiringSkippedLate came later than MaxAge allows.
 	FiringSkippedLate FiringOutcome = "skipped_late"
+	// FiringSkippedEnded was to continue a TriggerSession.Target that has
+	// ended or is gone, and started nothing.
+	FiringSkippedEnded FiringOutcome = "skipped_ended"
 	// FiringRefused was refused, such as by the agent's owner's policy;
 	// Firing.Reason says why.
 	FiringRefused FiringOutcome = "refused"

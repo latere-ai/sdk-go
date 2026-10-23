@@ -2468,6 +2468,9 @@
             "format": "date-time",
             "type": "string"
           },
+          "origin": {
+            "$ref": "#/components/schemas/TriggerOrigin"
+          },
           "owner": {
             "$ref": "#/components/schemas/Owner"
           },
@@ -4659,6 +4662,28 @@
         "required": [
           "product",
           "verbs"
+        ],
+        "type": "object"
+      },
+      "TriggerOrigin": {
+        "properties": {
+          "confirmedBy": {
+            "type": "string"
+          },
+          "kind": {
+            "type": "string"
+          },
+          "sessionId": {
+            "type": "string"
+          },
+          "toolUseId": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "kind",
+          "sessionId",
+          "toolUseId"
         ],
         "type": "object"
       },

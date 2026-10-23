@@ -966,6 +966,14 @@ func TestRoutineOf(t *testing.T) {
 	if !ok || r.Title != "Weekly digest" || r.TriggerID != "trg_1" || r.LastSessionID != "ses_9" || r.NextRunAt == nil || string(r.RawJSON()) != trigger {
 		t.Errorf("the routine reads %+v, %v", r, ok)
 	}
+	if r.Origin != nil {
+		t.Errorf("a routine the person made reads the origin %+v", r.Origin)
+	}
+	offered := &agents.TriggerOrigin{Kind: agents.TriggerFromProposal, SessionID: "ses_4", ToolUseID: "toolu_1", ConfirmedBy: "alice"}
+	tr.Status.Origin = offered
+	if r, ok := agents.RoutineOf(&tr, chat); !ok || r.Origin == nil || *r.Origin != *offered {
+		t.Errorf("a routine an agent offered reads the origin %+v, %v", r.Origin, ok)
+	}
 	for _, agent := range []string{"", "another"} {
 		if _, ok := agents.RoutineOf(&tr, agent); ok {
 			t.Errorf("the routine read as one of %q", agent)

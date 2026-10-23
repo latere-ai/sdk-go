@@ -106,6 +106,10 @@ type Routine struct {
 	LastSessionID string
 	// CreatedAt is when the routine was made.
 	CreatedAt time.Time
+	// Origin is the offer that made the routine, for one an agent offered
+	// in a session and the person accepted, when they did so at
+	// CreatedAt; nil for a routine the person made.
+	Origin *TriggerOrigin
 
 	raw json.RawMessage
 }
@@ -143,7 +147,7 @@ func RoutineOf(t *Trigger, agent string) (*Routine, bool) {
 	r := &Routine{
 		Name: t.Metadata.Name, TriggerID: t.Status.ID, Agent: agent, Title: f.Title, Instruction: f.Instruction,
 		Starts: f.Starts, Schedule: f.Schedule, Paused: f.Paused, LastRunAt: t.Status.LastFiredAt, LastSessionID: t.Status.LastSessionID,
-		CreatedAt: t.Status.CreatedAt, raw: t.raw,
+		CreatedAt: t.Status.CreatedAt, Origin: t.Status.Origin, raw: t.raw,
 	}
 	if !r.Paused && r.Starts == StartsOnSchedule {
 		r.NextRunAt = t.Status.NextFireAt

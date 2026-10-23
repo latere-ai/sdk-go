@@ -110,9 +110,15 @@ func TestApplyTriggerFillsTheEnvelopeAndSendsNoStatus(t *testing.T) {
 	if spec["agent"] != "latere-chat" || spec["timeZone"] != "Europe/Berlin" {
 		t.Errorf("sent the spec %v", spec)
 	}
-	for _, unset := range []string{"on", "skipIfActive", "maxActive", "maxAge", "suspend"} {
+	for _, unset := range []string{"on", "at", "skipIfActive", "maxActive", "maxAge", "suspend"} {
 		if _, has := spec[unset]; has {
 			t.Errorf("sent the unset %s: %v", unset, spec[unset])
+		}
+	}
+	session, _ := spec["session"].(map[string]any)
+	for _, unset := range []string{"target", "attended", "notify"} {
+		if _, has := session[unset]; has {
+			t.Errorf("sent the unset session.%s: %v", unset, session[unset])
 		}
 	}
 	if in.APIVersion != "" || in.Status.ID != "trg_old" {
@@ -261,5 +267,38 @@ func TestTriggerCallsReturnTheAPIsRefusal(t *testing.T) {
 	}
 	if _, err := c.ListFiringsPage(t.Context(), "x", nil); !errors.Is(err, latere.ErrNotFound) {
 		t.Errorf("firings: %v", err)
+	}
+}
+
+// TestATriggerThatFiresOnceContinuesItsTarget: a trigger that fires once
+// sends its time, the session it continues, whether its sessions wait for
+// their owner and how its turns notify, and reads back the call that made
+// it.
+func TestATriggerThatFiresOnceContinuesItsTarget(t *testing.T) {
+	answer := `{"apiVersion":"topos.latere.ai/v1","kind":"Trigger","metadata":{"name":"wake-01m34g2jf01b91b8399cd1g6yp","displayName":"Whether the refund arrived"},
+"spec":{"agent":"agent_1","at":"2026-10-24T07:00:00Z","session":{"message":"Look at the inbox.","policy":"continue","target":"ses_1","attended":true,"notify":"judged"}},
+"status":{"id":"trg_2","createdAt":"2026-10-23T09:00:00Z","origin":{"kind":"wake","sessionId":"ses_1","toolUseId":"toolu_7"}}}`
+	c, calls := fakeAPI(t, map[string]string{"PUT /v1/agents/triggers/wake-01m34g2jf01b91b8399cd1g6yp": answer})
+	at := time.Date(2026, 10, 24, 9, 0, 0, 0, time.FixedZone("CEST", 2*60*60))
+	got, err := c.ApplyTrigger(t.Context(), &agents.Trigger{
+		Metadata: agents.TriggerMetadata{Name: "wake-01m34g2jf01b91b8399cd1g6yp", DisplayName: "Whether the refund arrived"},
+		Spec: agents.TriggerSpec{Agent: "latere-chat", At: at, Session: agents.TriggerSession{
+			Message: "Look at the inbox.", Policy: agents.SessionPolicyContinue, Target: "ses_1", Attended: true, Notify: agents.NotifyJudged,
+		}},
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	spec, _ := (*calls)[0].Body["spec"].(map[string]any)
+	session, _ := spec["session"].(map[string]any)
+	if spec["at"] != "2026-10-24T09:00:00+02:00" || session["target"] != "ses_1" || session["attended"] != true || session["notify"] != "judged" {
+		t.Errorf("sent the spec %v", spec)
+	}
+	if !got.Spec.At.Equal(at) || got.Spec.Session.Target != "ses_1" || !got.Spec.Session.Attended || got.Spec.Session.Notify != agents.NotifyJudged {
+		t.Errorf("read the spec back as %+v", got.Spec)
+	}
+	want := &agents.TriggerOrigin{Kind: agents.TriggerFromWake, SessionID: "ses_1", ToolUseID: "toolu_7"}
+	if o := got.Status.Origin; o == nil || *o != *want {
+		t.Errorf("read the origin as %+v, want %+v", o, want)
 	}
 }

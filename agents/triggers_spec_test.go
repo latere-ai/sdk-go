@@ -32,6 +32,7 @@ func TestTriggersMatchTheSchemas(t *testing.T) {
 	d.checkModel(t, "EventFilter", reflect.TypeFor[EventFilter](), s["TriggerOn"], true)
 	d.checkModel(t, "PayloadMatch", reflect.TypeFor[PayloadMatch](), s["TriggerMatch"], true)
 	d.checkModel(t, "TriggerStatus", reflect.TypeFor[TriggerStatus](), s["ManifestStatus"], true)
+	d.checkModel(t, "TriggerOrigin", reflect.TypeFor[TriggerOrigin](), s["TriggerOrigin"], true)
 	d.checkModel(t, "FiringCounts", reflect.TypeFor[FiringCounts](), s["TriggerCounts"], true)
 	d.checkModel(t, "Firing", reflect.TypeFor[Firing](), s["Firing"], true)
 	d.checkModel(t, "FiringEvent", reflect.TypeFor[FiringEvent](), s["FiringEvent"], true)

@@ -143,6 +143,50 @@ var leftOut = map[string]string{
 	"TriggerStatus.identity": "the identity the trigger's sessions are started with, which no client reads yet",
 }
 
+// aheadOfTheDocument is the fields models read that the published
+// document does not describe yet, by the model's Go type and the field's
+// JSON name, each with the schema it will join and what it is. checkModel
+// takes them as read, and TestFieldsAheadOfTheDocumentAreStillAhead fails
+// once the document describes one, so the model is then held to it.
+var aheadOfTheDocument = map[string]ahead{
+	"Session.wake":            {"Session", "a session's pending wake"},
+	"Session.outcome":         {"Session", "whether the latest turn a trigger began brought anything to the person"},
+	"Session.notice":          {"Session", "what the agent last brought to the person"},
+	"SessionStatus.outcome":   {"event:session.status", "the outcome of the turn the idle status ends"},
+	"UserMessage.wake":        {"event:user.message", "the wake a message came from"},
+	"TriggerSpec.at":          {"TriggerSpec", "the time a trigger that fires once fires at"},
+	"TriggerSession.target":   {"TriggerSession", "the session every firing continues"},
+	"TriggerSession.attended": {"TriggerSession", "whether a firing's sessions wait for their owner's answers"},
+	"TriggerSession.notify":   {"TriggerSession", "whether every turn a firing begins brings its result"},
+}
+
+// ahead is a field of aheadOfTheDocument: the schema it will join, a
+// component's name or "event:" and an event's type for its payload, and
+// what it is.
+type ahead struct{ schema, what string }
+
+// TestFieldsAheadOfTheDocumentAreStillAhead fails once the document
+// describes a field of aheadOfTheDocument, which is then taken off it.
+func TestFieldsAheadOfTheDocumentAreStillAhead(t *testing.T) {
+	d, _ := loadDocument(t)
+	for field, a := range aheadOfTheDocument {
+		var s *schema
+		if typ, ok := strings.CutPrefix(a.schema, "event:"); ok {
+			s = d.resolve(d.payload(typ))
+		} else {
+			s = d.resolve(d.Components.Schemas[a.schema])
+		}
+		if s == nil {
+			t.Errorf("%s: the document has no %s", field, a.schema)
+			continue
+		}
+		_, name, _ := strings.Cut(field, ".")
+		if _, ok := s.Properties[name]; ok {
+			t.Errorf("the document now describes %s (%s): hold the model to it and take it off aheadOfTheDocument", field, a.what)
+		}
+	}
+}
+
 // checkModel compares the model type typ with s: every JSON field of typ
 // is a property of s, a date-time is read as a time.Time, and a nested
 // struct is compared with its property's schema. With complete, every
@@ -183,6 +227,9 @@ func (d *document) checkModel(t *testing.T, name string, typ reflect.Type, s *sc
 		read[tag] = true
 		prop, ok := s.Properties[tag]
 		if !ok {
+			if _, coming := aheadOfTheDocument[typ.Name()+"."+tag]; coming {
+				continue
+			}
 			t.Errorf("%s.%s is read, and the document has no such field", name, tag)
 			continue
 		}

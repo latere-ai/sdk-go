@@ -105,6 +105,16 @@ type Session struct {
 	Root string `json:"root,omitempty"`
 	// TriggerID is the trigger that started the session, if one did.
 	TriggerID string `json:"trigger_id,omitempty"`
+	// Wake is the session's pending wake: when its agent will look again,
+	// and what for. Nil when it has none; a session has at most one, and
+	// loses it when the wake fires or is canceled, or the session ends.
+	Wake *PendingWake `json:"wake,omitempty"`
+	// Outcome is whether the latest turn a trigger or a wake began brought
+	// anything to the person; empty before the first such turn ends.
+	Outcome TurnOutcome `json:"outcome,omitempty"`
+	// Notice is what the agent last brought to the person with its notify
+	// tool; nil before its first call.
+	Notice *Notice `json:"notice,omitempty"`
 	// Budget is what the session has spent.
 	Budget *Budget `json:"budget,omitempty"`
 	// Folder is the session's folder of files in Storage, where it keeps
@@ -137,6 +147,49 @@ func (s *Session) UnmarshalJSON(b []byte) error {
 	}
 	s.raw = keep(b)
 	return nil
+}
+
+// A PendingWake is a session's next wake: a trigger that fires once and
+// sends the agent's note back to the session, which the agent set with
+// its wake tool. Client.DeleteTrigger with TriggerID cancels it.
+type PendingWake struct {
+	// TriggerID is the wake's trigger.
+	TriggerID string `json:"trigger_id"`
+	// At is when it fires.
+	At time.Time `json:"at"`
+	// Title is the one line the agent wrote for the person: what it will
+	// look for.
+	Title string `json:"title"`
+	// Count is the wake's place in a row of wakes with no word from the
+	// person who started the session between them, from 1. Past the
+	// API's bound, the next wake waits for the person's yes.
+	Count int `json:"count"`
+}
+
+// TurnOutcome is whether a turn a trigger or a wake began brought anything
+// to the person.
+type TurnOutcome string
+
+// The outcomes of a turn a trigger or a wake began. A turn that ends on
+// an error, a limit or the budget has none, nor does a turn a person
+// began.
+const (
+	// TurnNotified brought its result to the person: its trigger's
+	// TriggerSession.Notify is NotifyAlways, or the agent called its notify
+	// tool, or the turn waited for the person on the way.
+	TurnNotified TurnOutcome = "notified"
+	// TurnQuiet ended with nothing for the person, who need not be told.
+	TurnQuiet TurnOutcome = "quiet"
+)
+
+// A Notice is what an agent brought to the person with its notify tool.
+type Notice struct {
+	// Title is the one line the agent wrote, for a notification or a list.
+	Title string `json:"title"`
+	// Seq is the sequence of the call in the session's log.
+	Seq int64 `json:"seq"`
+	// At is when it was made.
+	At time.Time `json:"at"`
 }
 
 // Runner is where a session's agent runs.

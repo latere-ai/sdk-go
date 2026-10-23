@@ -737,3 +737,44 @@ func TestForkingAtAPointWithAMessage(t *testing.T) {
 		t.Errorf("%d forks sent, want the 3 that hold", len(*calls))
 	}
 }
+
+// TestAWakeAndATurnsOutcomeAreRead: a session reads its pending wake, the
+// outcome of its latest turn a trigger began and its latest notice; the
+// idle status that ends such a turn reads its outcome; and a message a
+// wake sent reads its firing and its wake.
+func TestAWakeAndATurnsOutcomeAreRead(t *testing.T) {
+	const woken = `{"id":"ses_1","agent":{"id":"agent_1","name":"latere-chat","version":3},"status":"idle","stop_reason":"end_turn","turn":4,"last_seq":40,
+"wake":{"trigger_id":"trg_2","at":"2026-10-24T07:00:00Z","title":"Whether the refund arrived","count":2},"outcome":"quiet",
+"notice":{"title":"The refund arrived.","seq":31,"at":"2026-10-23T07:01:00Z"},"created_at":"2026-10-22T12:05:00Z","updated_at":"2026-10-23T07:02:00Z"}`
+	c, _ := fakeAPI(t, map[string]string{"GET /v1/agents/sessions/ses_1": woken})
+	s, err := c.GetSession(t.Context(), "ses_1")
+	if err != nil {
+		t.Fatal(err)
+	}
+	wantWake := agents.PendingWake{TriggerID: "trg_2", At: time.Date(2026, 10, 24, 7, 0, 0, 0, time.UTC), Title: "Whether the refund arrived", Count: 2}
+	if s.Wake == nil || *s.Wake != wantWake {
+		t.Errorf("read the wake as %+v", s.Wake)
+	}
+	wantNotice := agents.Notice{Title: "The refund arrived.", Seq: 31, At: time.Date(2026, 10, 23, 7, 1, 0, 0, time.UTC)}
+	if s.Outcome != agents.TurnQuiet || s.Notice == nil || *s.Notice != wantNotice {
+		t.Errorf("read the outcome %q and the notice %+v", s.Outcome, s.Notice)
+	}
+
+	status := &agents.Event{Type: agents.EventSessionStatus, Payload: json.RawMessage(`{"status":"idle","stop_reason":"end_turn","outcome":"notified"}`)}
+	var st agents.SessionStatus
+	if err := status.Decode(&st); err != nil || st.Outcome != agents.TurnNotified {
+		t.Errorf("read the status as %+v, %v", st, err)
+	}
+
+	message := &agents.Event{Type: agents.EventUserMessage, Payload: json.RawMessage(`{"sender":{"subject":"trigger:trg_2","kind":"trigger"},
+"content":[{"type":"text","text":"Look at the inbox."}],"firing_id":"frg_3",
+"wake":{"trigger_id":"trg_2","set_at":"2026-10-23T09:00:00Z","due_at":"2026-10-24T07:00:00Z","count":2}}`)}
+	var m agents.UserMessage
+	if err := message.Decode(&m); err != nil {
+		t.Fatal(err)
+	}
+	wantFiring := agents.WakeFiring{TriggerID: "trg_2", SetAt: time.Date(2026, 10, 23, 9, 0, 0, 0, time.UTC), DueAt: time.Date(2026, 10, 24, 7, 0, 0, 0, time.UTC), Count: 2}
+	if m.FiringID != "frg_3" || m.Wake == nil || *m.Wake != wantFiring {
+		t.Errorf("read the message as %+v, its wake %+v", m, m.Wake)
+	}
+}

@@ -270,7 +270,7 @@ for e, err := range ag.ListEvents(ctx, s.ID, nil) {
 		if err != nil {
 			return err
 		}
-		show(f.Path, f.MediaType, r) // f.MediaType is the file's own type
+		show(f.Path, r.MediaType(), r.Size(), r) // the file's own type and length, as f.MediaType and f.Size
 		r.Close()
 	}
 }
@@ -281,9 +281,12 @@ if errors.Is(err, agents.ErrFileUnavailable) {
 }
 ```
 
-Each returns a reader that is yours to close. Its media type is the one the
-API answered: a copy that is no PNG, JPEG, GIF or WebP picture is answered
-as `application/octet-stream`, and its record names its own type. The
+Each returns a reader that is yours to close, with the file's own media
+type and its length in bytes before you read any of it: a copy's are the
+ones its record names, and a working file's are its name's or its leading
+bytes' type and its length when the read began. A copy that is no PNG,
+JPEG, GIF or WebP picture is answered as a download, an HTML page and an
+SVG included, so show one only in a sandbox of your own. The
 `Config`'s timeout bounds the wait for the answer and nothing after it, so
 a large file reads for as long as `ctx` allows. `ReadSessionFile` refuses a
 file past `agents.MaxSessionFileBytes`, 32 MiB, with an error matching

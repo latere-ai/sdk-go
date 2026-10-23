@@ -102,11 +102,12 @@ func (r *FileReader) Read(p []byte) (int, error) { return r.body.Read(p) }
 func (r *FileReader) Close() error { return r.body.Close() }
 
 // MediaType returns the media type the API answered the bytes as, from
-// the answer's Content-Type, such as "image/png".
+// the answer's Content-Type, such as "image/png" or "text/plain;
+// charset=utf-8".
 func (r *FileReader) MediaType() string { return r.mediaType }
 
-// Size returns the file's length in bytes, or -1 when the answer did not
-// say.
+// Size returns the file's length in bytes, as the answer's Content-Length
+// states it, or -1 when the answer did not say.
 func (r *FileReader) Size() int64 { return r.size }
 
 // CacheControl returns the answer's Cache-Control, which says how long the
@@ -136,12 +137,16 @@ func acceptAny() http.Header { return http.Header{"Accept": {"*/*"}} }
 // showed or a file it linked, by its KeptFile's Blob. The caller closes
 // the reader.
 //
-// A PNG, JPEG, GIF or WebP picture is answered as its own media type, and
-// any other file as "application/octet-stream", whatever it is: the
-// record that names the digest holds the file's own type and its size,
-// in Attachment.MediaType and Size or KeptFile.MediaType and Size. The
-// reader's Size is the file's when the session keeps its files in a
-// folder, as a record's Ref shows, and -1 otherwise.
+// The reader's MediaType is the file's own and its Size the file's
+// length, as the record that names the digest states them in
+// Attachment.MediaType and Size or KeptFile.MediaType and Size, so a
+// program can label a file, or refuse one too large for it, before it
+// reads any byte. A PNG, JPEG, GIF or WebP picture is answered as that
+// image type, with a ContentDisposition of "inline"; any other file is
+// answered as an "attachment", an HTML page and an SVG included, which a
+// program shows in a sandbox of its own if it shows one at all. A blob no
+// record names, such as an agent's bundle, has the type its leading bytes
+// give.
 //
 // The files a session keeps stay readable after it ends. A digest the
 // session does not hold, or a file whose records were all redacted,

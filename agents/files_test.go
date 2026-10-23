@@ -51,8 +51,15 @@ func TestReadBlob(t *testing.T) {
 			w.Header().Set("Content-Type", "image/png")
 			w.Header().Set("Content-Length", strconv.Itoa(len(png)))
 			_, _ = io.WriteString(w, png)
+		case "/v1/agents/sessions/ses_1/blobs/sha256:report":
+			// A kept file that is no picture: its own type and length, as
+			// a download.
+			w.Header().Set("Content-Type", "text/markdown; charset=utf-8")
+			w.Header().Set("Content-Length", "8")
+			w.Header().Set("Content-Disposition", "attachment")
+			_, _ = io.WriteString(w, "# Report")
 		case "/v1/agents/sessions/ses_1/blobs/sha256:streamed":
-			// A blob of the session's own store streams with no length.
+			// An answer that states no length.
 			w.Header().Set("Content-Type", "application/octet-stream")
 			w.(http.Flusher).Flush()
 			_, _ = io.WriteString(w, "bytes")
@@ -78,6 +85,18 @@ func TestReadBlob(t *testing.T) {
 	if path != "/v1/agents/sessions/ses_1/blobs/"+digest || accept != "*/*" {
 		t.Errorf("asked %s with Accept %q", path, accept)
 	}
+
+	r, err = c.ReadBlob(t.Context(), "ses_1", "sha256:report")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if r.MediaType() != "text/markdown; charset=utf-8" || r.Size() != 8 || r.ContentDisposition() != "attachment" {
+		t.Errorf("a kept file of %s, %d bytes and %q, before a byte was read", r.MediaType(), r.Size(), r.ContentDisposition())
+	}
+	if got, err := io.ReadAll(r); err != nil || string(got) != "# Report" {
+		t.Errorf("a kept file read %q, %v", got, err)
+	}
+	_ = r.Close() // the bytes are read; a failed close loses nothing
 
 	r, err = c.ReadBlob(t.Context(), "ses_1", "sha256:streamed")
 	if err != nil {

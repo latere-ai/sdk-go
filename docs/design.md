@@ -535,10 +535,10 @@ encodes, since a caller draws it at once and never streams it.
 ## Gaps in the API
 
 These gaps are the API's to close, and the SDK does not work around
-them. Two are in what a program can learn of a session's files:
-
-- `ReadBlob` answers a file that is no PNG, JPEG, GIF or WebP picture as `application/octet-stream`, and with a size of -1 for a session that keeps no folder, so a program reads the file's type and size from its record.
-- The API lists no session's working directory, so a program learns which files a session made from its log alone: its kept files and the `ToolMeta` of its writes and edits.
+them. One is in what a program can learn of a session's files: the API
+lists no session's working directory, so a program learns which files a
+session made from its log alone, its kept files and the `ToolMeta` of
+its writes and edits.
 
 The web part has no reference document yet, so `web`'s tests hold the
 client to the answers the platform's icon and image routes give rather

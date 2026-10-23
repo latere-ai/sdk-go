@@ -7,6 +7,17 @@ minor version may break code, and every such change is marked **Breaking**.
 
 ## [Unreleased]
 
+### Changed
+
+- Package `agents`: a `FileReader` from `ReadBlob` reports a kept file's
+  own media type in `MediaType` and its length in `Size`, the ones its
+  `Attachment` or `KeptFile` records, before any byte is read, as the API
+  now answers them; before, a file that is no picture read as
+  `application/octet-stream`, and its size was -1 for a session that keeps
+  no folder. A file that is no picture is still a download, an HTML page
+  and an SVG included. Nothing in the SDK's code changes; the docs and a
+  test state the answer.
+
 ## [0.9.0] - 2026-10-23
 
 ### Added

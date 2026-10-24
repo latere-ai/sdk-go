@@ -120,6 +120,8 @@ func TestModelsMatchTheSchemas(t *testing.T) {
 		"ProjectApp":          {account.ProjectApp{}, s["ProjectApp"]},
 		"CreateProjectParams": {account.CreateProjectParams{}, s["ProjectCreate"]},
 		"TriggerInlet":        {account.TriggerInlet{}, s["TriggerInlet"]},
+		"Spend":               {account.Spend{}, s["Spend"]},
+		"SpendDay":            {account.SpendDay{}, s["SpendDay"]},
 	}
 	for name, c := range cases {
 		if c.schema == nil {
@@ -164,6 +166,7 @@ func TestModelsReadEveryField(t *testing.T) {
 		"ModelDataTerms": account.ModelDataTerms{}, "ModelTerms": account.ModelTerms{}, "ServingProvider": account.ServingProvider{},
 		"Project": account.Project{}, "Project.owner": account.ProjectOwner{}, "ProjectApp": account.ProjectApp{},
 		"ProjectCreate": account.CreateProjectParams{}, "TriggerInlet": account.TriggerInlet{},
+		"Spend": account.Spend{}, "SpendDay": account.SpendDay{},
 	} {
 		fields := jsonFields(reflect.TypeOf(model))
 		sch := s[name]
@@ -220,6 +223,8 @@ func TestEndpointsAreInTheDocument(t *testing.T) {
 		{"delete", "/v1/account/triggers/{trigger_id}/hook"},
 		{"post", "/v1/account/triggers/{trigger_id}/address"},
 		{"delete", "/v1/account/triggers/{trigger_id}/address"},
+		{"get", "/v1/account/wallet/spend"},
+		{"get", "/v1/account/wallet/forecast"},
 	} {
 		if _, ok := d.Paths[e.path][e.method]; !ok {
 			t.Errorf("%s %s is not in the document", strings.ToUpper(e.method), e.path)

@@ -98,11 +98,10 @@ func TestTheSpendIsRefusedOutsideItsBounds(t *testing.T) {
 }
 
 // routesOutsideTheDocument are the routes the package calls that the
-// published account document does not describe yet, each with what its
-// models follow instead.
-var routesOutsideTheDocument = map[string]string{
-	"get /v1/account/wallet/spend": "the spending read, which Spend and SpendDay follow as the platform's own account reference describes it, ahead of the published document",
-}
+// vendored account document does not describe yet, each with what its
+// models follow instead. None is now: the spending read and the month's
+// forecast are both in it.
+var routesOutsideTheDocument = map[string]string{}
 
 // TestRoutesOutsideTheDocumentAreStillOutside fails once the vendored
 // account document describes one of routesOutsideTheDocument, so its

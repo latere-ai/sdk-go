@@ -7,6 +7,8 @@ minor version may break code, and every such change is marked **Breaking**.
 
 ## [Unreleased]
 
+## [0.12.0] - 2026-10-25
+
 ### Added
 
 - Package `account`: `GetForecast`, what the person will have spent by

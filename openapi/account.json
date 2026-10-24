@@ -1265,6 +1265,282 @@
         ],
         "type": "object"
       },
+      "Forecast": {
+        "properties": {
+          "days": {
+            "description": "Every day of the month in the zone, the 1st first.",
+            "items": {
+              "$ref": "#/components/schemas/ForecastDay"
+            },
+            "type": "array"
+          },
+          "items": {
+            "description": "One entry for each of the person's triggers.",
+            "items": {
+              "$ref": "#/components/schemas/ForecastItem"
+            },
+            "type": "array"
+          },
+          "last_month_micro": {
+            "description": "What last month spent in all, in the zone, in micro-USD.",
+            "type": "integer"
+          },
+          "person_led_per_day_micro": {
+            "description": "What the person's own conversations spent a day on average over the last 28 days, in micro-USD: what each day ahead is expected to cost them.",
+            "type": "integer"
+          },
+          "pool_micro": {
+            "description": "What proactive work may spend in a rolling 7 days now, in micro-USD, as the spending read's.",
+            "type": "integer"
+          },
+          "proactive_again_at": {
+            "description": "When the pool is spent now: when it frees up, as the oldest proactive spending leaves the 7 days. Adding credit frees it sooner.",
+            "format": "date-time",
+            "type": "string"
+          },
+          "proactive_skips_from": {
+            "description": "The first day a run is expected to be skipped because the proactive pool is spent, when that day is in the month; after `proactive_again_at` when the pool is spent now.",
+            "format": "date",
+            "type": "string"
+          },
+          "proactive_week_micro": {
+            "description": "What proactive work spent in the last 7 days, in micro-USD, as the spending read's.",
+            "type": "integer"
+          },
+          "runs_out_on": {
+            "description": "The day by whose end what is expected from now would pass the credit, when that day is in the month. The person's own spending is still counted after it, at the same rate.",
+            "format": "date",
+            "type": "string"
+          },
+          "share_bps": {
+            "description": "The share of the credit proactive work may use, in basis points, as the spending read's; assumed for the rest of the month.",
+            "type": "integer"
+          },
+          "spendable_micro": {
+            "description": "The credit the wallet can spend now, in micro-USD, as the spending read's.",
+            "type": "integer"
+          },
+          "today": {
+            "description": "Today's date in the zone.",
+            "format": "date",
+            "type": "string"
+          },
+          "unlisted_proactive_micro": {
+            "description": "What proactive work spent this month that no listed item's runs hold, in micro-USD: the person's own replies in a conversation a trigger started, a trigger since deleted, a turn not yet counted. Never below zero.",
+            "type": "integer"
+          },
+          "zone": {
+            "description": "The time zone the month is read in.",
+            "type": "string"
+          }
+        },
+        "required": [
+          "zone",
+          "today",
+          "days",
+          "person_led_per_day_micro",
+          "last_month_micro",
+          "unlisted_proactive_micro",
+          "spendable_micro",
+          "share_bps",
+          "pool_micro",
+          "proactive_week_micro",
+          "items"
+        ],
+        "type": "object"
+      },
+      "ForecastDay": {
+        "properties": {
+          "date": {
+            "description": "The day, in the zone.",
+            "format": "date",
+            "type": "string"
+          },
+          "expected_person_led_micro": {
+            "description": "What the rest of the day is expected to cost the person's own conversations, in micro-USD; zero on a day that is over.",
+            "type": "integer"
+          },
+          "expected_proactive_micro": {
+            "description": "What the rest of the day's runs are expected to cost, in micro-USD: the runs of the items whose `half` is `proactive` and that name no `counted_in`.",
+            "type": "integer"
+          },
+          "person_led_micro": {
+            "description": "What the person's own conversations spent that day so far, in micro-USD.",
+            "type": "integer"
+          },
+          "proactive_micro": {
+            "description": "What proactive work spent that day so far, in micro-USD: the usage counted, or what the listed items' runs cost that day when that is more.",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "date",
+          "person_led_micro",
+          "proactive_micro",
+          "expected_person_led_micro",
+          "expected_proactive_micro"
+        ],
+        "type": "object"
+      },
+      "ForecastItem": {
+        "properties": {
+          "allowance_skips": {
+            "description": "How many of the expected runs its own allowance would skip.",
+            "type": "integer"
+          },
+          "counted_in": {
+            "description": "For a follow-up in a conversation another listed trigger started: that trigger. Its runs are inside that trigger's month and count toward its allowance.",
+            "type": "string"
+          },
+          "days": {
+            "description": "Every day of the month in the zone.",
+            "items": {
+              "$ref": "#/components/schemas/ForecastItemDay"
+            },
+            "type": "array"
+          },
+          "expected_at": {
+            "description": "For a schedule or a follow-up, the times of its runs expected this month, skipped ones included.",
+            "items": {
+              "format": "date-time",
+              "type": "string"
+            },
+            "type": "array"
+          },
+          "expected_runs": {
+            "description": "How many runs are expected this month, skipped ones included.",
+            "type": "integer"
+          },
+          "fires_on": {
+            "description": "How it runs: on a schedule, when an event arrives, or once at a time, as a follow-up does.",
+            "enum": [
+              "schedule",
+              "event",
+              "at"
+            ],
+            "type": "string"
+          },
+          "forecast_micro": {
+            "description": "What its month comes to: `spent_micro` and the runs expected that are not skipped, in micro-USD; absent with no `per_run_micro`.",
+            "type": "integer"
+          },
+          "half": {
+            "description": "Where its runs are billed: `person_led` for a follow-up, or a trigger continuing one conversation, in a conversation the person started, whose runs their own average already holds.",
+            "enum": [
+              "person_led",
+              "proactive"
+            ],
+            "type": "string"
+          },
+          "most_micro": {
+            "description": "With no `per_run_micro`, an allowance and not paused: the most it can spend by the month's end, its allowance over the time left, in micro-USD.",
+            "type": "integer"
+          },
+          "paused": {
+            "description": "It is paused, so nothing more is expected of it.",
+            "type": "boolean"
+          },
+          "per_day": {
+            "description": "For a trigger on events, its runs a day over the last 28 days, or since it was made.",
+            "type": "number"
+          },
+          "per_run_micro": {
+            "description": "The mean cost of its latest five runs that worked, in micro-USD; absent before its first.",
+            "type": "integer"
+          },
+          "per_week_micro": {
+            "description": "Its weekly allowance, in micro-USD; absent without one.",
+            "type": "integer"
+          },
+          "runs": {
+            "description": "How many of its runs worked this month so far.",
+            "type": "integer"
+          },
+          "share_skips": {
+            "description": "How many of the expected runs the proactive pool would skip.",
+            "type": "integer"
+          },
+          "skipping": {
+            "$ref": "#/components/schemas/ForecastSkipping"
+          },
+          "spent_micro": {
+            "description": "What its runs cost this month so far, in micro-USD.",
+            "type": "integer"
+          },
+          "trigger_id": {
+            "description": "The trigger, as the agents' API names it.",
+            "type": "string"
+          }
+        },
+        "required": [
+          "trigger_id",
+          "fires_on",
+          "paused",
+          "half",
+          "spent_micro",
+          "runs",
+          "days",
+          "expected_runs",
+          "allowance_skips",
+          "share_skips"
+        ],
+        "type": "object"
+      },
+      "ForecastItemDay": {
+        "properties": {
+          "date": {
+            "description": "The day, in the zone.",
+            "format": "date",
+            "type": "string"
+          },
+          "expected": {
+            "description": "How many runs are expected the rest of that day.",
+            "type": "integer"
+          },
+          "expected_skipped": {
+            "description": "How many of those would be skipped.",
+            "type": "integer"
+          },
+          "ran": {
+            "description": "How many of its runs worked that day.",
+            "type": "integer"
+          },
+          "skipped": {
+            "description": "How many of its runs were skipped that day, by its allowance or the pool.",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "date",
+          "ran",
+          "skipped",
+          "expected",
+          "expected_skipped"
+        ],
+        "type": "object"
+      },
+      "ForecastSkipping": {
+        "description": "Where its next run is skipped, or, for a follow-up, waits; absent otherwise. A follow-up a limit stops is kept and runs once the limit lifts, within a day.",
+        "properties": {
+          "until": {
+            "description": "Its next run that is not skipped, or when a follow-up that waits runs; absent when none is expected.",
+            "format": "date-time",
+            "type": "string"
+          },
+          "why": {
+            "description": "Its weekly allowance is reached, or the proactive pool is spent.",
+            "enum": [
+              "allowance",
+              "share"
+            ],
+            "type": "string"
+          }
+        },
+        "required": [
+          "why"
+        ],
+        "type": "object"
+      },
       "FreeSearches": {
         "description": "No longer answered. Every web search is charged to the wallet, on every level, Quick included.",
         "properties": {
@@ -2094,6 +2370,70 @@
         ],
         "type": "object"
       },
+      "Spend": {
+        "properties": {
+          "days": {
+            "description": "One entry for each UTC day asked, oldest first, today last; a day with no spending reads zero in both.",
+            "items": {
+              "$ref": "#/components/schemas/SpendDay"
+            },
+            "type": "array"
+          },
+          "pool_micro": {
+            "description": "What proactive work may spend in a rolling 7 days: `share_bps` of `spendable_micro` plus `proactive_week_micro`, in micro-USD. A trigger's firing and a wake start nothing while `proactive_week_micro` is at it.",
+            "type": "integer"
+          },
+          "proactive_week_micro": {
+            "description": "What proactive work spent in the last 7 days, in micro-USD.",
+            "type": "integer"
+          },
+          "share_bps": {
+            "description": "The share of the person's credit that goes to proactive work, in basis points: 2000 until they have spent for 28 days, then between 500 and 5000.",
+            "type": "integer"
+          },
+          "share_moved_at": {
+            "description": "When the share last moved, or was first read. It moves again once 7 days have passed.",
+            "format": "date-time",
+            "type": "string"
+          },
+          "spendable_micro": {
+            "description": "The credit the wallet can spend now, in micro-USD, as the wallet read's `spendable_micro`.",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "days",
+          "share_bps",
+          "share_moved_at",
+          "spendable_micro",
+          "proactive_week_micro",
+          "pool_micro"
+        ],
+        "type": "object"
+      },
+      "SpendDay": {
+        "properties": {
+          "date": {
+            "description": "The UTC day.",
+            "format": "date",
+            "type": "string"
+          },
+          "person_led_micro": {
+            "description": "What the person's own sessions spent that day, in micro-USD, the turns wakes began in them included.",
+            "type": "integer"
+          },
+          "proactive_micro": {
+            "description": "What the sessions a trigger's firing started spent that day, in micro-USD.",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "date",
+          "person_led_micro",
+          "proactive_micro"
+        ],
+        "type": "object"
+      },
       "TopUp": {
         "description": "What adding credit takes. Present when the deployment takes payments and the caller may add credit to the wallet: their own, or an organization's as its owner or admin, unless the organization pays after it spends.",
         "properties": {
@@ -2191,7 +2531,7 @@
     }
   },
   "info": {
-    "description": "What a product reads about the person it acts for and that no single capability owns: the Effort levels a session can run at and what the next turn on each costs, the wallet a turn is charged to and adding credit to it, and where a request is processed. A product also makes the person's copy of an agent the platform manages exist here, before it starts their session. And it reads and changes the person's preferences: what to call them, their standing instructions, which sites a session's machine may reach, their pins and bookmarks, and whether conversations may be shared; it makes, lists and stops the read-only links to a conversation a person shares; and it keeps the person's projects, which group their conversations and hold the apps those conversations work on. It also lists, invites and removes the people a private app opens for. And it gives a person's trigger its own link, which another app posts to, or its own email address, which mail is forwarded to, each starting the trigger. It lists, renames and removes the person's own computers, which the sessions they start work on. Every route answers the caller named by the token, in the context the token names.",
+    "description": "What a product reads about the person it acts for and that no single capability owns: the Effort levels a session can run at and what the next turn on each costs, the wallet a turn is charged to, adding credit to it and what was spent, by the person and by the work their triggers start, and where a request is processed. A product also makes the person's copy of an agent the platform manages exist here, before it starts their session. And it reads and changes the person's preferences: what to call them, their standing instructions, which sites a session's machine may reach, their pins and bookmarks, and whether conversations may be shared; it makes, lists and stops the read-only links to a conversation a person shares; and it keeps the person's projects, which group their conversations and hold the apps those conversations work on. It also lists, invites and removes the people a private app opens for. And it gives a person's trigger its own link, which another app posts to, or its own email address, which mail is forwarded to, each starting the trigger. It lists, renames and removes the person's own computers, which the sessions they start work on. Every route answers the caller named by the token, in the context the token names.",
     "title": "Latere account",
     "version": "1"
   },
@@ -5748,6 +6088,286 @@
           }
         },
         "summary": "Add credit",
+        "tags": [
+          "wallet"
+        ]
+      }
+    },
+    "/v1/account/wallet/forecast": {
+      "get": {
+        "description": "What the caller will have spent by the end of the calendar month in their time zone, and whether their credit lasts that long. Their own conversations are expected to cost their average a day over the last 28 days, and each trigger of theirs is simulated run by run to the month's end: a schedule at its fire times, a trigger on events at its runs a day over the last 28 days, a follow-up at its time, each run at the mean cost of its latest five. A run is skipped where the trigger's weekly allowance is at or past over the 7 days before it, and where the proactive pool is spent then, the pool being today's share of the credit left at that moment and the week's proactive spend; with no credit left, nothing priced runs. A follow-up in a conversation the person started is billed as their own spending, so it is counted in their half (`half` is `person_led`); one in a conversation another trigger started is inside that trigger's month (`counted_in`). For every day ahead, `expected_proactive_micro` is the expected cost of the items whose `half` is `proactive` and that name no `counted_in`, so those items' months and `unlisted_proactive_micro` add up to the proactive half. The pause of every trigger at once is not applied. The days are the zone's; each hour of spending is counted on the day its start falls on there. The personal context only.",
+        "operationId": "readForecast",
+        "parameters": [
+          {
+            "description": "The IANA time zone the month is read in, such as `Europe/Berlin`: the zone the person's schedules run in. UTC when absent.",
+            "in": "query",
+            "name": "tz",
+            "required": false,
+            "schema": {
+              "default": "UTC",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "example": {
+                  "days": [
+                    {
+                      "date": "2026-10-23",
+                      "expected_person_led_micro": 0,
+                      "expected_proactive_micro": 0,
+                      "person_led_micro": 610000,
+                      "proactive_micro": 140000
+                    },
+                    {
+                      "date": "2026-10-24",
+                      "expected_person_led_micro": 260000,
+                      "expected_proactive_micro": 0,
+                      "person_led_micro": 210000,
+                      "proactive_micro": 60000
+                    },
+                    {
+                      "date": "2026-10-25",
+                      "expected_person_led_micro": 520000,
+                      "expected_proactive_micro": 60000,
+                      "person_led_micro": 0,
+                      "proactive_micro": 0
+                    }
+                  ],
+                  "items": [
+                    {
+                      "allowance_skips": 0,
+                      "days": [
+                        {
+                          "date": "2026-10-24",
+                          "expected": 0,
+                          "expected_skipped": 0,
+                          "ran": 1,
+                          "skipped": 0
+                        },
+                        {
+                          "date": "2026-10-25",
+                          "expected": 1,
+                          "expected_skipped": 0,
+                          "ran": 0,
+                          "skipped": 0
+                        }
+                      ],
+                      "expected_at": [
+                        "2026-10-25T07:00:00Z",
+                        "2026-10-26T07:00:00Z",
+                        "2026-10-27T07:00:00Z",
+                        "2026-10-28T07:00:00Z",
+                        "2026-10-29T07:00:00Z",
+                        "2026-10-30T07:00:00Z",
+                        "2026-10-31T07:00:00Z"
+                      ],
+                      "expected_runs": 7,
+                      "fires_on": "schedule",
+                      "forecast_micro": 1520000,
+                      "half": "proactive",
+                      "paused": false,
+                      "per_run_micro": 60000,
+                      "per_week_micro": 400000,
+                      "runs": 9,
+                      "share_skips": 0,
+                      "spent_micro": 1100000,
+                      "trigger_id": "trg_01JAH5W3K8D2N6Q0R4T7V9X1Z3"
+                    }
+                  ],
+                  "last_month_micro": 18400000,
+                  "person_led_per_day_micro": 520000,
+                  "pool_micro": 1124000,
+                  "proactive_skips_from": "2026-10-28",
+                  "proactive_week_micro": 620000,
+                  "runs_out_on": "2026-10-29",
+                  "share_bps": 2000,
+                  "spendable_micro": 5000000,
+                  "today": "2026-10-24",
+                  "unlisted_proactive_micro": 0,
+                  "zone": "Europe/Berlin"
+                },
+                "schema": {
+                  "$ref": "#/components/schemas/Forecast"
+                }
+              }
+            },
+            "description": "The month's forecast."
+          },
+          "400": {
+            "content": {
+              "application/json": {
+                "example": {
+                  "error": {
+                    "code": "invalid_request",
+                    "details": {
+                      "detail": "tz is an IANA time zone such as Europe/Berlin, UTC when absent; got Mars/Olympus"
+                    },
+                    "message": "The time zone is not valid."
+                  }
+                },
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            },
+            "description": "invalid_request: `tz` is not a time zone the server knows."
+          },
+          "401": {
+            "$ref": "#/components/responses/unauthorized"
+          },
+          "403": {
+            "content": {
+              "application/json": {
+                "example": {
+                  "error": {
+                    "code": "forbidden",
+                    "message": "The forecast is shown for your personal account."
+                  }
+                },
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            },
+            "description": "forbidden: the token names an organization's context, where the forecast is not read; or a token narrowed by grants that cover neither starting a session nor sending into one."
+          },
+          "429": {
+            "$ref": "#/components/responses/rate_limited"
+          },
+          "503": {
+            "content": {
+              "application/json": {
+                "example": {
+                  "error": {
+                    "code": "forecast_unavailable",
+                    "message": "The forecast is not available right now."
+                  }
+                },
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            },
+            "description": "forecast_unavailable: the session core this deployment runs does not serve the runs the forecast reads yet, or did not answer; retry later. wallet_unavailable: the spending cannot be read now; retry shortly. wallet_unconfigured: the deployment keeps no wallets."
+          }
+        },
+        "summary": "Read the month's forecast",
+        "tags": [
+          "wallet"
+        ]
+      }
+    },
+    "/v1/account/wallet/spend": {
+      "get": {
+        "description": "The caller's spending by day, and where their share for proactive work stands. Proactive work is what runs with nobody watching, counted here by session: what a session a trigger's firing started spends is proactive, and what a session the person started spends is theirs, a turn a wake begins in it included. Each entry of `days` is a UTC day, oldest first and today last, in micro-USD. A share of the person's credit goes to proactive work: `share_bps` is a fifth until the person has spent for 28 days, and then moves once a week halfway toward one less the part of their credit they spent themselves over the last 28 days, between a twentieth and a half. `pool_micro` is that share of `spendable_micro` and `proactive_week_micro`, what proactive work spent in the last 7 days, so what it spent does not shrink its own pool. Once the week's proactive spend reaches the pool, a trigger's firing and a wake start nothing (`proactive_share_spent`) until the oldest spend leaves the 7 days, and a trigger an agent proposes names a weekly allowance no larger than the pool. Spending reaches this read a few minutes after the turn that spent it. Reading it may move the share, when its week is due. The personal context only.",
+        "operationId": "readSpend",
+        "parameters": [
+          {
+            "description": "How many UTC days to answer, today's included: 1 to 90, 28 when absent.",
+            "in": "query",
+            "name": "days",
+            "required": false,
+            "schema": {
+              "default": 28,
+              "maximum": 90,
+              "minimum": 1,
+              "type": "integer"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "example": {
+                  "days": [
+                    {
+                      "date": "2026-10-22",
+                      "person_led_micro": 84000,
+                      "proactive_micro": 12000
+                    },
+                    {
+                      "date": "2026-10-23",
+                      "person_led_micro": 120000,
+                      "proactive_micro": 30000
+                    }
+                  ],
+                  "pool_micro": 220000,
+                  "proactive_week_micro": 100000,
+                  "share_bps": 2000,
+                  "share_moved_at": "2026-10-20T09:00:00Z",
+                  "spendable_micro": 1000000
+                },
+                "schema": {
+                  "$ref": "#/components/schemas/Spend"
+                }
+              }
+            },
+            "description": "The spending and the share."
+          },
+          "400": {
+            "content": {
+              "application/json": {
+                "example": {
+                  "error": {
+                    "code": "invalid_request",
+                    "details": {
+                      "detail": "days is a whole number from 1 to 90, 28 when absent; got \"120\""
+                    },
+                    "message": "The number of days is not valid."
+                  }
+                },
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            },
+            "description": "invalid_request: `days` is not a whole number from 1 to 90."
+          },
+          "401": {
+            "$ref": "#/components/responses/unauthorized"
+          },
+          "403": {
+            "content": {
+              "application/json": {
+                "example": {
+                  "error": {
+                    "code": "forbidden",
+                    "message": "Spending over time is shown for your personal account."
+                  }
+                },
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            },
+            "description": "forbidden: the token names an organization's context, where spending over time is not read here; or a token narrowed by grants that cover neither starting a session nor sending into one."
+          },
+          "429": {
+            "$ref": "#/components/responses/rate_limited"
+          },
+          "503": {
+            "content": {
+              "application/json": {
+                "example": {
+                  "error": {
+                    "code": "wallet_unavailable",
+                    "message": "The wallet cannot be read right now. Try again shortly."
+                  }
+                },
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            },
+            "description": "wallet_unavailable: the spending cannot be read now; retry shortly. wallet_unconfigured: the deployment keeps no wallets."
+          }
+        },
+        "summary": "Read spending over time",
         "tags": [
           "wallet"
         ]

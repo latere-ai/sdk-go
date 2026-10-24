@@ -671,12 +671,20 @@ suspends it, so `Watch.Pause` reads it from the trigger list without a
 read of the log the pausing call is in.
 
 The account part's read of spending by day, `/v1/account/wallet/spend`,
-is in the platform's own account reference before the published
-document, so `account.Spend` follows that reference and the `account`
-tests list the route and fail once the vendored document describes it. A
-day of it is a calendar day, which the SDK reads as a `time.Time` at
-midnight UTC, as it reads every other point in time, and writes back in
-the API's own form.
+is held to the account document like the rest of the package. A day of it
+is a calendar day, which the SDK reads as a `time.Time` at midnight UTC,
+as it reads every other point in time, and writes back in the API's own
+form.
+
+The month's forecast, `/v1/account/wallet/forecast`, is computed on the
+server, so every program shows the same month and its items add up to the
+account; the SDK adds no arithmetic but `ForecastItem.InProactiveHalf`,
+the one rule of which items make up the proactive half. Its days are
+calendar days in the forecast's zone, read as `time.Time` at midnight UTC
+of each date as a spending day is, so reading one needs no zone data on
+the machine: a program reads its Year, Month and Day. Its wire shape is
+held to the document by an internal test of the types `Forecast` reads
+through, since the exported types carry no JSON tags of their own.
 
 The web part has no reference document yet, so `web`'s tests hold the
 client to the answers the platform's icon and image routes give rather

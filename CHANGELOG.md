@@ -7,6 +7,24 @@ minor version may break code, and every such change is marked **Breaking**.
 
 ## [Unreleased]
 
+### Added
+
+- Package `account`: `GetForecast`, what the person will have spent by
+  the end of the calendar month in `GetForecastParams.TimeZone`, as a
+  `Forecast`: its `Days`, each `ForecastDay` spent so far and expected in
+  both halves; `PersonLedPerDayMicroUSD`, `LastMonthMicroUSD`,
+  `UnlistedProactiveMicroUSD`, the share's standing, `RunsOutOn`,
+  `ProactiveSkipsFrom` and `ProactiveAgainAt`; and one `ForecastItem` per
+  trigger, with its `Half` (`HalfPersonLed`, `HalfProactive`),
+  `CountedIn`, `FiresOn`, its month so far and to come, `ExpectedAt` or
+  `PerDay`, its skips and `Skipping` (`SkipAllowance`, `SkipShare`), and
+  `InProactiveHalf`, which says which items add up to the proactive half.
+
+### Changed
+
+- Package `account`: `Spend` and `SpendDay` are now held to the account
+  document, which describes the spending read.
+
 ## [0.11.0] - 2026-10-24
 
 ### Added

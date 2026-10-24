@@ -468,6 +468,18 @@ The package also keeps what a person's clients share:
   machines, and `GetModelDataTerms` the data terms of models. `GetSpend`
   reads the personal context alone; an organization's token is refused
   with `latere.ErrForbidden`.
+- **The month to its end:** `GetForecast` answers what the person will
+  have spent by the end of the calendar month in a time zone, computed
+  once on the server: every day of the month in both halves, spent so far
+  and expected, the day their credit would run out (`RunsOutOn`), the day
+  runs would start being skipped (`ProactiveSkipsFrom`), when a spent pool
+  frees up (`ProactiveAgainAt`), and each trigger's month as a
+  `ForecastItem` (`SpentMicroUSD`, `ForecastMicroUSD` or, before its first
+  run, `MostMicroUSD`, its runs by day, its runs to come and the ones its
+  allowance or the pool would skip, and `Skipping`). The items for which
+  `InProactiveHalf` is true and `UnlistedProactiveMicroUSD` add up to the
+  proactive half. A date is a `time.Time` at midnight UTC of the date in
+  the forecast's zone. The personal context alone, as `GetSpend`.
 - `RecordArrival` records the site that referred a person and the page
   they landed on.
 

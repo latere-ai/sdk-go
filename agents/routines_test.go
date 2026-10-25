@@ -141,6 +141,9 @@ func (tp *topos) store(name string, m map[string]any) {
 	if spec != nil && spec["schedule"] != nil && spec["suspend"] != true {
 		status["nextFireAt"] = "2026-10-26T07:00:00Z"
 	}
+	if spec != nil && spec["at"] != nil && spec["suspend"] != true {
+		status["nextFireAt"] = spec["at"]
+	}
 	m["status"] = status
 	tp.triggers[name] = m
 }
@@ -304,6 +307,17 @@ func TestTheManifestIsTheOneLatereChatWrites(t *testing.T) {
 			return &agents.CreateRoutineParams{Agent: chat, Title: "Receipts", Instruction: "Add it to my list.", Starts: agents.StartsFromEmail}
 		}, `{"apiVersion":"topos.latere.ai/v1","kind":"Trigger","metadata":{"name":"NAME","displayName":"Receipts","labels":{"applied-by":"latere-chat"}},
 			"spec":{"agent":"latere-chat","on":{"product":"mail","verbs":["received"]},"session":{"message":"Add it to my list.\n\nThe email that started this run:\nFrom: {{event.actor}}\nSubject: {{event.payload.subject}}\n\n{{event.payload.text}}\n\nAttachments: {{event.payload.attachments}}","title":"Receipts"},"skipIfActive":false}}`},
+		{"a routine that runs once", func() *agents.CreateRoutineParams {
+			return &agents.CreateRoutineParams{Agent: chat, Title: "Call the bank", Instruction: "Remind me to call the bank about the transfer.", Starts: agents.StartsOnce,
+				At: time.Date(2036, 3, 2, 9, 30, 0, 0, time.FixedZone("CET", 3600)), AtZone: "Europe/Berlin"}
+		}, `{"apiVersion":"topos.latere.ai/v1","kind":"Trigger","metadata":{"name":"NAME","displayName":"Call the bank","labels":{"applied-by":"latere-chat"}},
+			"spec":{"agent":"latere-chat","at":"2036-03-02T08:30:00Z","timeZone":"Europe/Berlin","session":{"message":"Remind me to call the bank about the transfer.","title":"Call the bank"},"skipIfActive":false}}`},
+		{"a routine on another model that tells what needs the person", func() *agents.CreateRoutineParams {
+			p := weekly()
+			p.Model, p.Notify = "tier/thorough", agents.NotifyJudged
+			return p
+		}, `{"apiVersion":"topos.latere.ai/v1","kind":"Trigger","metadata":{"name":"NAME","displayName":"Weekly news","labels":{"applied-by":"latere-chat"}},
+			"spec":{"agent":"latere-chat","schedule":"0 9 * * 1,4","timeZone":"Europe/Berlin","session":{"message":"Summarize this week's news on climate policy and city cycling.","title":"Weekly news","model":{"name":"tier/thorough"},"notify":"judged"},"skipIfActive":false}}`},
 		{"a paused routine, trimmed", func() *agents.CreateRoutineParams {
 			p := weekly()
 			p.Title, p.Instruction, p.Paused = "  Weekly news ", "\n Summarize this week's news on climate policy and city cycling. \n", true
@@ -981,5 +995,249 @@ func TestRoutineOf(t *testing.T) {
 	}
 	if _, ok := agents.RoutineOf(nil, chat); ok {
 		t.Error("nil read as a routine")
+	}
+}
+
+// inTwoDays is a time a routine that runs once may run at: a whole second
+// two days from now, in Berlin's winter offset, as a person there picks
+// it.
+func inTwoDays() time.Time {
+	return time.Now().Add(48 * time.Hour).Truncate(time.Second).In(time.FixedZone("CET", 3600))
+}
+
+// once is a routine that runs once, at at, picked in Berlin.
+func once(at time.Time) *agents.CreateRoutineParams {
+	return &agents.CreateRoutineParams{Agent: chat, Title: "Call the bank", Instruction: "Remind me to call the bank.", Starts: agents.StartsOnce,
+		At: at, AtZone: "Europe/Berlin"}
+}
+
+// A routine that runs once reads back with its time and the zone it was
+// picked in, and its time as its next run while it runs; a change that
+// names no time keeps the stored one, a paused routine keeps its time
+// with no next run, and the list holds it.
+func TestARoutineThatRunsOnce(t *testing.T) {
+	tp, c := newTopos(t)
+	at := inTwoDays()
+	r := create(t, c, once(at), "k")
+	if r.Starts != agents.StartsOnce || !r.At.Equal(at) || r.AtZone != "Europe/Berlin" || r.Schedule != nil || r.NextRunAt == nil || !r.NextRunAt.Equal(at) {
+		t.Fatalf("the routine reads %+v", r)
+	}
+	if spec := tp.manifest(r.Name)["spec"].(map[string]any); spec["at"] != at.UTC().Format(time.RFC3339) || spec["timeZone"] != "Europe/Berlin" || spec["schedule"] != nil {
+		t.Errorf("the spec is %v", spec)
+	}
+	title := "Call the bank today"
+	renamed, err := c.ChangeRoutine(t.Context(), chat, r.Name, &agents.ChangeRoutineParams{Title: &title})
+	if err != nil || renamed.Title != title || !renamed.At.Equal(at) || renamed.AtZone != "Europe/Berlin" {
+		t.Fatalf("a change of its name answered %+v, %v", renamed, err)
+	}
+	if spec := tp.manifest(r.Name)["spec"].(map[string]any); spec["at"] != at.UTC().Format(time.RFC3339) || spec["timeZone"] != "Europe/Berlin" {
+		t.Errorf("a change of its name wrote %v", spec)
+	}
+	later := at.Add(24 * time.Hour)
+	moved, err := c.ChangeRoutine(t.Context(), chat, r.Name, &agents.ChangeRoutineParams{At: &later, AtZone: "America/New_York"})
+	if err != nil || !moved.At.Equal(later) || moved.AtZone != "America/New_York" || !moved.NextRunAt.Equal(later) {
+		t.Errorf("a change of its time answered %+v, %v", moved, err)
+	}
+	paused := true
+	if got, err := c.ChangeRoutine(t.Context(), chat, r.Name, &agents.ChangeRoutineParams{Paused: &paused}); err != nil || !got.Paused || got.NextRunAt != nil || !got.At.Equal(later) {
+		t.Errorf("a paused routine reads %+v, %v", got, err)
+	}
+	var list []*agents.Routine
+	for got, err := range c.ListRoutines(t.Context(), &agents.ListRoutinesParams{Agent: chat}) {
+		if err != nil {
+			t.Fatal(err)
+		}
+		list = append(list, got)
+	}
+	if len(list) != 1 || list[0].Starts != agents.StartsOnce || !list[0].At.Equal(later) {
+		t.Errorf("the list reads %+v", list)
+	}
+
+	// A trigger that names no zone reads in UTC.
+	tp.edit(r.Name, func(spec, _ map[string]any) { delete(spec, "timeZone") })
+	if got, err := c.GetRoutine(t.Context(), chat, r.Name); err != nil || got.AtZone != "UTC" {
+		t.Errorf("no zone reads %+v, %v", got, err)
+	}
+}
+
+// A routine that runs once is refused before the API hears of it without
+// a time, with one that has passed, or with a zone of no IANA name's
+// shape, at its create and at a change of its time; a routine that comes
+// to run once names its time.
+func TestATimeIsCheckedBeforeTheAPIHearsOfIt(t *testing.T) {
+	tp, c := newTopos(t)
+	w := create(t, c, weekly(), "w")
+	past, zero := time.Now().Add(-time.Hour), time.Time{}
+	for _, tc := range []struct {
+		name   string
+		params *agents.CreateRoutineParams
+	}{
+		{"no time", once(zero)},
+		{"a time that has passed", once(past)},
+		{"a zone of another shape", func() *agents.CreateRoutineParams { p := once(inTwoDays()); p.AtZone = "../etc"; return p }()},
+	} {
+		tp.lines()
+		if _, err := c.CreateRoutine(t.Context(), tc.params); !errors.Is(err, agents.ErrRoutineAtInvalid) {
+			t.Errorf("%s: %v", tc.name, err)
+		}
+		if lines := tp.lines(); len(lines) != 0 {
+			t.Errorf("%s: the API saw %v", tc.name, lines)
+		}
+	}
+	starts := agents.StartsOnce
+	for _, tc := range []struct {
+		name   string
+		change *agents.ChangeRoutineParams
+	}{
+		{"to once with no time", &agents.ChangeRoutineParams{Starts: &starts}},
+		{"to once at a time that has passed", &agents.ChangeRoutineParams{Starts: &starts, At: &past}},
+	} {
+		tp.lines()
+		if _, err := c.ChangeRoutine(t.Context(), chat, w.Name, tc.change); !errors.Is(err, agents.ErrRoutineAtInvalid) {
+			t.Errorf("%s: %v", tc.name, err)
+		}
+		if lines := tp.lines(); !reflect.DeepEqual(lines, []string{"GET " + triggersPath + "/" + w.Name}) {
+			t.Errorf("%s: the API saw %v, want the read alone", tc.name, lines)
+		}
+	}
+}
+
+// A routine on a schedule that comes to run once takes its time and loses
+// its schedule; it goes back to a schedule only with one named, losing
+// its time, and to a link, losing its time and zone.
+func TestARoutineMovesBetweenScheduleOnceAndLink(t *testing.T) {
+	tp, c := newTopos(t)
+	w := create(t, c, weekly(), "w")
+	at, starts := inTwoDays(), agents.StartsOnce
+	got, err := c.ChangeRoutine(t.Context(), chat, w.Name, &agents.ChangeRoutineParams{Starts: &starts, At: &at, AtZone: "Europe/Berlin"})
+	if err != nil || got.Starts != agents.StartsOnce || got.Schedule != nil || !got.At.Equal(at) || got.Instruction != w.Instruction {
+		t.Fatalf("to once answered %+v, %v", got, err)
+	}
+	if spec := tp.manifest(w.Name)["spec"].(map[string]any); spec["schedule"] != nil || spec["at"] != at.UTC().Format(time.RFC3339) || spec["timeZone"] != "Europe/Berlin" {
+		t.Errorf("to once wrote %v", spec)
+	}
+	schedule := agents.StartsOnSchedule
+	if _, err := c.ChangeRoutine(t.Context(), chat, w.Name, &agents.ChangeRoutineParams{Starts: &schedule}); !errors.Is(err, agents.ErrRoutineScheduleInvalid) {
+		t.Errorf("back to a schedule without one: %v", err)
+	}
+	back, err := c.ChangeRoutine(t.Context(), chat, w.Name, &agents.ChangeRoutineParams{Starts: &schedule, Schedule: weekly().Schedule, At: &at})
+	if err != nil || back.Starts != agents.StartsOnSchedule || back.Schedule == nil || !back.At.IsZero() || back.AtZone != "" {
+		t.Fatalf("back to a schedule answered %+v, %v", back, err)
+	}
+	if spec := tp.manifest(w.Name)["spec"].(map[string]any); spec["at"] != nil || spec["schedule"] != "0 9 * * 1,4" || spec["timeZone"] != "Europe/Berlin" {
+		t.Errorf("back to a schedule wrote %v", spec)
+	}
+	if _, err := c.ChangeRoutine(t.Context(), chat, w.Name, &agents.ChangeRoutineParams{Starts: &starts, At: &at}); err != nil {
+		t.Fatal(err)
+	}
+	link := agents.StartsFromLink
+	toLink, err := c.ChangeRoutine(t.Context(), chat, w.Name, &agents.ChangeRoutineParams{Starts: &link})
+	if err != nil || toLink.Starts != agents.StartsFromLink || !toLink.At.IsZero() || toLink.NextRunAt != nil {
+		t.Fatalf("to a link answered %+v, %v", toLink, err)
+	}
+	if spec := tp.manifest(w.Name)["spec"].(map[string]any); spec["at"] != nil || spec["timeZone"] != nil || spec["on"] == nil {
+		t.Errorf("to a link wrote %v", spec)
+	}
+}
+
+// A routine that runs once runs now on request: its run now is the one it
+// had.
+func TestARoutineThatRunsOnceRunsNow(t *testing.T) {
+	tp, c := newTopos(t)
+	r := create(t, c, once(inTwoDays()), "k")
+	tp.lines()
+	f, err := c.RunRoutine(t.Context(), chat, r.Name, &agents.RunRoutineParams{IdempotencyKey: "press-1"})
+	if err != nil || f.SessionID == "" {
+		t.Fatalf("the run answered %+v, %v", f, err)
+	}
+	if lines := tp.lines(); !reflect.DeepEqual(lines, []string{"GET " + triggersPath + "/" + r.Name, "POST " + triggersPath + "/" + r.Name + "/fire"}) {
+		t.Errorf("the API saw %v", lines)
+	}
+}
+
+// The model a routine's runs start on is written as its session's model
+// and read back; a change that names none keeps it, and a reasoning level
+// set another way, a new model keeps that level, and "" returns runs to
+// the agent's own model.
+func TestTheModelARoutineRunsOn(t *testing.T) {
+	tp, c := newTopos(t)
+	p := weekly()
+	p.Model = "tier/thorough"
+	r := create(t, c, p, "k")
+	if r.Model != "tier/thorough" {
+		t.Errorf("the routine reads the model %q", r.Model)
+	}
+	session := func() map[string]any {
+		return tp.manifest(r.Name)["spec"].(map[string]any)["session"].(map[string]any)
+	}
+	if got := session()["model"]; !reflect.DeepEqual(got, map[string]any{"name": "tier/thorough"}) {
+		t.Errorf("the model is written as %v", got)
+	}
+	tp.edit(r.Name, func(spec, _ map[string]any) {
+		spec["session"].(map[string]any)["model"] = map[string]any{"name": "tier/thorough", "reasoning": "high"}
+	})
+	title := "Monday news"
+	if got, err := c.ChangeRoutine(t.Context(), chat, r.Name, &agents.ChangeRoutineParams{Title: &title}); err != nil || got.Model != "tier/thorough" {
+		t.Errorf("a change of its name answered %+v, %v", got, err)
+	}
+	if got := session()["model"]; !reflect.DeepEqual(got, map[string]any{"name": "tier/thorough", "reasoning": "high"}) {
+		t.Errorf("a change of its name wrote the model %v", got)
+	}
+	quick := "tier/quick"
+	if got, err := c.ChangeRoutine(t.Context(), chat, r.Name, &agents.ChangeRoutineParams{Model: &quick}); err != nil || got.Model != quick {
+		t.Errorf("a new model answered %+v, %v", got, err)
+	}
+	if got := session()["model"]; !reflect.DeepEqual(got, map[string]any{"name": "tier/quick", "reasoning": "high"}) {
+		t.Errorf("a new model wrote %v", got)
+	}
+	own := ""
+	if got, err := c.ChangeRoutine(t.Context(), chat, r.Name, &agents.ChangeRoutineParams{Model: &own}); err != nil || got.Model != "" {
+		t.Errorf("the agent's own model answered %+v, %v", got, err)
+	}
+	if got, ok := session()["model"]; ok {
+		t.Errorf("the agent's own model wrote %v", got)
+	}
+	plain := create(t, c, weekly(), "plain")
+	if _, ok := tp.manifest(plain.Name)["spec"].(map[string]any)["session"].(map[string]any)["model"]; ok || plain.Model != "" {
+		t.Errorf("a routine that names no model wrote one: %q", plain.Model)
+	}
+}
+
+// Whether a routine's runs bring every result to the person is written as
+// its session's notify and read back, NotifyAlways for one that names
+// none; a change that names none keeps it, and one there is none of is
+// refused before the API hears of it.
+func TestHowARoutineTellsThePerson(t *testing.T) {
+	tp, c := newTopos(t)
+	p := weekly()
+	p.Notify = agents.NotifyJudged
+	r := create(t, c, p, "k")
+	session := func() map[string]any {
+		return tp.manifest(r.Name)["spec"].(map[string]any)["session"].(map[string]any)
+	}
+	if r.Notify != agents.NotifyJudged || session()["notify"] != "judged" {
+		t.Errorf("the routine reads %q and wrote %v", r.Notify, session()["notify"])
+	}
+	title := "Monday news"
+	if got, err := c.ChangeRoutine(t.Context(), chat, r.Name, &agents.ChangeRoutineParams{Title: &title}); err != nil || got.Notify != agents.NotifyJudged || session()["notify"] != "judged" {
+		t.Errorf("a change of its name answered %+v, %v, and wrote %v", got, err, session()["notify"])
+	}
+	if got, err := c.ChangeRoutine(t.Context(), chat, r.Name, &agents.ChangeRoutineParams{Notify: agents.NotifyAlways}); err != nil || got.Notify != agents.NotifyAlways || session()["notify"] != "always" {
+		t.Errorf("a change to always answered %+v, %v, and wrote %v", got, err, session()["notify"])
+	}
+	plain := create(t, c, weekly(), "plain")
+	if _, ok := tp.manifest(plain.Name)["spec"].(map[string]any)["session"].(map[string]any)["notify"]; ok || plain.Notify != agents.NotifyAlways {
+		t.Errorf("a routine that names none wrote one, and reads %q", plain.Notify)
+	}
+	tp.lines()
+	p.Notify = "sometimes"
+	if _, err := c.CreateRoutine(t.Context(), p); !errors.Is(err, agents.ErrRoutineNotifyInvalid) {
+		t.Errorf("a create with a way there is none of: %v", err)
+	}
+	if _, err := c.ChangeRoutine(t.Context(), chat, r.Name, &agents.ChangeRoutineParams{Notify: "sometimes"}); !errors.Is(err, agents.ErrRoutineNotifyInvalid) {
+		t.Errorf("a change to a way there is none of: %v", err)
+	}
+	if lines := tp.lines(); !reflect.DeepEqual(lines, []string{"GET " + triggersPath + "/" + r.Name}) {
+		t.Errorf("the API saw %v, want the read alone", lines)
 	}
 }

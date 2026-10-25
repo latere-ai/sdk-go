@@ -148,7 +148,9 @@ var leftOut = map[string]string{
 // JSON name, each with the schema it will join and what it is. checkModel
 // takes them as read, and TestFieldsAheadOfTheDocumentAreStillAhead fails
 // once the document describes one, so the model is then held to it.
-var aheadOfTheDocument = map[string]ahead{}
+var aheadOfTheDocument = map[string]ahead{
+	"TriggerSession.model": {"TriggerSession", "the model each session a firing starts runs on, as a session's update names it"},
+}
 
 // ahead is a field of aheadOfTheDocument: the schema it will join, a
 // component's name or "event:" and an event's type for its payload, and

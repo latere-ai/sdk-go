@@ -28,9 +28,10 @@ type WatchKind string
 
 // The kinds of Watch.
 const (
-	// WatchRoutine is a routine: it runs on a schedule, or each time
-	// something arrives at its link or its address. The routine methods
-	// read and change it by the watch's Name.
+	// WatchRoutine is a routine: it runs on a schedule, each time
+	// something arrives at its link or its address, or once, at a time the
+	// person picked. The routine methods read and change it by the watch's
+	// Name.
 	WatchRoutine WatchKind = "routine"
 	// WatchEvent is a trigger that fires on the events its On selects,
 	// which an agent offered and the person accepted: events no routine
@@ -93,16 +94,25 @@ type Watch struct {
 	// Schedule is when a routine on a schedule runs; nil for the other
 	// kinds, and for a schedule of a shape a routine does not write.
 	Schedule *RoutineSchedule
+	// At is when a routine that runs once runs, and AtZone the IANA time
+	// zone the person picked it in, paused or not; the zero time and empty
+	// for the other kinds.
+	At     time.Time
+	AtZone string
 	// On selects the events an event watch fires on; nil for the other
 	// kinds.
 	On *EventFilter
-	// NextAt is when it looks next: a routine's next run, or the time of
-	// a wake. Nil while it is paused, and for one that looks when an event
-	// arrives.
+	// NextAt is when it looks next: a routine's next run, the time of a
+	// routine that runs once, or the time of a wake. Nil while it is
+	// paused, and for one that looks when an event arrives.
 	NextAt *time.Time
 	// Notify is whether every run brings its result to the person or the
 	// agent judges; a wake's runs are always judged.
 	Notify NotifyPolicy
+	// Model is the model each session it starts runs on, such as
+	// "tier/thorough"; empty when they start on the agent's own model, and
+	// for a wake, which continues its session on that session's model.
+	Model string
 	// Paused says it fires nothing until it is resumed. The hold of every
 	// trigger, which Client.GetTriggerHold reads, leaves it as it is.
 	Paused bool
@@ -191,12 +201,19 @@ func watchOf(t *Trigger, agent string) (*Watch, bool) {
 		return w, true
 	}
 	w.CountsToward, w.PerWeekMicroUSD, w.Spend = w.TriggerID, perWeekOf(t), t.Status.Spend
+	// A wake continues its session, on the model that session runs on.
+	if m := t.Spec.Session.Model; m != nil {
+		w.Model = m.Name
+	}
 	if o != nil && o.Kind == TriggerFromProposal {
 		w.SetBy = SetByOffer
 		w.Session = &WatchSession{ID: o.SessionID}
 	}
+	// A routine that runs once fires at its spec's At as a wake does, but
+	// with no wake's origin, so it reads as the routine it is.
 	if r, ok := RoutineOf(t, agent); ok {
 		w.Kind, w.Title, w.Why, w.Starts, w.Schedule, w.NextAt = WatchRoutine, r.Title, r.Instruction, r.Starts, r.Schedule, r.NextRunAt
+		w.At, w.AtZone = r.At, r.AtZone
 		return w, true
 	}
 	e, ok := routine.ReadEvent(shapeOf(t), agent)

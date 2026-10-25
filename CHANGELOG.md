@@ -7,6 +7,35 @@ minor version may break code, and every such change is marked **Breaking**.
 
 ## [Unreleased]
 
+### Added
+
+- Package `agents`: a routine that runs once. `StartsOnce` runs the
+  routine at `At`, which `CreateRoutine` and `ChangeRoutine` refuse with
+  `ErrRoutineAtInvalid` when it has passed; the API deletes the routine
+  once that run started. `AtZone` keeps the zone the person picked the
+  time in, written as the trigger's `timeZone`, so a routine read back
+  says the time as they picked it. `Routine.NextRunAt` is its time, and
+  `ListWatches` reads it as a routine, with `Watch.At` and `Watch.AtZone`.
+  `RunRoutine` runs it now, as its one run.
+- Package `agents`: the model a routine's runs start on. `Model` on
+  `CreateRoutineParams` and `ChangeRoutineParams`, such as
+  `"tier/thorough"`, is written as the trigger's `session.model`; `""` on
+  a change returns runs to the agent's own model. `Routine.Model` and
+  `Watch.Model` read it back, and `TriggerSession.Model` carries it on
+  any trigger.
+- Package `agents`: whether a routine's runs bring every result to the
+  person. `Notify` on `CreateRoutineParams` and `ChangeRoutineParams`
+  writes the trigger's `session.notify`; `NotifyJudged` tells the person
+  only what the agent judges needs them, and `ErrRoutineNotifyInvalid`
+  refuses any other value. `Routine.Notify` reads it back,
+  `NotifyAlways` for a routine that names none. A routine that names
+  none still writes none.
+- Package `agents/routine`: `Once`, `Fields.At`, `Fields.AtZone`,
+  `Fields.Model` and `Fields.Notify`, with `CheckAt`, `CheckNotify`,
+  `ErrAtInvalid` and `ErrNotifyInvalid`. `Manifest` takes `spec.at` off a
+  routine that comes to start another way, and `schedule` and `on` off
+  one that comes to run once.
+
 ## [0.12.0] - 2026-10-25
 
 ### Added

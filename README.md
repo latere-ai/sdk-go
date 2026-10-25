@@ -163,9 +163,10 @@ _, err = ag.ApplyTrigger(ctx, &agents.Trigger{
 
 ### Routines
 
-A routine is an instruction a person hands an agent once, which runs again
-and again with nobody waiting: on a schedule, or each time another app
-sends to its private link or an email reaches its address. It is a trigger
+A routine is an instruction a person hands an agent once, which runs with
+nobody waiting: on a schedule, each time another app sends to its private
+link or an email reaches its address, or one time, at a time the person
+picked. It is a trigger
 written in one shape, so every program that shows a person's routines reads
 and changes the same ones; Latere Chat's are those of its managed agent,
 `latere-chat`.
@@ -187,11 +188,20 @@ paused := true
 _, err = ag.ChangeRoutine(ctx, "latere-chat", r.Name, &agents.ChangeRoutineParams{Paused: &paused})
 ```
 
+A routine with `Starts: agents.StartsOnce` runs at its `At`, which must not
+have passed, and the API deletes it once that run started. `AtZone` is the
+zone the person picked the time in, kept so the routine read back says the
+time as they picked it. `Model` is the model each run's session starts on,
+such as `"tier/thorough"`, in place of the agent's own, and
+`Notify: agents.NotifyJudged` brings a run's result to the person only
+when the agent judges it needs them. A change that names none of these
+keeps what the routine has.
+
 `ListRoutines` lists them, `GetRoutine` reads one, `DeleteRoutine` deletes
 one and `RunRoutine` runs one now. A change reads the trigger and writes
 back every field it does not name as the API answered it, those this SDK
-does not model included. The name, the instruction and the schedule are
-checked before anything is sent, each refusal an error to match with
+does not model included. The name, the instruction, the schedule and the
+time are checked before anything is sent, each refusal an error to match with
 `errors.Is`, such as `agents.ErrRoutineInstructionTooLong`; a name that
 names no routine matches `latere.ErrNotFound`. The agent must exist in the
 caller's context first: a program signed in as a person makes a managed

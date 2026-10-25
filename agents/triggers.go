@@ -196,6 +196,10 @@ type TriggerSession struct {
 	// the person, or the agent judges; NotifyAlways when empty. A wake's
 	// turn is judged whatever it says.
 	Notify NotifyPolicy `json:"notify,omitempty"`
+	// Model is the model each session a firing starts runs on, its Name
+	// such as "tier/thorough" and, when set, its Reasoning, as
+	// UpdateSession changes a session's; the agent's own when nil.
+	Model *Model `json:"model,omitempty"`
 }
 
 // NotifyPolicy is whether the turns a trigger begins bring their result

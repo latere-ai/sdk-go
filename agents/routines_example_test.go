@@ -39,6 +39,38 @@ func ExampleClient_CreateRoutine() {
 	fmt.Println(r.Name, r.NextRunAt)
 }
 
+// Making a routine that runs once, on Tuesday at 9:30 in the zone the
+// person picked it in, on the Thorough Effort level, telling the person
+// only if the run finds something that needs them. The API deletes it
+// once it ran; AtZone is kept so the routine read back says the time as
+// the person picked it.
+func ExampleClient_CreateRoutine_once() {
+	ctx := context.Background()
+	zone := "Europe/Berlin"
+	berlin, err := time.LoadLocation(zone)
+	if err != nil {
+		log.Fatal(err)
+	}
+	r, err := client().CreateRoutine(ctx, &agents.CreateRoutineParams{
+		Agent:       "latere-chat",
+		Title:       "Flight check-in",
+		Instruction: "Check whether check-in for my flight to Lisbon is open, and tell me if it is.",
+		Starts:      agents.StartsOnce,
+		At:          time.Date(2026, 11, 3, 9, 30, 0, 0, berlin),
+		AtZone:      zone,
+		Model:       "tier/thorough",
+		Notify:      agents.NotifyJudged,
+	})
+	if errors.Is(err, agents.ErrRoutineAtInvalid) {
+		fmt.Println("Pick a time that has not passed.")
+		return
+	}
+	if err != nil {
+		log.Fatal(err)
+	}
+	fmt.Println(r.Name, r.At.In(berlin).Format("Mon 15:04"))
+}
+
 // Listing Latere Chat's routines with when each runs next.
 func ExampleClient_ListRoutines() {
 	ctx := context.Background()

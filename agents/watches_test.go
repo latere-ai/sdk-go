@@ -689,3 +689,50 @@ func TestAPausedWatchSaysWhoPausedIt(t *testing.T) {
 		t.Errorf("the trigger reads %+v", tr.Status)
 	}
 }
+
+// TestAOneTimeRoutineIsARoutineWatch: a person's routine that runs once
+// fires at its spec's at as a wake does, yet reads as a routine watch,
+// with its time, the zone it was picked in and its time as when it looks
+// next, its model and its way of telling; paused, it keeps its time with
+// no next look. A wake beside it still reads as a wake.
+func TestAOneTimeRoutineIsARoutineWatch(t *testing.T) {
+	api, c := newWatchAPI(t)
+	api.pageSize = 10
+	once := func(spec map[string]any) {
+		delete(spec, "schedule")
+		spec["at"] = "2026-10-28T08:30:00Z"
+		spec["session"].(map[string]any)["model"] = map[string]any{"name": "tier/thorough", "reasoning": "high"}
+		spec["session"].(map[string]any)["notify"] = "judged"
+	}
+	api.triggers = []map[string]any{
+		routineTrigger(chat, "once", "Call the bank", "Remind me to call the bank.",
+			map[string]any{"id": "trg_1", "createdAt": "2026-10-25T09:00:00Z", "nextFireAt": "2026-10-28T08:30:00Z"}, once),
+		routineTrigger(chat, "paused", "Pay the rent", "Remind me to pay the rent.", map[string]any{"id": "trg_2"}, func(spec map[string]any) {
+			once(spec)
+			spec["suspend"] = true
+		}),
+		wakeTrigger("trg_3", "ses_b", "toolu_3", "Whether the refund arrived"),
+	}
+	api.triggers[2]["spec"].(map[string]any)["session"].(map[string]any)["model"] = map[string]any{"name": "tier/quick"}
+	api.sessions["ses_b"] = sessionOf("ses_b", chat, "A refund", `{"trigger_id":"trg_3","at":"2026-10-24T07:00:00Z","title":"Whether the refund arrived","count":1}`)
+	page, err := c.ListWatchesPage(t.Context(), &agents.ListWatchesParams{Agent: chat})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(page.Items) != 3 {
+		t.Fatalf("read %d watches: %+v", len(page.Items), page.Items)
+	}
+	at := time.Date(2026, 10, 28, 8, 30, 0, 0, time.UTC)
+	w := page.Items[0]
+	if w.Kind != agents.WatchRoutine || w.Starts != agents.StartsOnce || w.SetBy != agents.SetByPerson || w.Session != nil || w.Title != "Call the bank" ||
+		w.Why != "Remind me to call the bank." || !w.At.Equal(at) || w.AtZone != "Europe/Berlin" || w.NextAt == nil || !w.NextAt.Equal(at) ||
+		w.Schedule != nil || w.Model != "tier/thorough" || w.Notify != agents.NotifyJudged || w.CountsToward != "trg_1" {
+		t.Errorf("the routine that runs once reads %+v", w)
+	}
+	if p := page.Items[1]; p.Kind != agents.WatchRoutine || p.Starts != agents.StartsOnce || !p.Paused || p.NextAt != nil || !p.At.Equal(at) {
+		t.Errorf("the paused routine that runs once reads %+v", p)
+	}
+	if wake := page.Items[2]; wake.Kind != agents.WatchWake || wake.Starts != "" || !wake.At.IsZero() || wake.Model != "" {
+		t.Errorf("the wake reads %+v", wake)
+	}
+}

@@ -19,7 +19,7 @@ import (
 // Version is the release of this module, sent in the User-Agent header:
 // the newest release in CHANGELOG.md, or the coming one with "-dev" before
 // the first.
-const Version = "0.12.0"
+const Version = "0.13.0"
 
 // DefaultBaseURL is the address of the Latere API.
 const DefaultBaseURL = "https://api.latere.ai"

@@ -7,6 +7,8 @@ minor version may break code, and every such change is marked **Breaking**.
 
 ## [Unreleased]
 
+## [0.13.0] - 2026-10-25
+
 ### Added
 
 - Package `account`: the provider that serves each model of an Effort

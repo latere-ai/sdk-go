@@ -5,8 +5,8 @@
 // sends it: the label and the name the trigger carries, the name made from
 // a create's key, the manifest's fields, its weekly allowance, model and
 // way of telling the person among them, reading a trigger back as a
-// routine, and the checks a routine's title, instruction, schedule, time,
-// allowance and way of telling must pass. It also holds the shape of the
+// routine, and the checks a routine's title, instruction, schedule,
+// dates, allowance and way of telling must pass. It also holds the shape of the
 // trigger an agent's offer on events no routine starts from is written as:
 // its name, the words after its ask, and reading it back.
 //
@@ -49,8 +49,7 @@ const (
 	// MaxTitle is the most characters a routine's name holds.
 	MaxTitle = 60
 	// MaxInstruction is the most bytes the instruction of a routine on a
-	// schedule or one that runs once holds: the longest message a firing
-	// renders.
+	// schedule or on dates holds: the longest message a firing renders.
 	MaxInstruction = 64 << 10
 	// MaxEventInstruction is the most bytes the instruction of a routine
 	// that starts from a link or an email holds. What arrives is written
@@ -58,6 +57,9 @@ const (
 	// message refused past MaxInstruction, so an instruction of this length
 	// and everything that arrives fit together.
 	MaxEventInstruction = 16 << 10
+	// MaxDates is the most dates a routine on dates runs at, the most
+	// times the API takes in a trigger's spec.times.
+	MaxDates = 100
 )
 
 // The trigger manifest's kind and version a routine is written as.
@@ -98,10 +100,11 @@ const (
 	// which the platform issues; the email follows the instruction in the
 	// run's message.
 	FromEmail Start = "email"
-	// Once runs the routine one time, at its At, written as the trigger's
-	// spec.at. The API deletes the trigger once that run started a
-	// session, which keeps what it did.
-	Once Start = "once"
+	// OnDates runs the routine once at each of its Dates, times a schedule
+	// cannot say, written as the trigger's spec.times. The API deletes the
+	// trigger after the last; the sessions the runs started keep what they
+	// did.
+	OnDates Start = "dates"
 )
 
 // The ways a trigger's spec.session.notify tells the person what a run
@@ -172,17 +175,20 @@ type Fields struct {
 	// a schedule, keeps the schedule its stored trigger has, one of a shape
 	// a routine does not write among them.
 	Schedule *Schedule
-	// At is when a routine that starts Once runs, the trigger's spec.at,
-	// which must not have passed when it is written. The zero time, for a
-	// routine that starts Once, keeps the time and the zone its stored
-	// trigger has.
-	At time.Time
-	// AtZone is the IANA time zone the person picked At in, such as
-	// "Europe/Berlin", written with At as the trigger's spec.timeZone. The
-	// run comes at At whatever the zone; the zone is kept so a program can
-	// say the time back to the person as they picked it. Empty is UTC. It
-	// is checked for its shape alone.
-	AtZone string
+	// Dates are the times a routine on dates runs at, once each, the
+	// trigger's spec.times: 1 to MaxDates distinct times, at least one of
+	// them after now when they are written. A date that has passed may
+	// stay in the list and never runs, so a change can write back the
+	// dates it read. Nil, for a routine on dates, keeps the dates and the
+	// zone its stored trigger has. Read and CheckDates list them in
+	// ascending order.
+	Dates []time.Time
+	// DatesZone is the IANA time zone the person picked the dates in, such
+	// as "Europe/Berlin", written with Dates as the trigger's
+	// spec.timeZone. Each run comes at its date whatever the zone; the zone
+	// is kept so a program can say the dates back to the person as they
+	// picked them. Empty is UTC. It is checked for its shape alone.
+	DatesZone string
 	// Model is the model each run's session starts on, the trigger's
 	// spec.session.model.name, such as a routed name of an Effort level.
 	// Nil keeps the model the stored trigger names; "" takes the model
@@ -288,9 +294,9 @@ type Trigger struct {
 	// spec.timeZone, and Product the product of its spec.on, "" for a
 	// trigger on a schedule.
 	Schedule, TimeZone, Product string
-	// At is its spec.at, the zero time for a trigger that does not fire
-	// once.
-	At time.Time
+	// Times is its spec.times, nil for a trigger that does not fire at a
+	// list of times.
+	Times []time.Time
 	// Message and Title are its spec.session's.
 	Message, Title string
 	// Model is the name of its spec.session.model, and Notify its
@@ -306,11 +312,11 @@ type Trigger struct {
 // trigger without the Label of agent, or whose name is not a routine's.
 // The instruction and the title are read as the person wrote them,
 // without the words a routine that starts from a link or an email adds
-// after its instruction. A trigger with an At reads as a routine that
-// starts Once, its AtZone the trigger's zone, UTC when it names none.
-// Schedule is nil for a routine that starts from a link or an email or
-// runs once, and for one whose schedule has a shape a routine does not
-// write, set another way.
+// after its instruction. A trigger with Times reads as a routine on
+// dates, its dates in ascending order and its DatesZone the trigger's
+// zone, UTC when it names none. Schedule is nil for a routine that starts
+// from a link or an email or on dates, and for one whose schedule has a
+// shape a routine does not write, set another way.
 func Read(t Trigger, agent string) (Fields, bool) {
 	if agent == "" || t.Labels[Label] != agent || !IsName(t.Name) {
 		return Fields{}, false
@@ -321,9 +327,10 @@ func Read(t Trigger, agent string) (Fields, bool) {
 	}
 	starts := OnSchedule
 	switch {
-	case !t.At.IsZero():
-		// The API holds a trigger to one of a schedule, events and a time.
-		starts = Once
+	case len(t.Times) > 0:
+		// The API holds a trigger to one of a schedule, events, a time and
+		// a list of times.
+		starts = OnDates
 	case t.Product == productWebhook:
 		starts = FromLink
 	case t.Product == productMail:
@@ -346,10 +353,10 @@ func Read(t Trigger, agent string) (Fields, bool) {
 		f.Model = &model
 	}
 	switch {
-	case starts == Once:
-		f.At, f.AtZone = t.At, t.TimeZone
-		if f.AtZone == "" {
-			f.AtZone = "UTC"
+	case starts == OnDates:
+		f.Dates, f.DatesZone = slices.SortedFunc(slices.Values(t.Times), time.Time.Compare), t.TimeZone
+		if f.DatesZone == "" {
+			f.DatesZone = "UTC"
 		}
 	case t.Schedule != "":
 		f.Schedule = ParseSchedule(t.Schedule, t.TimeZone)
@@ -377,12 +384,12 @@ var (
 	// that is not an IANA name's shape.
 	ErrScheduleInvalid = errors.New("routine: the routine's schedule is not one a routine runs on")
 	// ErrStartsInvalid matches a Start that is none of OnSchedule, FromLink,
-	// FromEmail and Once.
+	// FromEmail and OnDates.
 	ErrStartsInvalid = errors.New("routine: the routine starts in no way a routine starts")
-	// ErrAtInvalid matches a routine that runs once without a time, with a
-	// time that is not after now, which the API refuses too, or with a zone
-	// that is not an IANA name's shape.
-	ErrAtInvalid = errors.New("routine: the routine's time is not one a routine runs once at")
+	// ErrDatesInvalid matches a routine on dates without one, with more
+	// than MaxDates, with the same time twice, with none after now, which
+	// the API refuses too, or with a zone that is not an IANA name's shape.
+	ErrDatesInvalid = errors.New("routine: the routine's dates are not ones a routine runs at")
 	// ErrAllowanceInvalid matches a weekly allowance below zero. Zero is
 	// none: it takes an allowance off.
 	ErrAllowanceInvalid = errors.New("routine: the weekly allowance is below zero")
@@ -415,9 +422,9 @@ func CheckInstruction(s string, starts Start) (string, error) {
 	s = strings.TrimSpace(s)
 	bound := MaxInstruction
 	// What arrives follows the instruction of a routine that starts from a
-	// link or an email; one on a schedule or that runs once has nothing
-	// after it.
-	if starts != OnSchedule && starts != Once {
+	// link or an email; one on a schedule or on dates has nothing after
+	// it.
+	if starts != OnSchedule && starts != OnDates {
 		bound = MaxEventInstruction
 	}
 	switch {
@@ -450,20 +457,32 @@ func CheckSchedule(s Schedule) (Schedule, error) {
 	return Schedule{Days: days, Hour: s.Hour, Minute: s.Minute, Zone: s.Zone}, nil
 }
 
-// CheckAt returns an error matching ErrAtInvalid for the time of a
-// routine that runs once that is zero or not after now, or whose zone,
-// when given, is not an IANA name's shape. The API refuses a time that
-// has passed when the trigger is written, so a caller hears of it first.
-func CheckAt(at time.Time, zone string, now time.Time) error {
+// CheckDates returns the dates of a routine on dates in ascending order,
+// or an error matching ErrDatesInvalid for a list of no date or of more
+// than MaxDates, one that holds the same time twice, one with no date
+// after now, or a zone, when given, that is not an IANA name's shape. A
+// date that has passed is kept beside one to come: it never runs. The API
+// refuses a list with nothing to come when the trigger is written, so a
+// caller hears of it first.
+func CheckDates(dates []time.Time, zone string, now time.Time) ([]time.Time, error) {
 	switch {
-	case at.IsZero():
-		return fmt.Errorf("%w: a routine that runs once names its time", ErrAtInvalid)
-	case !at.After(now):
-		return fmt.Errorf("%w: %s has passed", ErrAtInvalid, at.Format(time.RFC3339))
+	case len(dates) == 0:
+		return nil, fmt.Errorf("%w: a routine on dates names at least one", ErrDatesInvalid)
+	case len(dates) > MaxDates:
+		return nil, fmt.Errorf("%w: %d dates, past %d", ErrDatesInvalid, len(dates), MaxDates)
 	case zone != "" && !zonePattern.MatchString(zone):
-		return fmt.Errorf("%w: the zone %q is not an IANA time zone name", ErrAtInvalid, zone)
+		return nil, fmt.Errorf("%w: the zone %q is not an IANA time zone name", ErrDatesInvalid, zone)
 	}
-	return nil
+	sorted := slices.SortedFunc(slices.Values(dates), time.Time.Compare)
+	for i := 1; i < len(sorted); i++ {
+		if sorted[i].Equal(sorted[i-1]) {
+			return nil, fmt.Errorf("%w: %s is named twice", ErrDatesInvalid, sorted[i].UTC().Format(time.RFC3339Nano))
+		}
+	}
+	if last := sorted[len(sorted)-1]; !last.After(now) {
+		return nil, fmt.Errorf("%w: every date has passed, the last %s", ErrDatesInvalid, last.UTC().Format(time.RFC3339Nano))
+	}
+	return sorted, nil
 }
 
 // CheckNotify returns an error matching ErrNotifyInvalid for a way of
@@ -489,18 +508,18 @@ func CheckAllowance(perWeekMicroUSD int64) error {
 // is none of the four.
 func CheckStarts(s Start) error {
 	switch s {
-	case OnSchedule, FromLink, FromEmail, Once:
+	case OnSchedule, FromLink, FromEmail, OnDates:
 		return nil
 	}
 	return fmt.Errorf("%w: %q", ErrStartsInvalid, string(s))
 }
 
 // New returns the fields of a new routine trimmed and checked: Starts is
-// OnSchedule when empty, a routine on a schedule names one, a routine that
-// runs once names a time after now, an allowance is not below zero, and a
-// way of telling, when given, is one a trigger takes. The schedule of a
-// routine that does not start on one is dropped, and the time of one that
-// does not run once. An error matches one of the check errors.
+// OnSchedule when empty, a routine on a schedule names one, a routine on
+// dates names dates CheckDates takes, an allowance is not below zero, and
+// a way of telling, when given, is one a trigger takes. The schedule of a
+// routine that does not start on one is dropped, and the dates of one
+// that does not start on dates. An error matches one of the check errors.
 func New(f Fields) (Fields, error) {
 	if f.Starts == "" {
 		f.Starts = OnSchedule
@@ -525,14 +544,14 @@ func New(f Fields) (Fields, error) {
 	if f.Instruction, err = CheckInstruction(f.Instruction, f.Starts); err != nil {
 		return Fields{}, err
 	}
-	if f.Starts == Once {
-		if err := CheckAt(f.At, f.AtZone, time.Now()); err != nil {
+	if f.Starts == OnDates {
+		if f.Dates, err = CheckDates(f.Dates, f.DatesZone, time.Now()); err != nil {
 			return Fields{}, err
 		}
 		f.Schedule = nil
 		return f, nil
 	}
-	f.At, f.AtZone = time.Time{}, ""
+	f.Dates, f.DatesZone = nil, ""
 	if f.Starts != OnSchedule {
 		f.Schedule = nil
 		return f, nil
@@ -619,11 +638,11 @@ func writeModel(session map[string]any, model *string) error {
 // the spec's other fields among them, is written back as it was, so a
 // change undoes nothing set another way; an f whose PerWeekMicroUSD or
 // Model is nil, or whose Notify is empty, keeps what the stored trigger
-// has of it with the rest. A routine that runs once is written with its
-// spec.at, and the schedule and the events of how it started before are
-// taken off; one that comes to start another way has its spec.at taken
-// off. f is written as it is: New and the checks are the caller's to
-// apply first.
+// has of it with the rest. A routine on dates is written with its
+// spec.times, even for one date, and the schedule, the events or the one
+// time of how it started before are taken off; one that comes to start
+// another way has its spec.times taken off. f is written as it is: New
+// and the checks are the caller's to apply first.
 func Manifest(agent, name string, stored json.RawMessage, f Fields) (json.RawMessage, error) {
 	m := map[string]any{}
 	if len(stored) > 0 {
@@ -666,20 +685,26 @@ func Manifest(agent, name string, stored json.RawMessage, f Fields) (json.RawMes
 	}
 	spec["agent"] = agent
 	switch {
-	case f.Starts == Once:
-		// A zero time keeps the stored one with its zone. The time is
-		// written in UTC, the zone beside it, since the API reads the time
-		// alone to fire it.
-		if !f.At.IsZero() {
-			spec["at"] = f.At.UTC().Format(time.RFC3339)
-			if f.AtZone != "" {
-				spec["timeZone"] = f.AtZone
+	case f.Starts == OnDates:
+		// Nil dates keep the stored ones with their zone. The dates are
+		// written in UTC, the zone beside them, since the API reads the
+		// times alone to fire them. A single date is a list too: the one
+		// time a trigger fires at, spec.at, is a wake's.
+		if f.Dates != nil {
+			times := make([]string, len(f.Dates))
+			for i, d := range f.Dates {
+				times[i] = d.UTC().Format(time.RFC3339Nano)
+			}
+			spec["times"] = times
+			if f.DatesZone != "" {
+				spec["timeZone"] = f.DatesZone
 			} else {
 				delete(spec, "timeZone")
 			}
 		}
 		delete(spec, "schedule")
 		delete(spec, "on")
+		delete(spec, "at")
 	case f.Starts != OnSchedule:
 		product := productWebhook
 		if f.Starts == FromEmail {
@@ -692,11 +717,13 @@ func Manifest(agent, name string, stored json.RawMessage, f Fields) (json.RawMes
 		delete(spec, "schedule")
 		delete(spec, "timeZone")
 		delete(spec, "at")
+		delete(spec, "times")
 		delete(session, "key")
 	case f.Schedule != nil:
 		spec["schedule"], spec["timeZone"] = Cron(*f.Schedule), f.Schedule.Zone
 		delete(spec, "on")
 		delete(spec, "at")
+		delete(spec, "times")
 	}
 	// Every run of a routine shares one session key, so with the API's
 	// default a run waiting on the person would skip every later run until

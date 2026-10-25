@@ -9,14 +9,19 @@ minor version may break code, and every such change is marked **Breaking**.
 
 ### Added
 
-- Package `agents`: a routine that runs once. `StartsOnce` runs the
-  routine at `At`, which `CreateRoutine` and `ChangeRoutine` refuse with
-  `ErrRoutineAtInvalid` when it has passed; the API deletes the routine
-  once that run started. `AtZone` keeps the zone the person picked the
-  time in, written as the trigger's `timeZone`, so a routine read back
-  says the time as they picked it. `Routine.NextRunAt` is its time, and
-  `ListWatches` reads it as a routine, with `Watch.At` and `Watch.AtZone`.
-  `RunRoutine` runs it now, as its one run.
+- Package `agents`: a routine on dates. `StartsOnDates` runs the
+  routine once at each of its `Dates`, times a schedule cannot say, from
+  one to `MaxRoutineDates`; the API deletes the routine after the last.
+  `CreateRoutine` and `ChangeRoutine` refuse with
+  `ErrRoutineDatesInvalid` a list with no date, more than the most, the
+  same time twice or nothing still to come; a date that has passed may
+  stay beside one to come, so a change can write back what it read.
+  `DatesZone` keeps the zone the person picked the dates in, written as
+  the trigger's `timeZone`, so a routine read back says the dates as they
+  picked them. `Routine.NextRunAt` is the first date still to come, and
+  `ListWatches` reads the routine as one, with `Watch.Dates` and
+  `Watch.DatesZone`. `TriggerSpec.Times` carries the list on any
+  trigger.
 - Package `agents`: the model a routine's runs start on. `Model` on
   `CreateRoutineParams` and `ChangeRoutineParams`, such as
   `"tier/thorough"`, is written as the trigger's `session.model`; `""` on
@@ -30,11 +35,12 @@ minor version may break code, and every such change is marked **Breaking**.
   refuses any other value. `Routine.Notify` reads it back,
   `NotifyAlways` for a routine that names none. A routine that names
   none still writes none.
-- Package `agents/routine`: `Once`, `Fields.At`, `Fields.AtZone`,
-  `Fields.Model` and `Fields.Notify`, with `CheckAt`, `CheckNotify`,
-  `ErrAtInvalid` and `ErrNotifyInvalid`. `Manifest` takes `spec.at` off a
-  routine that comes to start another way, and `schedule` and `on` off
-  one that comes to run once.
+- Package `agents/routine`: `OnDates`, `MaxDates`, `Fields.Dates`,
+  `Fields.DatesZone`, `Fields.Model` and `Fields.Notify`, with
+  `CheckDates`, `CheckNotify`, `ErrDatesInvalid` and `ErrNotifyInvalid`.
+  A routine on dates is written as `spec.times`, even for one date.
+  `Manifest` takes `times` off a routine that comes to start another way,
+  and `schedule`, `on` and `at` off one that comes to start on dates.
 
 ## [0.12.0] - 2026-10-25
 

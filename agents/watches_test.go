@@ -690,25 +690,28 @@ func TestAPausedWatchSaysWhoPausedIt(t *testing.T) {
 	}
 }
 
-// TestAOneTimeRoutineIsARoutineWatch: a person's routine that runs once
-// fires at its spec's at as a wake does, yet reads as a routine watch,
-// with its time, the zone it was picked in and its time as when it looks
-// next, its model and its way of telling; paused, it keeps its time with
-// no next look. A wake beside it still reads as a wake.
-func TestAOneTimeRoutineIsARoutineWatch(t *testing.T) {
+// TestARoutineOnDatesIsARoutineWatch: a person's routine on dates fires
+// at set times as a wake does, yet reads as a routine watch, with its
+// dates, the zone they were picked in and the first date after now as
+// when it looks next, its model and its way of telling; paused, it keeps
+// its dates with no next look. A wake beside it still reads as a wake.
+func TestARoutineOnDatesIsARoutineWatch(t *testing.T) {
 	api, c := newWatchAPI(t)
 	api.pageSize = 10
-	once := func(spec map[string]any) {
+	passed := time.Now().Add(-time.Hour).Truncate(time.Second).UTC()
+	next := time.Now().Add(48 * time.Hour).Truncate(time.Second).UTC()
+	last := next.Add(7 * 24 * time.Hour)
+	onDates := func(spec map[string]any) {
 		delete(spec, "schedule")
-		spec["at"] = "2026-10-28T08:30:00Z"
+		spec["times"] = []any{last.Format(time.RFC3339), passed.Format(time.RFC3339), next.Format(time.RFC3339)}
 		spec["session"].(map[string]any)["model"] = map[string]any{"name": "tier/thorough", "reasoning": "high"}
 		spec["session"].(map[string]any)["notify"] = "judged"
 	}
 	api.triggers = []map[string]any{
-		routineTrigger(chat, "once", "Call the bank", "Remind me to call the bank.",
-			map[string]any{"id": "trg_1", "createdAt": "2026-10-25T09:00:00Z", "nextFireAt": "2026-10-28T08:30:00Z"}, once),
+		routineTrigger(chat, "dates", "Flight check-in", "Check in for my flight.",
+			map[string]any{"id": "trg_1", "createdAt": "2026-10-25T09:00:00Z", "nextFireAt": next.Format(time.RFC3339)}, onDates),
 		routineTrigger(chat, "paused", "Pay the rent", "Remind me to pay the rent.", map[string]any{"id": "trg_2"}, func(spec map[string]any) {
-			once(spec)
+			onDates(spec)
 			spec["suspend"] = true
 		}),
 		wakeTrigger("trg_3", "ses_b", "toolu_3", "Whether the refund arrived"),
@@ -722,17 +725,17 @@ func TestAOneTimeRoutineIsARoutineWatch(t *testing.T) {
 	if len(page.Items) != 3 {
 		t.Fatalf("read %d watches: %+v", len(page.Items), page.Items)
 	}
-	at := time.Date(2026, 10, 28, 8, 30, 0, 0, time.UTC)
+	dates := []time.Time{passed, next, last}
 	w := page.Items[0]
-	if w.Kind != agents.WatchRoutine || w.Starts != agents.StartsOnce || w.SetBy != agents.SetByPerson || w.Session != nil || w.Title != "Call the bank" ||
-		w.Why != "Remind me to call the bank." || !w.At.Equal(at) || w.AtZone != "Europe/Berlin" || w.NextAt == nil || !w.NextAt.Equal(at) ||
-		w.Schedule != nil || w.Model != "tier/thorough" || w.Notify != agents.NotifyJudged || w.CountsToward != "trg_1" {
-		t.Errorf("the routine that runs once reads %+v", w)
+	if w.Kind != agents.WatchRoutine || w.Starts != agents.StartsOnDates || w.SetBy != agents.SetByPerson || w.Session != nil || w.Title != "Flight check-in" ||
+		w.Why != "Check in for my flight." || !slices.EqualFunc(w.Dates, dates, time.Time.Equal) || w.DatesZone != "Europe/Berlin" ||
+		w.NextAt == nil || !w.NextAt.Equal(next) || w.Schedule != nil || w.Model != "tier/thorough" || w.Notify != agents.NotifyJudged || w.CountsToward != "trg_1" {
+		t.Errorf("the routine on dates reads %+v", w)
 	}
-	if p := page.Items[1]; p.Kind != agents.WatchRoutine || p.Starts != agents.StartsOnce || !p.Paused || p.NextAt != nil || !p.At.Equal(at) {
-		t.Errorf("the paused routine that runs once reads %+v", p)
+	if p := page.Items[1]; p.Kind != agents.WatchRoutine || p.Starts != agents.StartsOnDates || !p.Paused || p.NextAt != nil || !slices.EqualFunc(p.Dates, dates, time.Time.Equal) {
+		t.Errorf("the paused routine on dates reads %+v", p)
 	}
-	if wake := page.Items[2]; wake.Kind != agents.WatchWake || wake.Starts != "" || !wake.At.IsZero() || wake.Model != "" {
+	if wake := page.Items[2]; wake.Kind != agents.WatchWake || wake.Starts != "" || wake.Dates != nil || wake.Model != "" {
 		t.Errorf("the wake reads %+v", wake)
 	}
 }

@@ -39,12 +39,13 @@ func ExampleClient_CreateRoutine() {
 	fmt.Println(r.Name, r.NextRunAt)
 }
 
-// Making a routine that runs once, on Tuesday at 9:30 in the zone the
-// person picked it in, on the Thorough Effort level, telling the person
-// only if the run finds something that needs them. The API deletes it
-// once it ran; AtZone is kept so the routine read back says the time as
-// the person picked it.
-func ExampleClient_CreateRoutine_once() {
+// Making a routine on dates: it checks in for an outbound flight and the
+// return, at 9:30 the day before each, in the zone the person picked them
+// in, on the Thorough Effort level, telling the person only when a run
+// finds something that needs them. The API deletes it after the last
+// date; DatesZone is kept so the routine read back says the dates as the
+// person picked them.
+func ExampleClient_CreateRoutine_dates() {
 	ctx := context.Background()
 	zone := "Europe/Berlin"
 	berlin, err := time.LoadLocation(zone)
@@ -54,21 +55,26 @@ func ExampleClient_CreateRoutine_once() {
 	r, err := client().CreateRoutine(ctx, &agents.CreateRoutineParams{
 		Agent:       "latere-chat",
 		Title:       "Flight check-in",
-		Instruction: "Check whether check-in for my flight to Lisbon is open, and tell me if it is.",
-		Starts:      agents.StartsOnce,
-		At:          time.Date(2026, 11, 3, 9, 30, 0, 0, berlin),
-		AtZone:      zone,
-		Model:       "tier/thorough",
-		Notify:      agents.NotifyJudged,
+		Instruction: "Check whether check-in for my flight is open, and tell me if it is.",
+		Starts:      agents.StartsOnDates,
+		Dates: []time.Time{
+			time.Date(2026, 11, 3, 9, 30, 0, 0, berlin),
+			time.Date(2026, 11, 10, 9, 30, 0, 0, berlin),
+		},
+		DatesZone: zone,
+		Model:     "tier/thorough",
+		Notify:    agents.NotifyJudged,
 	})
-	if errors.Is(err, agents.ErrRoutineAtInvalid) {
-		fmt.Println("Pick a time that has not passed.")
+	if errors.Is(err, agents.ErrRoutineDatesInvalid) {
+		fmt.Println("Pick at least one time that has not passed.")
 		return
 	}
 	if err != nil {
 		log.Fatal(err)
 	}
-	fmt.Println(r.Name, r.At.In(berlin).Format("Mon 15:04"))
+	for _, d := range r.Dates {
+		fmt.Println(d.In(berlin).Format("Mon 2 Jan 15:04"))
+	}
 }
 
 // Listing Latere Chat's routines with when each runs next.

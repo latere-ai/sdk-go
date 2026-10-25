@@ -19,7 +19,7 @@ import (
 // A routine is an instruction a person hands an agent once, which the
 // agent then carries out with nobody waiting: on a schedule, each time
 // another app sends to the routine's private link or an email reaches its
-// address, or one time, at a time the person picked. A routine is a
+// address, or at each of a few dates the person picked. A routine is a
 // trigger of the person's
 // own, written in one shape, so every program that shows a person's
 // routines reads and changes the same triggers: Latere Chat's routines are
@@ -41,8 +41,8 @@ const (
 	// MaxRoutineTitle is the most characters a routine's name holds.
 	MaxRoutineTitle = routine.MaxTitle
 	// MaxRoutineInstruction is the most bytes the instruction of a routine
-	// on a schedule or one that runs once holds: the longest message a
-	// firing renders.
+	// on a schedule or on dates holds: the longest message a firing
+	// renders.
 	MaxRoutineInstruction = routine.MaxInstruction
 	// MaxEventRoutineInstruction is the most bytes the instruction of a
 	// routine that starts from a link or an email holds. What arrives is
@@ -50,6 +50,9 @@ const (
 	// the message refused past MaxRoutineInstruction, so an instruction of
 	// this length and everything that arrives fit together.
 	MaxEventRoutineInstruction = routine.MaxEventInstruction
+	// MaxRoutineDates is the most dates a routine on dates runs at, the
+	// most times the API takes in a trigger's spec.times.
+	MaxRoutineDates = routine.MaxDates
 )
 
 // RoutineStart is how a routine starts.
@@ -68,9 +71,10 @@ const (
 	// address, which the platform issues; the email follows the instruction
 	// in the run's message.
 	StartsFromEmail = routine.FromEmail
-	// StartsOnce runs the routine one time, at its At. The API deletes the
-	// routine once that run started a session, which keeps what it did.
-	StartsOnce = routine.Once
+	// StartsOnDates runs the routine once at each of its Dates, times a
+	// schedule cannot say. The API deletes the routine after the last; the
+	// sessions the runs started keep what they did.
+	StartsOnDates = routine.OnDates
 )
 
 // A RoutineSchedule is when a routine on a schedule runs: on the days
@@ -97,15 +101,16 @@ type Routine struct {
 	// Starts is how the routine starts.
 	Starts RoutineStart
 	// Schedule is when a routine on a schedule runs. It is nil for a
-	// routine that starts from a link or an email or runs once, and for one
+	// routine that starts from a link or an email or on dates, and for one
 	// whose schedule has a shape a routine does not write, set another way.
 	Schedule *RoutineSchedule
-	// At is when a routine that starts once runs, and AtZone the IANA time
-	// zone the person picked it in, UTC when they picked none, so a
-	// program can say the time back in that zone; the zero time and empty
-	// for the other ways a routine starts.
-	At     time.Time
-	AtZone string
+	// Dates are the times a routine on dates runs at, once each, in
+	// ascending order, those that have passed among them, and DatesZone
+	// the IANA time zone the person picked them in, UTC when they picked
+	// none, so a program can say the dates back in that zone. Nil and
+	// empty for the other ways a routine starts.
+	Dates     []time.Time
+	DatesZone string
 	// Model is the model each run's session starts on, such as
 	// "tier/thorough"; empty when runs start on the agent's own model.
 	Model string
@@ -115,9 +120,10 @@ type Routine struct {
 	Notify NotifyPolicy
 	// Paused says the routine runs nothing until it is resumed.
 	Paused bool
-	// NextRunAt is when a routine on a schedule runs next, or the At of
-	// one that runs once; nil while it is paused, and for one that starts
-	// from a link or an email.
+	// NextRunAt is when a routine on a schedule runs next, or the first of
+	// the Dates of one on dates that is after now when it is read; nil
+	// while it is paused, for one on dates with no date left, and for one
+	// that starts from a link or an email.
 	NextRunAt *time.Time
 	// LastRunAt is when it last ran, and LastSessionID the session that
 	// run started; nil and empty before its first run.
@@ -161,8 +167,8 @@ func RoutineName(key string) string { return routine.Name(key) }
 // none: a trigger without the RoutineLabel of agent, or whose name is not
 // a routine's. The instruction and the title are read as the person wrote
 // them, without the words a routine that starts from a link or an email
-// adds after its instruction. A trigger that fires once, at its spec's At,
-// reads as a routine that starts once.
+// adds after its instruction. A trigger that fires at its spec's Times
+// reads as a routine on dates.
 func RoutineOf(t *Trigger, agent string) (*Routine, bool) {
 	if t == nil {
 		return nil, false
@@ -173,7 +179,7 @@ func RoutineOf(t *Trigger, agent string) (*Routine, bool) {
 	}
 	r := &Routine{
 		Name: t.Metadata.Name, TriggerID: t.Status.ID, Agent: agent, Title: f.Title, Instruction: f.Instruction,
-		Starts: f.Starts, Schedule: f.Schedule, At: f.At, AtZone: f.AtZone, Notify: NotifyPolicy(f.Notify), Paused: f.Paused,
+		Starts: f.Starts, Schedule: f.Schedule, Dates: f.Dates, DatesZone: f.DatesZone, Notify: NotifyPolicy(f.Notify), Paused: f.Paused,
 		LastRunAt: t.Status.LastFiredAt, LastSessionID: t.Status.LastSessionID, CreatedAt: t.Status.CreatedAt, Origin: t.Status.Origin,
 		PerWeekMicroUSD: perWeekOf(t), Spend: t.Status.Spend, SkippedBudget: skippedBudgetOf(t), raw: t.raw,
 	}
@@ -187,11 +193,21 @@ func RoutineOf(t *Trigger, agent string) (*Routine, bool) {
 	case r.Paused:
 	case r.Starts == StartsOnSchedule:
 		r.NextRunAt = t.Status.NextFireAt
-	case r.Starts == StartsOnce:
-		at := r.At
-		r.NextRunAt = &at
+	case r.Starts == StartsOnDates:
+		r.NextRunAt = nextDate(r.Dates, time.Now())
 	}
 	return r, true
+}
+
+// nextDate is the first of dates, in ascending order, after now; nil when
+// every one has passed.
+func nextDate(dates []time.Time, now time.Time) *time.Time {
+	for _, d := range dates {
+		if d.After(now) {
+			return &d
+		}
+	}
+	return nil
 }
 
 // perWeekOf is t's weekly allowance, zero when it has none.
@@ -213,7 +229,7 @@ func skippedBudgetOf(t *Trigger) int64 {
 // shapeOf is what package routine reads of t.
 func shapeOf(t *Trigger) routine.Trigger {
 	shape := routine.Trigger{Name: t.Metadata.Name, DisplayName: t.Metadata.DisplayName, Labels: t.Metadata.Labels,
-		Schedule: t.Spec.Schedule, TimeZone: t.Spec.TimeZone, At: t.Spec.At, Message: t.Spec.Session.Message, Title: t.Spec.Session.Title,
+		Schedule: t.Spec.Schedule, TimeZone: t.Spec.TimeZone, Times: t.Spec.Times, Message: t.Spec.Session.Message, Title: t.Spec.Session.Title,
 		Notify: string(t.Spec.Session.Notify), Suspend: t.Spec.Suspend, PerWeekMicroUSD: perWeekOf(t)}
 	if t.Spec.On != nil {
 		shape.Product = t.Spec.On.Product
@@ -253,12 +269,13 @@ var (
 	// or a zone that is not an IANA name's shape.
 	ErrRoutineScheduleInvalid = routine.ErrScheduleInvalid
 	// ErrRoutineStartsInvalid matches a RoutineStart that is none of
-	// StartsOnSchedule, StartsFromLink, StartsFromEmail and StartsOnce.
+	// StartsOnSchedule, StartsFromLink, StartsFromEmail and StartsOnDates.
 	ErrRoutineStartsInvalid = routine.ErrStartsInvalid
-	// ErrRoutineAtInvalid matches a routine that runs once without a time,
-	// with a time that is not after now, which the API refuses too, or
-	// with a zone that is not an IANA name's shape.
-	ErrRoutineAtInvalid = routine.ErrAtInvalid
+	// ErrRoutineDatesInvalid matches a routine on dates without one, with
+	// more than MaxRoutineDates, with the same time twice, with none after
+	// now, which the API refuses too, or with a zone that is not an IANA
+	// name's shape.
+	ErrRoutineDatesInvalid = routine.ErrDatesInvalid
 	// ErrRoutineNotifyInvalid matches a NotifyPolicy that is neither
 	// NotifyAlways nor NotifyJudged.
 	ErrRoutineNotifyInvalid = routine.ErrNotifyInvalid
@@ -424,13 +441,15 @@ type CreateRoutineParams struct {
 	Starts RoutineStart
 	// Schedule is when a routine on a schedule runs. Required for one.
 	Schedule *RoutineSchedule
-	// At is when a routine that starts once runs, which must be after now.
-	// Required for one.
-	At time.Time
-	// AtZone is the IANA time zone the person picked At in, such as
-	// "Europe/Berlin"; UTC when empty. The run comes at At whatever the
-	// zone: it is kept so the routine read back says the time in it.
-	AtZone string
+	// Dates are the times a routine on dates runs at, once each: 1 to
+	// MaxRoutineDates distinct times, at least one of them after now.
+	// Required for one. A single date is a routine that runs once.
+	Dates []time.Time
+	// DatesZone is the IANA time zone the person picked the dates in, such
+	// as "Europe/Berlin"; UTC when empty. Each run comes at its date
+	// whatever the zone: it is kept so the routine read back says the
+	// dates in it.
+	DatesZone string
 	// Model is the model each run's session starts on, such as
 	// "tier/thorough" for the Thorough Effort level; empty starts runs on
 	// the agent's own model. It is sent as it is, for the API to check.
@@ -458,7 +477,7 @@ type CreateRoutineParams struct {
 // a routine they do not make returns an error matching one of
 // ErrRoutineTitleMissing, ErrRoutineTitleInvalid,
 // ErrRoutineInstructionMissing, ErrRoutineInstructionTooLong,
-// ErrRoutineScheduleInvalid, ErrRoutineAtInvalid, ErrRoutineStartsInvalid,
+// ErrRoutineScheduleInvalid, ErrRoutineDatesInvalid, ErrRoutineStartsInvalid,
 // ErrRoutineNotifyInvalid or ErrAllowanceInvalid. The API may still refuse
 // the manifest, such as a zone or a model it does not know, or one without
 // an allowance where the installation requires one.
@@ -470,7 +489,7 @@ func (c *Client) CreateRoutine(ctx context.Context, params *CreateRoutineParams)
 		return nil, errors.New("agents: CreateRoutineParams.Agent is required")
 	}
 	fields := routine.Fields{Title: params.Title, Instruction: params.Instruction, Starts: params.Starts, Schedule: params.Schedule,
-		At: params.At, AtZone: params.AtZone, Notify: string(params.Notify), Paused: params.Paused}
+		Dates: params.Dates, DatesZone: params.DatesZone, Notify: string(params.Notify), Paused: params.Paused}
 	if params.PerWeekMicroUSD != 0 {
 		perWeek := params.PerWeekMicroUSD
 		fields.PerWeekMicroUSD = &perWeek
@@ -499,18 +518,21 @@ type ChangeRoutineParams struct {
 	// the routine starts once the change is made.
 	Instruction *string
 	// Starts changes how it starts. A routine that comes to start on a
-	// schedule needs Schedule, and one that comes to run once needs At;
-	// one that comes to start another way leaves its schedule or its time.
+	// schedule needs Schedule, and one that comes to start on dates needs
+	// Dates; one that comes to start another way leaves its schedule or
+	// its dates.
 	Starts *RoutineStart
 	// Schedule is its new schedule, for a routine on a schedule. Nil keeps
 	// the schedule it has, also one of a shape a routine does not write.
 	Schedule *RoutineSchedule
-	// At is its new time, for a routine that runs once, which must be
-	// after now, and AtZone the IANA time zone the person picked it in,
-	// UTC when empty. Nil keeps the time and the zone it has; AtZone is
-	// read with At alone.
-	At     *time.Time
-	AtZone string
+	// Dates are its new dates, for a routine on dates, held to what
+	// CreateRoutineParams.Dates takes; a date that has passed may stay
+	// beside one to come, so a change can write back the Dates it read.
+	// DatesZone is the IANA time zone the person picked them in, UTC when
+	// empty. Nil keeps the dates and the zone it has; DatesZone is read
+	// with Dates alone.
+	Dates     []time.Time
+	DatesZone string
 	// Model is the model its runs' sessions start on, such as
 	// "tier/thorough"; "" returns them to the agent's own model, and nil
 	// keeps the model it has. A reasoning level set on the stored trigger
@@ -559,8 +581,8 @@ func (c *Client) ChangeRoutine(ctx context.Context, agent, name string, params *
 	if f.Starts == StartsOnSchedule && r.Starts != StartsOnSchedule && params.Schedule == nil {
 		return nil, fmt.Errorf("%w: a routine that comes to start on a schedule names one", ErrRoutineScheduleInvalid)
 	}
-	if f.Starts == StartsOnce && r.Starts != StartsOnce && params.At == nil {
-		return nil, fmt.Errorf("%w: a routine that comes to run once names its time", ErrRoutineAtInvalid)
+	if f.Starts == StartsOnDates && r.Starts != StartsOnDates && params.Dates == nil {
+		return nil, fmt.Errorf("%w: a routine that comes to start on dates names them", ErrRoutineDatesInvalid)
 	}
 	if params.Title != nil {
 		if f.Title, err = routine.CheckTitle(*params.Title); err != nil {
@@ -586,14 +608,15 @@ func (c *Client) ChangeRoutine(ctx context.Context, agent, name string, params *
 		}
 		f.Schedule = &s
 	}
-	// The time is left zero unless the change names one, so the stored
-	// one is kept with its zone. A kept time is not checked again: a run
-	// the allowance skipped is tried again past its time.
-	if params.At != nil && f.Starts == StartsOnce {
-		if err := routine.CheckAt(*params.At, params.AtZone, time.Now()); err != nil {
+	// The dates are left nil unless the change names them, so the stored
+	// ones are kept with their zone, and are not checked again: a change
+	// of the name of a routine whose last date has passed while its run
+	// waits is no change of its dates.
+	if params.Dates != nil && f.Starts == StartsOnDates {
+		if f.Dates, err = routine.CheckDates(params.Dates, params.DatesZone, time.Now()); err != nil {
 			return nil, err
 		}
-		f.At, f.AtZone = *params.At, params.AtZone
+		f.DatesZone = params.DatesZone
 	}
 	if params.Paused != nil {
 		f.Paused = *params.Paused
@@ -644,12 +667,10 @@ type RunRoutineParams struct {
 }
 
 // RunRoutine runs the caller's routine of agent named name now, outside its
-// schedule, and returns the firing, whose SessionID is the session the
-// run started. A routine that runs once runs once: a run now that starts
-// a session is that run, and the API deletes the routine after it. The
-// agent must exist in the caller's context, at the version the run should
-// start: a program signed in as a person applies a managed agent with
-// account.ApplyManagedAgent first.
+// schedule or its dates, and returns the firing, whose SessionID is the
+// session the run started. The agent must exist in the caller's context,
+// at the version the run should start: a program signed in as a person
+// applies a managed agent with account.ApplyManagedAgent first.
 //
 // A paused routine returns an error matching ErrRoutinePaused, and one
 // that starts from a link or an email one matching

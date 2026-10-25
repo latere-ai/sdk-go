@@ -306,9 +306,24 @@ func TestWriteAllowance(t *testing.T) {
 	}
 }
 
-// soon is a time a routine that runs once may run at: a whole second two
-// days from now, as the API writes a time back.
-func soon() time.Time { return time.Now().Add(48 * time.Hour).Truncate(time.Second) }
+// days is whole seconds n days from now, as the API writes a time back.
+func days(n ...int) []time.Time {
+	now := time.Now().Truncate(time.Second)
+	out := make([]time.Time, len(n))
+	for i, d := range n {
+		out[i] = now.Add(time.Duration(d) * 24 * time.Hour)
+	}
+	return out
+}
+
+// utc is the dates as a trigger's spec.times holds them once decoded.
+func utc(dates []time.Time) []any {
+	out := make([]any, len(dates))
+	for i, d := range dates {
+		out[i] = d.UTC().Format(time.RFC3339Nano)
+	}
+	return out
+}
 
 // readBack reads a manifest as package agents reads the trigger it makes.
 func readBack(t *testing.T, b json.RawMessage) routine.Trigger {
@@ -320,7 +335,7 @@ func readBack(t *testing.T, b json.RawMessage) routine.Trigger {
 		}
 		Spec struct {
 			Schedule, TimeZone string
-			At                 time.Time
+			Times              []time.Time
 			On                 *struct{ Product string }
 			Session            struct {
 				Message, Title, Notify string
@@ -333,7 +348,7 @@ func readBack(t *testing.T, b json.RawMessage) routine.Trigger {
 		t.Fatal(err)
 	}
 	tr := routine.Trigger{Name: doc.Metadata.Name, DisplayName: doc.Metadata.DisplayName, Labels: doc.Metadata.Labels, Schedule: doc.Spec.Schedule,
-		TimeZone: doc.Spec.TimeZone, At: doc.Spec.At, Message: doc.Spec.Session.Message, Title: doc.Spec.Session.Title,
+		TimeZone: doc.Spec.TimeZone, Times: doc.Spec.Times, Message: doc.Spec.Session.Message, Title: doc.Spec.Session.Title,
 		Notify: doc.Spec.Session.Notify, Suspend: doc.Spec.Suspend}
 	if doc.Spec.On != nil {
 		tr.Product = doc.Spec.On.Product
@@ -344,138 +359,177 @@ func readBack(t *testing.T, b json.RawMessage) routine.Trigger {
 	return tr
 }
 
-// TestARoutineThatRunsOnce: a routine that runs once is written with its
-// time in UTC as spec.at and the zone the person picked as spec.timeZone,
-// with no schedule, and reads back as it was written; with no zone it
-// writes none and reads back in UTC. Its instruction is held to the bound
-// of a routine on a schedule, since nothing arrives after it.
-func TestARoutineThatRunsOnce(t *testing.T) {
-	at := soon().In(time.FixedZone("CET", 3600))
-	f, err := routine.New(routine.Fields{Title: "Call the bank", Instruction: "Remind me to call the bank.", Starts: routine.Once, At: at,
-		AtZone: "Europe/Berlin", Schedule: &monday})
+// TestARoutineOnDates: a routine on dates is written with its dates in
+// UTC, in ascending order, as spec.times and the zone the person picked
+// as spec.timeZone, with no schedule and no spec.at, even for one date,
+// and reads back as it was written; with no zone it writes none and
+// reads back in UTC. Its instruction is held to the bound of a routine on
+// a schedule, since nothing arrives after it.
+func TestARoutineOnDates(t *testing.T) {
+	dates := days(9, 2, 30)
+	cet := time.FixedZone("CET", 3600)
+	for i := range dates {
+		dates[i] = dates[i].In(cet)
+	}
+	f, err := routine.New(routine.Fields{Title: "Rent", Instruction: "Remind me to pay the rent.", Starts: routine.OnDates, Dates: dates,
+		DatesZone: "Europe/Berlin", Schedule: &monday})
 	if err != nil {
 		t.Fatal(err)
 	}
-	if f.Schedule != nil {
-		t.Errorf("a routine that runs once kept a schedule: %+v", f.Schedule)
+	sorted := []time.Time{dates[1], dates[0], dates[2]}
+	if f.Schedule != nil || !reflect.DeepEqual(f.Dates, sorted) {
+		t.Errorf("New gave %+v", f)
 	}
-	name := routine.Name("key-once")
+	name := routine.Name("key-dates")
 	b, err := routine.Manifest("latere-chat", name, nil, f)
 	if err != nil {
 		t.Fatal(err)
 	}
 	spec := decode(t, b)["spec"].(map[string]any)
-	if spec["at"] != at.UTC().Format(time.RFC3339) || spec["timeZone"] != "Europe/Berlin" || spec["schedule"] != nil || spec["on"] != nil {
+	if !reflect.DeepEqual(spec["times"], utc(sorted)) || spec["timeZone"] != "Europe/Berlin" || spec["schedule"] != nil || spec["on"] != nil || spec["at"] != nil {
 		t.Fatalf("the spec is %v", spec)
 	}
 	got, ok := routine.Read(readBack(t, b), "latere-chat")
-	if !ok || got.Starts != routine.Once || !got.At.Equal(at) || got.AtZone != "Europe/Berlin" || got.Schedule != nil {
+	if !ok || got.Starts != routine.OnDates || got.DatesZone != "Europe/Berlin" || got.Schedule != nil || len(got.Dates) != 3 {
 		t.Fatalf("it reads back as %+v, %v", got, ok)
 	}
-	got.At = at
+	for i := range sorted {
+		if !got.Dates[i].Equal(sorted[i]) {
+			t.Errorf("date %d reads back as %s, want %s", i, got.Dates[i], sorted[i])
+		}
+	}
+	got.Dates = f.Dates
 	if !reflect.DeepEqual(got, f) {
 		t.Errorf("it reads back as %+v, want %+v", got, f)
 	}
+	// Read orders the list however the trigger holds it.
+	tr := readBack(t, b)
+	tr.Times = []time.Time{sorted[2], sorted[0], sorted[1]}
+	if got, _ := routine.Read(tr, "latere-chat"); !got.Dates[0].Equal(sorted[0]) || !got.Dates[2].Equal(sorted[2]) {
+		t.Errorf("an unordered list reads as %v", got.Dates)
+	}
 
-	f.AtZone = ""
-	b, err = routine.Manifest("latere-chat", name, nil, f)
+	one, err := routine.New(routine.Fields{Title: "Bank", Instruction: "Remind me to call the bank.", Starts: routine.OnDates, Dates: days(1)})
 	if err != nil {
 		t.Fatal(err)
 	}
-	if spec := decode(t, b)["spec"].(map[string]any); spec["timeZone"] != nil {
-		t.Errorf("no zone wrote %v", spec["timeZone"])
+	b, err = routine.Manifest("latere-chat", name, nil, one)
+	if err != nil {
+		t.Fatal(err)
 	}
-	if got, _ := routine.Read(readBack(t, b), "latere-chat"); got.AtZone != "UTC" {
-		t.Errorf("no zone reads back as %q", got.AtZone)
+	if spec := decode(t, b)["spec"].(map[string]any); !reflect.DeepEqual(spec["times"], utc(one.Dates)) || spec["at"] != nil || spec["timeZone"] != nil {
+		t.Errorf("one date with no zone wrote %v", spec)
+	}
+	if got, _ := routine.Read(readBack(t, b), "latere-chat"); got.DatesZone != "UTC" || got.Starts != routine.OnDates {
+		t.Errorf("no zone reads back as %+v", got)
 	}
 
 	long := strings.Repeat("x", routine.MaxEventInstruction+1)
-	if _, err := routine.New(routine.Fields{Title: "t", Instruction: long, Starts: routine.Once, At: at}); err != nil {
+	if _, err := routine.New(routine.Fields{Title: "t", Instruction: long, Starts: routine.OnDates, Dates: days(1)}); err != nil {
 		t.Errorf("an instruction past the bound of a link: %v", err)
 	}
-	if err := routine.CheckStarts(routine.Once); err != nil {
-		t.Errorf("Once: %v", err)
+	if err := routine.CheckStarts(routine.OnDates); err != nil {
+		t.Errorf("OnDates: %v", err)
 	}
-	onSchedule, err := routine.New(routine.Fields{Title: "t", Instruction: "x", Schedule: &monday, At: at, AtZone: "Europe/Berlin"})
-	if err != nil || !onSchedule.At.IsZero() || onSchedule.AtZone != "" {
-		t.Errorf("a routine on a schedule kept a time: %+v, %v", onSchedule, err)
+	onSchedule, err := routine.New(routine.Fields{Title: "t", Instruction: "x", Schedule: &monday, Dates: days(1), DatesZone: "Europe/Berlin"})
+	if err != nil || onSchedule.Dates != nil || onSchedule.DatesZone != "" {
+		t.Errorf("a routine on a schedule kept dates: %+v, %v", onSchedule, err)
+	}
+	// A trigger with no times, such as one with the one time of a wake set
+	// another way, is no routine on dates: it reads as a schedule set
+	// elsewhere.
+	if got, _ := routine.Read(routine.Trigger{Name: name, Labels: map[string]string{routine.Label: "latere-chat"}, Message: "m"}, "latere-chat"); got.Starts != routine.OnSchedule {
+		t.Errorf("a trigger with no times reads as %+v", got)
 	}
 }
 
-// TestATimeIsCheckedBeforeItIsWritten: a routine that runs once without a
-// time, with one that has passed or is now, or with a zone of no IANA
-// name's shape, is refused with ErrAtInvalid.
-func TestATimeIsCheckedBeforeItIsWritten(t *testing.T) {
+// TestTheDatesAreCheckedBeforeTheyAreWritten: a routine on dates without
+// one, with more than MaxDates, with the same time twice, with none after
+// now, or with a zone of no IANA name's shape is refused with
+// ErrDatesInvalid; a list with a date that has passed beside one to come
+// is taken, so a change can write back what it read.
+func TestTheDatesAreCheckedBeforeTheyAreWritten(t *testing.T) {
 	now := time.Now()
+	many := make([]time.Time, routine.MaxDates+1)
+	for i := range many {
+		many[i] = now.Add(time.Duration(i+1) * time.Hour)
+	}
 	for _, tc := range []struct {
-		name string
-		at   time.Time
-		zone string
+		name  string
+		dates []time.Time
+		zone  string
 	}{
-		{"no time", time.Time{}, "UTC"},
-		{"a time that has passed", now.Add(-time.Minute), "UTC"},
-		{"a zone of another shape", now.Add(time.Hour), "Berlin time"},
+		{"no dates", nil, "UTC"},
+		{"an empty list", []time.Time{}, "UTC"},
+		{"more than the most", many, "UTC"},
+		{"a date twice", []time.Time{now.Add(time.Hour), now.Add(2 * time.Hour), now.Add(time.Hour).In(time.FixedZone("CET", 3600))}, "UTC"},
+		{"every date passed", []time.Time{now.Add(-time.Hour), now.Add(-time.Minute)}, "UTC"},
+		{"a zone of another shape", []time.Time{now.Add(time.Hour)}, "Berlin time"},
 	} {
-		if _, err := routine.New(routine.Fields{Title: "t", Instruction: "x", Starts: routine.Once, At: tc.at, AtZone: tc.zone}); !errors.Is(err, routine.ErrAtInvalid) {
+		if _, err := routine.New(routine.Fields{Title: "t", Instruction: "x", Starts: routine.OnDates, Dates: tc.dates, DatesZone: tc.zone}); !errors.Is(err, routine.ErrDatesInvalid) {
 			t.Errorf("%s: %v", tc.name, err)
 		}
 	}
-	if err := routine.CheckAt(now, "", now); !errors.Is(err, routine.ErrAtInvalid) {
+	if _, err := routine.CheckDates([]time.Time{now}, "", now); !errors.Is(err, routine.ErrDatesInvalid) {
 		t.Errorf("now: %v", err)
 	}
-	if err := routine.CheckAt(now.Add(time.Second), "", now); err != nil {
-		t.Errorf("a second from now, in UTC: %v", err)
+	mixed, err := routine.CheckDates([]time.Time{now.Add(time.Hour), now.Add(-time.Hour)}, "", now)
+	if err != nil || len(mixed) != 2 || !mixed[0].Before(mixed[1]) {
+		t.Errorf("a passed date beside one to come: %v, %v", mixed, err)
+	}
+	if _, err := routine.CheckDates(many[:routine.MaxDates], "Europe/Berlin", now); err != nil {
+		t.Errorf("the most dates: %v", err)
 	}
 }
 
-// TestARoutineMovesBetweenSchedulesTimesAndLinks: a routine on a schedule
-// that comes to run once loses its schedule and its events; one that runs
-// once and comes to start on a schedule or from a link loses its time; a
-// change of one that runs once that names no time keeps the stored time
-// and zone.
-func TestARoutineMovesBetweenSchedulesTimesAndLinks(t *testing.T) {
+// TestARoutineMovesBetweenSchedulesDatesAndLinks: a routine on a schedule
+// that comes to start on dates loses its schedule, its events and a time
+// set another way; one on dates that comes to start on a schedule or from
+// a link loses its dates; a change of one on dates that names no dates
+// keeps the stored dates and zone.
+func TestARoutineMovesBetweenSchedulesDatesAndLinks(t *testing.T) {
 	name := routine.Name("key-moves")
-	at := soon()
+	dates := days(2, 4)
 	scheduled := json.RawMessage(`{"metadata":{"name":"` + name + `"},"spec":{"agent":"latere-chat","schedule":"0 9 * * 1","timeZone":"Europe/Berlin",
-"on":{"product":"github","verbs":["push"]},"session":{"message":"m","title":"t","key":"kept"}}}`)
-	b, err := routine.Manifest("latere-chat", name, scheduled, routine.Fields{Title: "t", Instruction: "m", Starts: routine.Once, At: at, AtZone: "Asia/Shanghai"})
+"on":{"product":"github","verbs":["push"]},"at":"2026-10-24T07:00:00Z","session":{"message":"m","title":"t","key":"kept"}}}`)
+	b, err := routine.Manifest("latere-chat", name, scheduled, routine.Fields{Title: "t", Instruction: "m", Starts: routine.OnDates, Dates: dates, DatesZone: "Asia/Shanghai"})
 	if err != nil {
 		t.Fatal(err)
 	}
 	spec := decode(t, b)["spec"].(map[string]any)
-	if spec["schedule"] != nil || spec["on"] != nil || spec["at"] != at.UTC().Format(time.RFC3339) || spec["timeZone"] != "Asia/Shanghai" ||
+	if spec["schedule"] != nil || spec["on"] != nil || spec["at"] != nil || !reflect.DeepEqual(spec["times"], utc(dates)) || spec["timeZone"] != "Asia/Shanghai" ||
 		spec["session"].(map[string]any)["key"] != "kept" {
-		t.Fatalf("to once wrote %v", spec)
+		t.Fatalf("to dates wrote %v", spec)
 	}
 
-	once := b
-	kept, err := routine.Manifest("latere-chat", name, once, routine.Fields{Title: "Renamed", Instruction: "m", Starts: routine.Once})
+	onDates := b
+	kept, err := routine.Manifest("latere-chat", name, onDates, routine.Fields{Title: "Renamed", Instruction: "m", Starts: routine.OnDates})
 	if err != nil {
 		t.Fatal(err)
 	}
-	if spec := decode(t, kept)["spec"].(map[string]any); spec["at"] != at.UTC().Format(time.RFC3339) || spec["timeZone"] != "Asia/Shanghai" {
-		t.Errorf("a change that names no time wrote %v", spec)
+	if spec := decode(t, kept)["spec"].(map[string]any); !reflect.DeepEqual(spec["times"], utc(dates)) || spec["timeZone"] != "Asia/Shanghai" {
+		t.Errorf("a change that names no dates wrote %v", spec)
 	}
-	// A shape that reads no time, such as one written before routines ran
-	// once, reads the trigger as on a schedule it does not know, and keeps
-	// the time.
-	if b, err := routine.Manifest("latere-chat", name, once, routine.Fields{Title: "t", Instruction: "m", Starts: routine.OnSchedule}); err != nil ||
-		decode(t, b)["spec"].(map[string]any)["at"] == nil {
+	// A shape that reads no dates, such as one written before routines ran
+	// on dates, reads the trigger as on a schedule it does not know, and
+	// keeps the dates.
+	if b, err := routine.Manifest("latere-chat", name, onDates, routine.Fields{Title: "t", Instruction: "m", Starts: routine.OnSchedule}); err != nil ||
+		decode(t, b)["spec"].(map[string]any)["times"] == nil {
 		t.Errorf("a change on a schedule it does not know wrote %s, %v", b, err)
 	}
 
-	toSchedule, err := routine.Manifest("latere-chat", name, once, routine.Fields{Title: "t", Instruction: "m", Starts: routine.OnSchedule, Schedule: &monday})
+	toSchedule, err := routine.Manifest("latere-chat", name, onDates, routine.Fields{Title: "t", Instruction: "m", Starts: routine.OnSchedule, Schedule: &monday})
 	if err != nil {
 		t.Fatal(err)
 	}
-	if spec := decode(t, toSchedule)["spec"].(map[string]any); spec["at"] != nil || spec["schedule"] != "0 9 * * 1" || spec["timeZone"] != "Europe/Berlin" {
+	if spec := decode(t, toSchedule)["spec"].(map[string]any); spec["times"] != nil || spec["schedule"] != "0 9 * * 1" || spec["timeZone"] != "Europe/Berlin" {
 		t.Errorf("to a schedule wrote %v", spec)
 	}
-	toLink, err := routine.Manifest("latere-chat", name, once, routine.Fields{Title: "t", Instruction: "m", Starts: routine.FromLink})
+	toLink, err := routine.Manifest("latere-chat", name, onDates, routine.Fields{Title: "t", Instruction: "m", Starts: routine.FromLink})
 	if err != nil {
 		t.Fatal(err)
 	}
-	if spec := decode(t, toLink)["spec"].(map[string]any); spec["at"] != nil || spec["timeZone"] != nil || spec["on"] == nil {
+	if spec := decode(t, toLink)["spec"].(map[string]any); spec["times"] != nil || spec["timeZone"] != nil || spec["on"] == nil {
 		t.Errorf("to a link wrote %v", spec)
 	}
 }

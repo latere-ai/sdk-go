@@ -82,9 +82,9 @@
 //
 // A routine is an instruction a person hands an agent once, which runs
 // with nobody waiting: on a schedule, each time another app sends to its
-// private link or an email reaches its address, or one time, at a time the
-// person picked. It is a
-// trigger written in one shape, labeled RoutineLabel with its agent's name
+// private link or an email reaches its address, or at each of a few dates
+// the person picked. It is a trigger written in one shape, labeled
+// RoutineLabel with its agent's name
 // and named RoutinePrefix and 20 hexadecimal digits, so every program that
 // shows a person's routines reads and changes the same ones: Latere Chat's
 // routines are those of its managed agent, "latere-chat", which Latere
@@ -106,9 +106,10 @@
 // makes a managed agent exist with account.ApplyManagedAgent. A routine's
 // runs are the sessions whose TriggerID is its TriggerID.
 //
-// A routine that starts StartsOnce runs at its At, and the API deletes it
-// once that run started; its AtZone keeps the zone the person picked the
-// time in. A routine's Model is the model each run's session starts on,
+// A routine that starts StartsOnDates runs once at each of its Dates, up
+// to MaxRoutineDates, and the API deletes it after the last; its DatesZone
+// keeps the zone the person picked them in. A routine's Model is the model
+// each run's session starts on,
 // and its Notify whether every run brings its result to the person or the
 // agent judges which do.
 //

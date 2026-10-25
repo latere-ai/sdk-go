@@ -165,11 +165,10 @@ _, err = ag.ApplyTrigger(ctx, &agents.Trigger{
 
 A routine is an instruction a person hands an agent once, which runs with
 nobody waiting: on a schedule, each time another app sends to its private
-link or an email reaches its address, or one time, at a time the person
-picked. It is a trigger
-written in one shape, so every program that shows a person's routines reads
-and changes the same ones; Latere Chat's are those of its managed agent,
-`latere-chat`.
+link or an email reaches its address, or at each of a few dates the person
+picked. It is a trigger written in one shape, so every program that shows a
+person's routines reads and changes the same ones; Latere Chat's are those
+of its managed agent, `latere-chat`.
 
 ```go
 r, err := ag.CreateRoutine(ctx, &agents.CreateRoutineParams{
@@ -188,10 +187,14 @@ paused := true
 _, err = ag.ChangeRoutine(ctx, "latere-chat", r.Name, &agents.ChangeRoutineParams{Paused: &paused})
 ```
 
-A routine with `Starts: agents.StartsOnce` runs at its `At`, which must not
-have passed, and the API deletes it once that run started. `AtZone` is the
-zone the person picked the time in, kept so the routine read back says the
-time as they picked it. `Model` is the model each run's session starts on,
+A routine with `Starts: agents.StartsOnDates` runs once at each of its
+`Dates`, times a schedule cannot say, one of them or up to
+`agents.MaxRoutineDates`, and the API deletes it after the last. At least
+one date must be to come; one that has passed may stay in the list and
+never runs, so a change can write back the dates it read. `DatesZone` is
+the zone the person picked them in, kept so the routine read back says the
+dates as they picked them, and `r.NextRunAt` is the first date to come.
+`Model` is the model each run's session starts on,
 such as `"tier/thorough"`, in place of the agent's own, and
 `Notify: agents.NotifyJudged` brings a run's result to the person only
 when the agent judges it needs them. A change that names none of these
@@ -201,7 +204,7 @@ keeps what the routine has.
 one and `RunRoutine` runs one now. A change reads the trigger and writes
 back every field it does not name as the API answered it, those this SDK
 does not model included. The name, the instruction, the schedule and the
-time are checked before anything is sent, each refusal an error to match with
+dates are checked before anything is sent, each refusal an error to match with
 `errors.Is`, such as `agents.ErrRoutineInstructionTooLong`; a name that
 names no routine matches `latere.ErrNotFound`. The agent must exist in the
 caller's context first: a program signed in as a person makes a managed

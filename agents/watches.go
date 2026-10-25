@@ -29,8 +29,8 @@ type WatchKind string
 // The kinds of Watch.
 const (
 	// WatchRoutine is a routine: it runs on a schedule, each time
-	// something arrives at its link or its address, or once, at a time the
-	// person picked. The routine methods read and change it by the watch's
+	// something arrives at its link or its address, or at each of the
+	// dates the person picked. The routine methods read and change it by the watch's
 	// Name.
 	WatchRoutine WatchKind = "routine"
 	// WatchEvent is a trigger that fires on the events its On selects,
@@ -94,17 +94,19 @@ type Watch struct {
 	// Schedule is when a routine on a schedule runs; nil for the other
 	// kinds, and for a schedule of a shape a routine does not write.
 	Schedule *RoutineSchedule
-	// At is when a routine that runs once runs, and AtZone the IANA time
-	// zone the person picked it in, paused or not; the zero time and empty
-	// for the other kinds.
-	At     time.Time
-	AtZone string
+	// Dates are the times a routine on dates runs at, in ascending order,
+	// those that have passed among them, paused or not, and DatesZone the
+	// IANA time zone the person picked them in; nil and empty for the
+	// other kinds.
+	Dates     []time.Time
+	DatesZone string
 	// On selects the events an event watch fires on; nil for the other
 	// kinds.
 	On *EventFilter
 	// NextAt is when it looks next: a routine's next run, the time of a
-	// routine that runs once, or the time of a wake. Nil while it is
-	// paused, and for one that looks when an event arrives.
+	// routine on dates that is after now, or the time of a wake. Nil
+	// while it is paused, for a routine on dates with no date left, and
+	// for one that looks when an event arrives.
 	NextAt *time.Time
 	// Notify is whether every run brings its result to the person or the
 	// agent judges; a wake's runs are always judged.
@@ -209,11 +211,11 @@ func watchOf(t *Trigger, agent string) (*Watch, bool) {
 		w.SetBy = SetByOffer
 		w.Session = &WatchSession{ID: o.SessionID}
 	}
-	// A routine that runs once fires at its spec's At as a wake does, but
-	// with no wake's origin, so it reads as the routine it is.
+	// A routine on dates fires at set times as a wake does, but with no
+	// wake's origin, so it reads as the routine it is.
 	if r, ok := RoutineOf(t, agent); ok {
 		w.Kind, w.Title, w.Why, w.Starts, w.Schedule, w.NextAt = WatchRoutine, r.Title, r.Instruction, r.Starts, r.Schedule, r.NextRunAt
-		w.At, w.AtZone = r.At, r.AtZone
+		w.Dates, w.DatesZone = r.Dates, r.DatesZone
 		return w, true
 	}
 	e, ok := routine.ReadEvent(shapeOf(t), agent)

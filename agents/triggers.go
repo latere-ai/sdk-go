@@ -82,7 +82,7 @@ type TriggerMetadata struct {
 }
 
 // TriggerSpec is what a trigger fires on and the session each firing
-// starts or continues. A trigger sets one of Schedule, On and At.
+// starts or continues. A trigger sets one of Schedule, On, At and Times.
 type TriggerSpec struct {
 	// Agent is the agent the sessions run, by name or id. The API answers
 	// the agent's id, and a trigger always runs the agent's latest version.
@@ -99,6 +99,12 @@ type TriggerSpec struct {
 	// continued, was skipped or was refused; the session it reached keeps
 	// what it did. A wake an agent set is such a trigger.
 	At time.Time `json:"at,omitzero"`
+	// Times fires the trigger once at each of these times, 1 to
+	// MaxRoutineDates distinct ones. A time that has passed may stay in
+	// the list and never fires, and the API refuses a list with no time
+	// to come. The API deletes the trigger after the last; TimeZone, read
+	// for no firing, may name the zone the times were picked in.
+	Times []time.Time `json:"times,omitempty"`
 	// Session is the session a firing starts, or the message it sends to
 	// the open session its key names.
 	Session TriggerSession `json:"session"`

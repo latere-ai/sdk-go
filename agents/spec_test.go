@@ -150,6 +150,7 @@ var leftOut = map[string]string{
 // once the document describes one, so the model is then held to it.
 var aheadOfTheDocument = map[string]ahead{
 	"TriggerSession.model": {"TriggerSession", "the model each session a firing starts runs on, as a session's update names it"},
+	"TriggerSpec.times":    {"TriggerSpec", "the times a trigger fires at, once each, before the API deletes it"},
 }
 
 // ahead is a field of aheadOfTheDocument: the schema it will join, a

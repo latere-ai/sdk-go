@@ -360,14 +360,21 @@ language.
 A routine names its agent rather than assuming Latere Chat's, so a
 program can keep routines of an agent of its own in the same shape.
 
-A routine that runs once is a trigger with `spec.at`, the API's one-time
-firing, which the API deletes once it ran. The time is written in
-UTC, and the zone the person picked it in goes in `spec.timeZone`, which
-the API accepts beside `at` and reads only for a schedule: the zone is
-kept so a client can say the time back as the person picked it, and it
-changes nothing about when the run comes. A trigger's own field holds it
-rather than an annotation, so every client reads it where a schedule's
-zone already is.
+A routine on dates is a trigger with `spec.times`, a list of the times it
+fires at, once each, which the API deletes after the last. It is a list
+even for one date: `spec.at`, the one time a trigger fires at, is the
+shape of a wake an agent sets, and a routine that came in two shapes would
+read two ways in every client. The dates are written in UTC, and the zone
+the person picked them in goes in `spec.timeZone`, which the API accepts
+beside `times` and reads only for a schedule: the zone is kept so a client
+can say the dates back as the person picked them, and it changes nothing
+about when the runs come. A trigger's own field holds it rather than an
+annotation, so every client reads it where a schedule's zone already is.
+
+A date that has passed may stay in the list, where it never fires, and the
+check asks only that one date is to come, as the API does. So a change can
+write back the dates it read, and a list that has partly run is changed
+like any other.
 
 The shape lives in `agents/routine`, which imports the standard library
 alone, as `llm/wire` holds the Lux dialect: the manifest, the name a key

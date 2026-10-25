@@ -9,6 +9,10 @@ minor version may break code, and every such change is marked **Breaking**.
 
 ### Added
 
+- Package `account`: the provider that serves each model of an Effort
+  level. `EffortModel.Provider` is the name a person reads for it, such
+  as `"Anthropic"` or `"OpenRouter"`, which tells apart two models of one
+  vendor served two ways; empty where the catalog names none.
 - Package `agents`: a routine on dates. `StartsOnDates` runs the
   routine once at each of its `Dates`, times a schedule cannot say, from
   one to `MaxRoutineDates`; the API deletes the routine after the last.

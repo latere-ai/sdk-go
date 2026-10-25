@@ -1168,6 +1168,11 @@
             "example": "deepseek/deepseek-v4-flash",
             "type": "string"
           },
+          "provider": {
+            "description": "The name a person reads for the provider that serves the model, such as `Anthropic` or `OpenRouter`, which tells apart two models of one vendor served two ways. Absent when the catalog names none.",
+            "example": "OpenRouter",
+            "type": "string"
+          },
           "reason": {
             "description": "Present when the model is not available: `zero_retention` while Zero data retention is on for the caller in the token's context and no endpoint that keeps nothing serves the model, `model_tier_model_unavailable` when it cannot run now, `rate_limited` for a free model while the level's free turns are used for now, and `budget_exhausted` while the wallet of the caller's context has spent past its credit.",
             "example": "model_tier_model_unavailable",
@@ -1400,7 +1405,7 @@
             "type": "array"
           },
           "expected_at": {
-            "description": "For a schedule or a follow-up, the times of its runs expected this month, skipped ones included.",
+            "description": "For a schedule, a list of times or a follow-up, the times of its runs expected this month, skipped ones included.",
             "items": {
               "format": "date-time",
               "type": "string"
@@ -1412,11 +1417,12 @@
             "type": "integer"
           },
           "fires_on": {
-            "description": "How it runs: on a schedule, when an event arrives, or once at a time, as a follow-up does.",
+            "description": "How it runs: on a schedule, when an event arrives, once at a time, as a follow-up does, or once at each time of a list it was given.",
             "enum": [
               "schedule",
               "event",
-              "at"
+              "at",
+              "times"
             ],
             "type": "string"
           },
@@ -1520,10 +1526,10 @@
         "type": "object"
       },
       "ForecastSkipping": {
-        "description": "Where its next run is skipped, or, for a follow-up, waits; absent otherwise. A follow-up a limit stops is kept and runs once the limit lifts, within a day.",
+        "description": "Where its next run is skipped, or, for a follow-up or a time of a list, waits; absent otherwise. A follow-up a limit stops is kept and runs once the limit lifts, within a day; a time of a list waits the same way within its trigger's lateness bound, and never past the next time of its list.",
         "properties": {
           "until": {
-            "description": "Its next run that is not skipped, or when a follow-up that waits runs; absent when none is expected.",
+            "description": "Its next run that is not skipped, or when a follow-up or a time of a list that waits runs; absent when none is expected.",
             "format": "date-time",
             "type": "string"
           },

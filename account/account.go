@@ -202,6 +202,11 @@ type EffortAuto struct {
 type EffortModel struct {
 	// Name is the model's name in the catalog.
 	Name string `json:"name"`
+	// Provider is the name a person reads for the provider that serves
+	// the model, such as "Anthropic" or "OpenRouter", which tells apart
+	// two models of one vendor served two ways; empty when the catalog
+	// names none.
+	Provider string `json:"provider,omitempty"`
 	// Charge is "none" for a free model or "credit" for a priced one.
 	Charge string `json:"charge"`
 	// Available reports whether a message with this model would run now.

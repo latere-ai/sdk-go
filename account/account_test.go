@@ -45,7 +45,7 @@ func TestReads(t *testing.T) {
 		"PUT /v1/account/agents/latere-chat": `{"id":"latere-chat","version":7,"model":"tier/quick","agent":{"id":"agent_1","version":3}}`,
 		"GET /v1/account/effort": `{"levels":[{"id":"quick","name":"tier/quick","order":0,"available":true,"retention":"none",
 			"next":{"charge":"credit","price":{"currency":"USD","per":1000000,"input":"0.25","output":"1.25"}},
-			"free_turns":{"bound":50,"used":3,"resets_at":"2026-10-21T00:00:00Z"},"models":[{"name":"m","charge":"none","available":true}]}],
+			"free_turns":{"bound":50,"used":3,"resets_at":"2026-10-21T00:00:00Z"},"models":[{"name":"m","provider":"OpenRouter","charge":"none","available":true}]}],
 			"auto":{"name":"auto","available":true,"levels":["quick","thorough"],"reads":"message","retention":"none"},"zero_retention":true,"zero_retention_by":"person"}`,
 		"GET /v1/account/wallet": `{"state":"Open","spendable_micro":4200000,"bought":true,"next_grant":{"amount_micro":1000000,"at":"2026-11-01T00:00:00Z"},
 			"top_up":{"min_micro":5000000,"spread_bps":290,"spread_fixed_micro":300000}}`,
@@ -65,7 +65,7 @@ func TestReads(t *testing.T) {
 	}
 	levels, err := c.GetEffortLevels(t.Context())
 	if err != nil || levels.Levels[0].Next.Price.Output != "1.25" || levels.Levels[0].FreeTurns.Used != 3 || levels.Auto.Reads != "message" || !levels.ZeroRetention ||
-		levels.Levels[0].FreeTurns.ResetsAt.IsZero() || !levels.Levels[0].ResetsAt.IsZero() {
+		levels.Levels[0].FreeTurns.ResetsAt.IsZero() || !levels.Levels[0].ResetsAt.IsZero() || levels.Levels[0].Models[0].Provider != "OpenRouter" {
 		t.Errorf("EffortLevels: %+v, %v", levels, err)
 	}
 	w, err := c.GetWallet(t.Context())

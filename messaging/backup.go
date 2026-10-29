@@ -4,6 +4,7 @@
 package messaging
 
 import (
+	"bytes"
 	"crypto/aes"
 	"crypto/cipher"
 	"crypto/ecdh"
@@ -214,21 +215,16 @@ func transferMessage(person, device string, encryptionKey []byte, approver strin
 }
 
 // SealTo seals the backup key to a new device's X25519 key from its
-// directory record, which an approving device does once it has vouched
-// for the device, and signs it with the approving device's key, so the
-// new device takes a backup key only from a device of its person.
-func (b *BackupKey) SealTo(device DeviceRecord, approver string, key ed25519.PrivateKey) ([]byte, error) {
-	if device.Kind != RecordDevice {
-		return nil, errors.New("messaging: a backup key is sealed to a device")
+// directory record, which the device that approved it does once it has
+// vouched for it, and signs it with that device's key: the key the
+// record names as its voucher's. A device takes a backup key only from
+// the device that approved it.
+func (b *BackupKey) SealTo(device DeviceRecord, key ed25519.PrivateKey) ([]byte, error) {
+	if device.Kind != RecordDevice || device.Root() {
+		return nil, errors.New("messaging: a backup key is sealed to a device another device approved")
 	}
-	if err := validID("approver", approver); err != nil {
-		return nil, err
-	}
-	if approver == device.ID {
-		return nil, errors.New("messaging: a device does not approve itself")
-	}
-	if len(key) != ed25519.PrivateKeySize {
-		return nil, errors.New("messaging: an approver signs with an Ed25519 key")
+	if len(key) != ed25519.PrivateKeySize || !bytes.Equal(key.Public().(ed25519.PublicKey), device.VoucherKey) {
+		return nil, errors.New("messaging: the backup key is sealed by the device that approved the device")
 	}
 	pub, err := ecdh.X25519().NewPublicKey(device.EncryptionKey)
 	if err != nil {
@@ -243,21 +239,30 @@ func (b *BackupKey) SealTo(device DeviceRecord, approver string, key ed25519.Pri
 	if err != nil {
 		return nil, err
 	}
-	sig := ed25519.Sign(key, transferMessage(device.Person, device.ID, device.EncryptionKey, approver, sealed))
+	sig := ed25519.Sign(key, transferMessage(device.Person, device.ID, device.EncryptionKey, device.Voucher, sealed))
 	return encode(func(w *writer) {
 		w.u8(transferVersion)
-		w.vec8([]byte(approver))
+		w.vec8([]byte(device.Voucher))
 		w.vec32(sealed)
 		w.vec8(sig)
 	}), nil
 }
 
 // OpenBackupKey opens a backup key SealTo sealed to this device, with
-// its X25519 private key, once the signature verifies under a device of
-// the person's that stands in their directory. It returns ErrSealed for a
-// transfer that is not for this device, and an error naming the approver
-// for one no device of the person signed.
-func OpenBackupKey(key *ecdh.PrivateKey, d *Directory, device string, transfer []byte) (*BackupKey, error) {
+// its X25519 private key and its own record as the device keeps it,
+// once the device's record stands in the directory and the signature
+// verifies under the device that approved it, which stands too. It
+// returns ErrSealed for a transfer that is not for this device, and an
+// error naming the approver for one the device's approver did not sign.
+func OpenBackupKey(key *ecdh.PrivateKey, d *Directory, self DeviceRecord, transfer []byte) (*BackupKey, error) {
+	if self.Kind != RecordDevice || self.Person != d.Person() || !bytes.Equal(self.EncryptionKey, key.PublicKey().Bytes()) {
+		return nil, errors.New("messaging: the record is not this device's")
+	}
+	own, ok := d.Device(self.ID)
+	if !ok || !bytes.Equal(own.SignatureKey, self.SignatureKey) || !bytes.Equal(own.EncryptionKey, self.EncryptionKey) ||
+		!bytes.Equal(own.VoucherKey, self.VoucherKey) || own.Voucher != self.Voucher {
+		return nil, fmt.Errorf("messaging: %s does not stand in the directory of %s as this device holds its record", self.ID, d.Person())
+	}
 	r := &reader{b: transfer}
 	if v := r.u8(); r.err == nil && v != transferVersion {
 		return nil, fmt.Errorf("%w: transfer version %d", errFormat, v)
@@ -267,10 +272,10 @@ func OpenBackupKey(key *ecdh.PrivateKey, d *Directory, device string, transfer [
 		return nil, err
 	}
 	by, ok := d.Device(approver)
-	if !ok || approver == device {
-		return nil, fmt.Errorf("messaging: the backup key comes from %q, which is not another device of %s", approver, d.Person())
+	if !ok || self.Root() || approver != self.Voucher || !bytes.Equal(by.SignatureKey, self.VoucherKey) {
+		return nil, fmt.Errorf("messaging: the backup key comes from %q, which is not the device that approved %s", approver, self.ID)
 	}
-	if !ed25519.Verify(by.SignatureKey, transferMessage(d.Person(), device, key.PublicKey().Bytes(), approver, sealed), sig) {
+	if !ed25519.Verify(by.SignatureKey, transferMessage(d.Person(), self.ID, self.EncryptionKey, approver, sealed), sig) {
 		return nil, fmt.Errorf("messaging: the backup key's signature does not verify under %s's key", approver)
 	}
 	sk, err := hpke.NewDHKEMPrivateKey(key)
@@ -278,7 +283,7 @@ func OpenBackupKey(key *ecdh.PrivateKey, d *Directory, device string, transfer [
 		return nil, err
 	}
 	kdf, aead := transferSuite()
-	raw, err := hpke.Open(sk, kdf, aead, transferContext(d.Person(), device), sealed)
+	raw, err := hpke.Open(sk, kdf, aead, transferContext(d.Person(), self.ID), sealed)
 	if err != nil || len(raw) != BackupKeySize {
 		return nil, ErrSealed
 	}

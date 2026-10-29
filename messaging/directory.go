@@ -17,32 +17,42 @@ import (
 )
 
 // A person's keys are in the directory as records, each vouched for by
-// another of the same person and signed by its own key, which proves
-// the person's device holds it. A device record holds a device's
-// signature key, the one its leaves carry in every group, and the X25519
-// key the person's other devices seal to it with. A recovery record
-// holds the public half of the signing key the person's recovery key
-// derives. The first device vouches for itself, which makes it a root,
-// and for the recovery record; every later device is vouched for by an
-// approved device or by the recovery key.
+// another of the same person and signed by its own key. A device record
+// holds a device's signature key, the one its leaves carry in every
+// group, and the X25519 key the person's other devices seal to it with.
+// A recovery record holds the public half of the signing key the
+// person's recovery key derives. The first device vouches for itself,
+// which makes it a root, and for the recovery record; every later device
+// is vouched for by an approved device or by the recovery key. A record
+// names its voucher's id and key under its own key's signature as well
+// as the voucher's, so where a record hangs is its own word and the
+// voucher's together, and no one who holds neither key moves it under
+// another root.
 //
 // A key the person no longer holds is revoked by a Revocation, signed
-// by one of their records, which the service stores and lists but cannot
-// make or undo. A revoked key is no record's key and vouches for
-// nothing, and a record it vouched for stays only when every revocation
-// of the key names it in Keep: a device of the person's that revokes a
-// stolen device names the devices that stay, and a revocation the thief
-// signs that names others makes both lose them, so a dispute fails
-// closed. A revocation counts when its signer's chain of vouches reaches
-// a root, revoked or not, so a stolen key can revoke the person's other
-// devices too; the person then starts over from a new root or the
-// recovery key. The apps keep every revocation they have seen and pass
-// it to NewDirectory with the service's, so the service can withhold a
-// revocation only from a device that never saw it.
+// by a record under the same root as the key, which the service stores
+// and lists but cannot make or undo. A revoked key is no record's key
+// and vouches for nothing, and a record it vouched for stays only when
+// every revocation of the key names it in Keep: a device of the person's
+// that revokes a stolen device names the devices that stay, and a
+// revocation the thief signs that names others makes both lose them, so
+// a dispute fails closed. A revocation counts whether or not its signer
+// is revoked itself, so a stolen key can revoke the person's other
+// devices under its root too; the person then comes back through the
+// recovery key or starts over from a new root. The apps keep every
+// revocation that counted and pass it back to NewDirectory as known, so
+// it applies whatever the service lists later; the service can withhold
+// a revocation only from a device that never saw it.
 
-// MaxRecords bounds the records, and the revocations, NewDirectory takes
-// for one person; those past it are dropped.
+// MaxRecords bounds the records NewDirectory takes for one person; past
+// it nothing stands, so no record is dropped for where the service lists
+// it.
 const MaxRecords = 256
+
+// MaxRevocations bounds the revocations that count for one person: one
+// for each key and one for each record a later revocation stops keeping.
+// Past it nothing stands.
+const MaxRevocations = 2 * MaxRecords
 
 // RecordKind is what a directory record holds.
 type RecordKind uint8
@@ -96,12 +106,14 @@ type DeviceRecord struct {
 	// EncryptionKey is a device's X25519 public key; empty for a
 	// recovery record.
 	EncryptionKey []byte `json:"encryption_key,omitempty"`
-	// Voucher is the id of the record whose key signed Vouch: the
-	// record's own for a root.
-	Voucher string `json:"voucher"`
-	Vouch   []byte `json:"vouch"`
-	// Possession is the record's own key's signature of the record
-	// without its voucher, made when the device made its keys.
+	// Voucher is the id of the record whose key signed Vouch, and
+	// VoucherKey that record's signature key: the record's own for a
+	// root.
+	Voucher    string `json:"voucher"`
+	VoucherKey []byte `json:"voucher_key"`
+	Vouch      []byte `json:"vouch"`
+	// Possession is the record's own key's signature of the record,
+	// voucher included, made when the device made its keys.
 	Possession []byte `json:"possession"`
 }
 
@@ -113,26 +125,18 @@ const (
 	revocationLabel = "latere messaging revocation v1"
 )
 
-func (r *DeviceRecord) possessionMessage() []byte {
+// body is the record as its possession and its vouch sign it, under
+// one of the two labels.
+func (r *DeviceRecord) body(label string) []byte {
 	return encode(func(w *writer) {
-		w.vec8([]byte(possessionLabel))
-		w.vec8([]byte(r.Person))
-		w.vec8([]byte(r.ID))
-		w.u8(uint8(r.Kind))
-		w.vec8(r.SignatureKey)
-		w.vec8(r.EncryptionKey)
-	})
-}
-
-func (r *DeviceRecord) vouchMessage() []byte {
-	return encode(func(w *writer) {
-		w.vec8([]byte(vouchLabel))
+		w.vec8([]byte(label))
 		w.vec8([]byte(r.Person))
 		w.vec8([]byte(r.ID))
 		w.u8(uint8(r.Kind))
 		w.vec8(r.SignatureKey)
 		w.vec8(r.EncryptionKey)
 		w.vec8([]byte(r.Voucher))
+		w.vec8(r.VoucherKey)
 	})
 }
 
@@ -156,8 +160,11 @@ func (r *DeviceRecord) validate() error {
 	if err := validID("voucher", r.Voucher); err != nil {
 		return err
 	}
-	if len(r.SignatureKey) != ed25519.PublicKeySize {
-		return errors.New("messaging: a record's signature key is an Ed25519 key")
+	if len(r.SignatureKey) != ed25519.PublicKeySize || len(r.VoucherKey) != ed25519.PublicKeySize {
+		return errors.New("messaging: a record's signature key and its voucher's are Ed25519 keys")
+	}
+	if r.Root() != bytes.Equal(r.VoucherKey, r.SignatureKey) {
+		return errors.New("messaging: a root, and only a root, is vouched for by its own key")
 	}
 	switch r.Kind {
 	case RecordDevice:
@@ -177,46 +184,71 @@ func (r *DeviceRecord) validate() error {
 	return nil
 }
 
-// Sign vouches for the record with the voucher's private key, setting
-// Voucher and Vouch. A device signs as itself for its own root record.
-func (r *DeviceRecord) Sign(voucher string, key ed25519.PrivateKey) error {
-	r.Voucher = voucher
+// verify reports whether the record is well formed and both its
+// signatures verify: its own key's and the key it names as its
+// voucher's.
+func (r *DeviceRecord) verify() bool {
+	return r.validate() == nil && ed25519.Verify(r.SignatureKey, r.body(possessionLabel), r.Possession) &&
+		ed25519.Verify(r.VoucherKey, r.body(vouchLabel), r.Vouch)
+}
+
+// Sign vouches for the record with the private key of the record it
+// names as its voucher: the device that approves it, or the recovery
+// key that recovers it.
+func (r *DeviceRecord) Sign(key ed25519.PrivateKey) error {
+	if len(key) != ed25519.PrivateKeySize || !bytes.Equal(key.Public().(ed25519.PublicKey), r.VoucherKey) {
+		return errors.New("messaging: the key is not the one the record names as its voucher's")
+	}
 	if err := r.validate(); err != nil {
 		return err
 	}
-	r.Vouch = ed25519.Sign(key, r.vouchMessage())
+	r.Vouch = ed25519.Sign(key, r.body(vouchLabel))
 	return nil
 }
 
 // NewDeviceRecord returns the record of a device with its signature key
-// and encryption key, its possession proved and not yet vouched for.
-func NewDeviceRecord(person, device string, key ed25519.PrivateKey, encryptionKey *ecdh.PublicKey) (DeviceRecord, error) {
-	return newRecord(DeviceRecord{Person: person, ID: device, Kind: RecordDevice, EncryptionKey: encryptionKey.Bytes()}, key)
+// and encryption key, naming the record that vouches for it, with the
+// device's proof that it holds the key. The voucher then signs it with
+// Sign. A nil voucher makes a root, the person's first device, which
+// vouches for itself here.
+func NewDeviceRecord(person, device string, key ed25519.PrivateKey, encryptionKey *ecdh.PublicKey, voucher *DeviceRecord) (DeviceRecord, error) {
+	return newRecord(DeviceRecord{Person: person, ID: device, Kind: RecordDevice, EncryptionKey: encryptionKey.Bytes()}, key, voucher)
 }
 
-// NewRecoveryRecord returns the record of a person's recovery key, its
-// possession proved and not yet vouched for: the device that made the
-// key vouches for it.
-func NewRecoveryRecord(person, id string, recovery *RecoveryKey) (DeviceRecord, error) {
+// NewRecoveryRecord returns the record of a person's recovery key,
+// naming the device that made the key, which then vouches for it with
+// Sign.
+func NewRecoveryRecord(person, id string, recovery *RecoveryKey, voucher DeviceRecord) (DeviceRecord, error) {
+	if voucher.Kind != RecordDevice {
+		return DeviceRecord{}, errors.New("messaging: a device vouches for the recovery record")
+	}
 	key, err := recovery.SigningKey()
 	if err != nil {
 		return DeviceRecord{}, err
 	}
-	return newRecord(DeviceRecord{Person: person, ID: id, Kind: RecordRecovery}, key)
+	return newRecord(DeviceRecord{Person: person, ID: id, Kind: RecordRecovery}, key, &voucher)
 }
 
-func newRecord(r DeviceRecord, key ed25519.PrivateKey) (DeviceRecord, error) {
+func newRecord(r DeviceRecord, key ed25519.PrivateKey, voucher *DeviceRecord) (DeviceRecord, error) {
 	if len(key) != ed25519.PrivateKeySize {
 		return DeviceRecord{}, errors.New("messaging: a record's key is an Ed25519 key")
 	}
 	r.SignatureKey = bytes.Clone(key.Public().(ed25519.PublicKey))
-	if err := validID("person", r.Person); err != nil {
+	if voucher == nil {
+		r.Voucher, r.VoucherKey = r.ID, bytes.Clone(r.SignatureKey)
+	} else {
+		if voucher.Person != r.Person {
+			return DeviceRecord{}, errors.New("messaging: a record is vouched for by a record of the same person")
+		}
+		r.Voucher, r.VoucherKey = voucher.ID, bytes.Clone(voucher.SignatureKey)
+	}
+	if err := r.validate(); err != nil {
 		return DeviceRecord{}, err
 	}
-	if err := validID("record", r.ID); err != nil {
-		return DeviceRecord{}, err
+	r.Possession = ed25519.Sign(key, r.body(possessionLabel))
+	if voucher == nil {
+		r.Vouch = ed25519.Sign(key, r.body(vouchLabel))
 	}
-	r.Possession = ed25519.Sign(key, r.possessionMessage())
 	return r, nil
 }
 
@@ -228,9 +260,11 @@ type Revocation struct {
 	// Key is the signature key revoked.
 	Key []byte `json:"key"`
 	// Keep are the signature keys of the records Key vouched for that
-	// stay the person's; what those vouched for stays with them.
+	// stay the person's; what those vouched for stays with them. A
+	// record that revokes its own key keeps nothing.
 	Keep [][]byte `json:"keep,omitempty"`
-	// By is the id of the record whose key signed it.
+	// By is the id of the record whose key signed it, under the same
+	// root as Key.
 	By        string `json:"by"`
 	Signature []byte `json:"signature"`
 }
@@ -289,25 +323,49 @@ type Directory struct {
 	person string
 	// records are the records that stand: verified and not revoked.
 	records map[string]DeviceRecord
-	// verified are the records whose chain verifies, revoked or not.
-	verified    map[string]DeviceRecord
+	// verified are the records whose chain verifies, revoked or not,
+	// with the id of the root each chain reaches, and their ids by key.
+	verified map[string]DeviceRecord
+	roots    map[string]string
+	byKey    map[string]string
+	// revoked are the keys revoked, and keep what each keeps: what
+	// every revocation of it names.
 	revoked     map[string]bool
+	keep        map[string]map[string]bool
 	revocations []Revocation
 }
 
 // NewDirectory verifies a person's records against their revocations and
-// keeps the records that stand. A record that fails, names another
-// person, is revoked or is past MaxRecords is left out and counted in
-// dropped, so a record the service made up costs nothing but itself. Two
-// records under one id, or with one key, are both left out.
-func NewDirectory(person string, records []DeviceRecord, revocations []Revocation) (d *Directory, dropped int) {
-	d = &Directory{person: person, records: make(map[string]DeviceRecord),
-		verified: make(map[string]DeviceRecord), revoked: make(map[string]bool)}
+// keeps the records that stand. known are the revocations the app kept
+// from an earlier directory of the person, Revocations, which apply
+// whatever is listed now; revocations are the service's, which count
+// when they verify. A record that fails, names another person or is
+// revoked is left out and counted in dropped, so a record the service
+// made up costs nothing but itself. Two records under one id, or with
+// one key, are both left out. Past MaxRecords records, or MaxRevocations
+// revocations that may count, nothing stands.
+func NewDirectory(person string, records []DeviceRecord, revocations, known []Revocation) (d *Directory, dropped int) {
+	d = &Directory{person: person, records: make(map[string]DeviceRecord), verified: make(map[string]DeviceRecord),
+		roots: make(map[string]string), byKey: make(map[string]string),
+		revoked: make(map[string]bool), keep: make(map[string]map[string]bool)}
+	seen := make(map[string]bool)
+	var facts []Revocation
+	for _, v := range known {
+		if v.Person == person && v.validate() == nil && !seen[string(v.Signature)] {
+			seen[string(v.Signature)] = true
+			facts = append(facts, v)
+		}
+	}
 	var recs []DeviceRecord
 	for _, r := range records {
-		if r.Person == person && len(recs) < MaxRecords {
+		if r.Person == person {
 			recs = append(recs, r)
 		}
+	}
+	d.revocations = cloneRevocations(facts)
+	if len(recs) > MaxRecords {
+		d.applyAll(facts)
+		return d, len(records)
 	}
 	n := len(recs)
 	byID := make(map[string]int, n)
@@ -320,88 +378,83 @@ func NewDirectory(person string, records []DeviceRecord, revocations []Revocatio
 	}
 	for i, r := range recs {
 		byID[r.ID] = i
-		ok[i] = ids[r.ID] == 1 && keys[string(r.SignatureKey)] == 1 && r.validate() == nil &&
-			ed25519.Verify(r.SignatureKey, r.possessionMessage(), r.Possession)
+		ok[i] = ids[r.ID] == 1 && keys[string(r.SignatureKey)] == 1 && r.verify()
 	}
-	parent := func(i int) (int, bool) {
-		p, found := byID[recs[i].Voucher]
-		return p, found
-	}
-	vouched := func(i, p int) bool {
-		return ed25519.Verify(recs[p].SignatureKey, recs[i].vouchMessage(), recs[i].Vouch)
-	}
+	parent := func(i int) int { return byID[recs[i].Voucher] }
 
-	// The chains that verify, with no revocation applied.
-	verified := walk(n, func(i int) (bool, bool) {
+	// The root each chain reaches, with no revocation applied: a record
+	// hangs from the listed record it names as its voucher, by id and
+	// key.
+	root := walk(n, func(i int) (int, bool) {
 		r := recs[i]
 		switch {
 		case !ok[i]:
-			return false, true
+			return -1, true
 		case r.Root():
-			return r.Kind == RecordDevice && ed25519.Verify(r.SignatureKey, r.vouchMessage(), r.Vouch), true
-		}
-		if _, found := parent(i); !found {
-			return false, true
-		}
-		return false, false
-	}, parent, vouched)
-
-	// The revocations that count, and what each revoked key keeps: what
-	// every revocation of it names.
-	keep := make(map[string]map[string]bool)
-	counted := 0
-	for _, v := range revocations {
-		if v.Person != person {
-			continue
-		}
-		if counted == MaxRecords {
-			break
-		}
-		s, found := byID[v.By]
-		if !found || !verified[s] || v.validate() != nil || !ed25519.Verify(recs[s].SignatureKey, v.message(), v.Signature) {
-			continue
-		}
-		counted++
-		names := make(map[string]bool, len(v.Keep))
-		if !bytes.Equal(recs[s].SignatureKey, v.Key) { // a key keeps nothing it revokes itself
-			for _, k := range v.Keep {
-				names[string(k)] = true
+			if r.Kind != RecordDevice {
+				return -1, true
 			}
+			return i, true
 		}
-		if prev, seen := keep[string(v.Key)]; seen {
-			for k := range prev {
-				if !names[k] {
-					delete(prev, k)
-				}
-			}
-		} else {
-			keep[string(v.Key)] = names
+		p, found := byID[r.Voucher]
+		if !found || !bytes.Equal(recs[p].SignatureKey, r.VoucherKey) {
+			return -1, true
 		}
-		d.revoked[string(v.Key)] = true
-		d.revocations = append(d.revocations, cloneRevocation(v))
+		return 0, false
+	}, parent, -1)
+	for i, r := range recs {
+		if root[i] >= 0 {
+			d.verified[r.ID] = r
+			d.roots[r.ID] = recs[root[i]].ID
+			d.byKey[string(r.SignatureKey)] = r.ID
+		}
 	}
+
+	// The revocations that may count: of a key a verified record holds,
+	// by a verified record under the same root, each once.
+	var counting []Revocation
+	for _, v := range revocations {
+		if v.Person != person || seen[string(v.Signature)] {
+			continue
+		}
+		k, found := d.byKey[string(v.Key)]
+		if !found || d.roots[k] != d.roots[v.By] || v.validate() != nil {
+			continue
+		}
+		seen[string(v.Signature)] = true
+		counting = append(counting, v)
+	}
+	if len(counting) > MaxRevocations {
+		clear(d.verified)
+		clear(d.roots)
+		clear(d.byKey)
+		d.applyAll(facts)
+		return d, len(records)
+	}
+	for _, v := range counting {
+		if ed25519.Verify(d.verified[v.By].SignatureKey, v.message(), v.Signature) {
+			d.apply(v)
+			d.revocations = append(d.revocations, cloneRevocation(v))
+		}
+	}
+	d.applyAll(facts)
 
 	// The records that stand: not revoked, through vouchers that stand,
 	// or through a revoked voucher whose revocations all keep them.
 	stands := walk(n, func(i int) (bool, bool) {
 		r := recs[i]
 		switch {
-		case !verified[i] || d.revoked[string(r.SignatureKey)]:
+		case root[i] < 0 || d.revoked[string(r.SignatureKey)]:
 			return false, true
 		case r.Root():
 			return true, true
 		}
-		p, _ := parent(i) // verified, so the voucher is there
-		if d.revoked[string(recs[p].SignatureKey)] {
-			return keep[string(recs[p].SignatureKey)][string(r.SignatureKey)], true
+		if d.revoked[string(r.VoucherKey)] {
+			return d.keep[string(r.VoucherKey)][string(r.SignatureKey)], true
 		}
 		return false, false
-	}, parent, func(int, int) bool { return true })
-
+	}, parent, false)
 	for i, r := range recs {
-		if verified[i] {
-			d.verified[r.ID] = r
-		}
 		if stands[i] {
 			d.records[r.ID] = r
 		}
@@ -409,29 +462,92 @@ func NewDirectory(person string, records []DeviceRecord, revocations []Revocatio
 	return d, len(records) - len(d.records)
 }
 
+// apply records a revocation that counts: its key is revoked, and keeps
+// only what this revocation and every earlier one of it name.
+func (d *Directory) apply(v Revocation) {
+	names := make(map[string]bool, len(v.Keep))
+	if d.byKey[string(v.Key)] != v.By { // a record that revokes its own key keeps nothing
+		for _, k := range v.Keep {
+			names[string(k)] = true
+		}
+	}
+	if prev, seen := d.keep[string(v.Key)]; seen {
+		for k := range prev {
+			if !names[k] {
+				delete(prev, k)
+			}
+		}
+	} else {
+		d.keep[string(v.Key)] = names
+	}
+	d.revoked[string(v.Key)] = true
+}
+
+func (d *Directory) applyAll(vs []Revocation) {
+	for _, v := range vs {
+		d.apply(v)
+	}
+}
+
+// CheckRevocation checks a revocation before the service keeps it: that
+// it would count, as NewDirectory counts one, and whether it changes
+// anything, revoking a key not yet revoked or keeping less of what the
+// key vouched for. One that changes nothing need not be kept, which
+// bounds what the service keeps by MaxRevocations.
+func (d *Directory) CheckRevocation(v Revocation) (changes bool, err error) {
+	if v.Person != d.person {
+		return false, fmt.Errorf("messaging: a revocation of %s is not one of %s", v.Person, d.person)
+	}
+	if err := v.validate(); err != nil {
+		return false, err
+	}
+	k, found := d.byKey[string(v.Key)]
+	if !found {
+		return false, errors.New("messaging: the revocation is of no key of the person's")
+	}
+	by, found := d.verified[v.By]
+	if !found || d.roots[by.ID] != d.roots[k] {
+		return false, errors.New("messaging: the revocation is signed by no record under the root of the key it revokes")
+	}
+	if !ed25519.Verify(by.SignatureKey, v.message(), v.Signature) {
+		return false, errors.New("messaging: the revocation's signature does not verify")
+	}
+	if !d.revoked[string(v.Key)] {
+		return true, nil
+	}
+	for _, r := range d.verified {
+		if bytes.Equal(r.VoucherKey, v.Key) && r.ID != k && d.keep[string(v.Key)][string(r.SignatureKey)] &&
+			(k == v.By || !slices.ContainsFunc(v.Keep, func(key []byte) bool { return bytes.Equal(key, r.SignatureKey) })) {
+			return true, nil
+		}
+	}
+	return false, nil
+}
+
 // walk decides a value for each of n records that hang from one another
 // by their vouchers, without recursion, so a long chain costs no stack.
 // leaf decides a record on its own when it can (done); otherwise the
-// record's value is its voucher's and edge's. A cycle decides false.
-func walk(n int, leaf func(i int) (v, done bool), parent func(i int) (int, bool), edge func(i, p int) bool) []bool {
+// record takes its voucher's value. A cycle decides cycle.
+func walk[T any](n int, leaf func(i int) (v T, done bool), parent func(i int) int, cycle T) []T {
 	const (
 		unknown = iota
 		walking
 		known
 	)
 	state := make([]uint8, n)
-	value := make([]bool, n)
+	value := make([]T, n)
 	var path []int
 	for i := range n {
 		path = path[:0]
-		cur, v := i, false
+		cur := i
+		var v T
 		for {
 			if state[cur] == known {
 				v = value[cur]
 				break
 			}
 			if state[cur] == walking {
-				v = false // a cycle reaches no root
+				v = cycle
 				break
 			}
 			state[cur] = walking
@@ -440,16 +556,21 @@ func walk(n int, leaf func(i int) (v, done bool), parent func(i int) (int, bool)
 				break
 			}
 			path = append(path, cur)
-			cur, _ = parent(cur)
+			cur = parent(cur)
 		}
-		for j := len(path) - 1; j >= 0; j-- {
-			k := path[j]
-			p, _ := parent(k)
-			v = v && edge(k, p)
+		for _, k := range path {
 			value[k], state[k] = v, known
 		}
 	}
 	return value
+}
+
+func cloneRevocations(vs []Revocation) []Revocation {
+	out := make([]Revocation, len(vs))
+	for i, v := range vs {
+		out[i] = cloneRevocation(v)
+	}
+	return out
 }
 
 func cloneRevocation(v Revocation) Revocation {
@@ -513,15 +634,9 @@ func (d *Directory) Device(id string) (DeviceRecord, bool) {
 // Revoked reports whether a revocation that counts revokes the key.
 func (d *Directory) Revoked(signatureKey []byte) bool { return d.revoked[string(signatureKey)] }
 
-// Revocations returns the revocations that count, for the app to keep
-// and pass to NewDirectory again.
-func (d *Directory) Revocations() []Revocation {
-	out := make([]Revocation, len(d.revocations))
-	for i, v := range d.revocations {
-		out[i] = cloneRevocation(v)
-	}
-	return out
-}
+// Revocations returns the revocations that counted, those known among
+// them, for the app to keep and pass to NewDirectory again as known.
+func (d *Directory) Revocations() []Revocation { return cloneRevocations(d.revocations) }
 
 // CheckMember checks that a leaf is a device of the person: its
 // credential names a device of the directory's person that stands, whose

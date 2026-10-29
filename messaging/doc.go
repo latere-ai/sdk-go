@@ -19,13 +19,16 @@
 // A person's devices are in the directory as DeviceRecords, each
 // vouched for by another of the same person, the first device for
 // itself and later ones by an approved device or by the recovery key,
-// and each signed by its own key. A key the person no longer holds is
-// revoked by a Revocation one of their records signs. NewDirectory keeps
-// the records whose vouches chain to a root through keys no one revoked,
-// and a root an app has not pinned for a person is a changed security
-// code. The apps keep the revocations they have seen and pass them in
-// with the service's, so the service can neither undo a revocation nor
-// keep it from a device that saw it.
+// and each signed by its own key over the voucher it names. A key the
+// person no longer holds is revoked by a Revocation a record under the
+// same root signs. NewDirectory keeps the records whose vouches chain to
+// a root through keys no one revoked, and a root an app has not pinned
+// for a person is a changed security code. The apps keep the
+// revocations a directory counted (Directory.Revocations) and pass them
+// back as known, which apply whatever the service lists later, so the
+// service can neither undo a revocation nor keep it from a device that
+// saw it. The service keeps a revocation only when
+// Directory.CheckRevocation says it changes something.
 //
 // # Commits
 //
@@ -60,8 +63,8 @@
 // let in, sealed by SealBundle and announced by the commit's notice
 // (NewCommitNotice, with WelcomeExtension in the commit's Welcome), into
 // the person's backup, sealed under their BackupKey, or into a report.
-// A new device of the person takes the backup key from another of their
-// devices, sealed to it and signed (BackupKey.SealTo).
+// A new device of the person takes the backup key from the device that
+// approved it, sealed to it and signed (BackupKey.SealTo).
 //
 // # Files
 //
@@ -92,8 +95,16 @@
 //     shown as its sender's, not as proof of the conversation's past.
 //   - The messages a device sent before its key was revoked stop
 //     verifying when the KeyCheck refuses a key no record stands for.
-//   - The service can list a new root for a person, whose devices then
-//     join on their own; the only sign is a changed security code.
+//   - The directory is as trustworthy as the roots a person's contacts
+//     pinned. The service can list a new root for a person, whose
+//     devices then join on their own; the only sign is a changed
+//     security code. Such a root revokes nothing under the person's
+//     roots and approves no backup key, and a new root of the person's
+//     own reaches none of their old devices either: the recovery key,
+//     which vouches under the old root while it stands, is the way back
+//     into it.
+//   - A revocation the service withholds from a device that never saw
+//     it, a new contact's, does not apply there until it is listed.
 //   - A chunk opened alone is checked against the file's key, not its
 //     digest, so a sender can seal for a seeking reader other bytes than
 //     the whole file opens to; OpenAttachment checks the digest.

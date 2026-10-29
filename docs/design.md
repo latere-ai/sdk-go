@@ -852,21 +852,28 @@ same bytes and a change to it is in a commit the rules see.
 
 Which devices are a person's is not the service's to say. A person's
 devices are directory records, each signed by another of the person's
-records back to a root the person's apps pin, and by its own key, so no
-one lists a key they do not hold; the service stores and serves them,
-and a record it made up verifies against nothing. A recovery record
+records back to a root the person's apps pin, and by its own key over
+the record and the voucher it names, so no one lists a key they do not
+hold or moves a record under another root; the service stores and
+serves them, and a record it made up verifies against nothing but a root
+of its own, which shows as a changed security code. A recovery record
 holds the public half of a key derived from the person's recovery key,
-so a new device can be vouched for when every old one is lost. A device
-is removed by a signed revocation of its key, which names the records
-the key vouched for that stay; a revoked key vouches for nothing after,
-and two revocations of one key that keep different records keep only
-what both name, so a thief who holds a stolen key and argues with the
-person leaves neither side the disputed devices. The service can
-withhold a revocation from a device that never saw it, not undo one, and
-it proposes the removal of a revoked device and nothing else, so it
-cannot take a person out of a conversation or its ownership on its own.
-The backup key reaches a new device sealed to it and signed by the
-approving device, so the service cannot hand a device a key of its own.
+so a new device can be vouched for under the old root when every old
+device is lost. A device is removed by a revocation of its key, signed
+by a record under the same root, which names the records the key
+vouched for that stay; a revoked key vouches for nothing after, and two
+revocations of one key that keep different records keep only what both
+name, so a thief who holds a stolen key and argues with the person
+leaves neither side the disputed devices. The apps keep every
+revocation that counted and apply it whatever the service lists later,
+so the service can withhold a revocation from a device that never saw
+it, not undo one. The service proposes the removal of a revoked device
+and nothing else, so it cannot take a person out of a conversation or
+its ownership on its own. Both bounds on what a directory holds fail
+closed, so where the service lists a record or a revocation changes
+nothing. The backup key reaches a new device sealed to it and signed by
+the device that approved it, and by no other, so neither the service
+nor another device of the person's hands it a key of its own.
 
 History shared with someone let in leaves the group as entries, each
 the original signed message, which `mls.VerifySignedContent` checks

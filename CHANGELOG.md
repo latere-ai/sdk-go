@@ -47,8 +47,12 @@ minor version may break code, and every such change is marked **Breaking**.
   alike (`Policy.CheckCommit`, `Policy.CheckProposal`, `Policy.Config`,
   `CheckMessage`), a person's devices as records vouched for by one
   another and signed by their own keys (`DeviceRecord`, `Directory`,
-  `SecurityCode`), with a device removed by a signed `Revocation` that
-  the service can neither make nor undo, a message padded to a
+  `SecurityCode`), each naming its voucher under its own key so no one
+  moves it under another root, with a device removed by a signed
+  `Revocation` from a record under the same root, which the service can
+  neither make nor undo and the apps keep as known
+  (`Directory.Revocations`, `Directory.CheckRevocation`), a
+  message padded to a
   fixed set of sizes (`Payload`), a message that verifies outside its
   group (`Entry`), history sealed for someone let in and announced in
   the commit that lets them in (`SealBundle`, `NewCommitNotice`), and

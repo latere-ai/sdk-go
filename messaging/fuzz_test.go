@@ -126,20 +126,20 @@ func FuzzNewDirectory(f *testing.F) {
 	pub, pub2 := priv.Public().(ed25519.PublicKey), priv2.Public().(ed25519.PublicKey)
 	f.Add("p", "d", uint8(1), []byte(pub), enc.PublicKey().Bytes(), "d", "q", "e", uint8(2), "d", "q", true)
 	f.Fuzz(func(t *testing.T, person, id string, kind uint8, sig, encKey []byte, voucher, id2, voucher2 string, kind2 uint8, voucher3, by string, keep bool) {
-		r1 := DeviceRecord{Person: person, ID: id, Kind: RecordKind(kind), SignatureKey: sig, EncryptionKey: encKey, Voucher: voucher}
+		r1 := DeviceRecord{Person: person, ID: id, Kind: RecordKind(kind), SignatureKey: sig, EncryptionKey: encKey, Voucher: voucher, VoucherKey: pub}
 		sign := func(r *DeviceRecord, k ed25519.PrivateKey) {
-			if r.validate() == nil { // vouchMessage is reached only after validate
-				r.Vouch = ed25519.Sign(priv, r.vouchMessage())
-				r.Possession = ed25519.Sign(k, r.possessionMessage())
+			if r.validate() == nil { // body is reached only after validate
+				r.Vouch = ed25519.Sign(priv, r.body(vouchLabel))
+				r.Possession = ed25519.Sign(k, r.body(possessionLabel))
 			}
 		}
 		sign(&r1, priv)
-		r2 := DeviceRecord{Person: person, ID: id2, Kind: RecordKind(kind2), SignatureKey: pub2, Voucher: voucher2}
+		r2 := DeviceRecord{Person: person, ID: id2, Kind: RecordKind(kind2), SignatureKey: pub2, Voucher: voucher2, VoucherKey: pub}
 		if r2.Kind == RecordDevice {
 			r2.EncryptionKey = enc.PublicKey().Bytes()
 		}
 		sign(&r2, priv2)
-		r3 := DeviceRecord{Person: person, ID: voucher3, Kind: RecordDevice, SignatureKey: pub, EncryptionKey: enc.PublicKey().Bytes(), Voucher: id}
+		r3 := DeviceRecord{Person: person, ID: voucher3, Kind: RecordDevice, SignatureKey: pub, EncryptionKey: enc.PublicKey().Bytes(), Voucher: id, VoucherKey: sig}
 		sign(&r3, priv)
 		v := Revocation{Person: person, Key: pub}
 		if keep {
@@ -148,7 +148,7 @@ func FuzzNewDirectory(f *testing.F) {
 		if err := v.Sign(by, priv2); err != nil {
 			v.By = by
 		}
-		d, dropped := NewDirectory(person, []DeviceRecord{r1, r2, r3}, []Revocation{v})
+		d, dropped := NewDirectory(person, []DeviceRecord{r1, r2, r3}, []Revocation{v}, []Revocation{v})
 		if dropped < 0 || dropped > 3 {
 			t.Fatalf("dropped %d", dropped)
 		}
@@ -166,17 +166,17 @@ func FuzzNewDirectory(f *testing.F) {
 func FuzzOpenBackupKey(f *testing.F) {
 	_, priv, _ := ed25519.GenerateKey(nil)
 	enc, _ := ecdh.X25519().GenerateKey(nil)
-	approver, _ := NewDeviceRecord("p", "a", priv, enc.PublicKey())
-	_ = approver.Sign("a", priv)
-	dev, _ := NewDeviceRecord("p", "b", priv, enc.PublicKey())
-	_ = dev.Sign("a", priv)
-	d, _ := NewDirectory("p", []DeviceRecord{approver}, nil)
+	_, priv2, _ := ed25519.GenerateKey(nil)
+	approver, _ := NewDeviceRecord("p", "a", priv, enc.PublicKey(), nil)
+	dev, _ := NewDeviceRecord("p", "b", priv2, enc.PublicKey(), &approver)
+	_ = dev.Sign(priv)
+	d, _ := NewDirectory("p", []DeviceRecord{approver, dev}, nil, nil)
 	bk, _ := NewBackupKey()
-	if sealed, err := bk.SealTo(dev, "a", priv); err == nil {
+	if sealed, err := bk.SealTo(dev, priv); err == nil {
 		f.Add(sealed)
 	}
 	f.Fuzz(func(t *testing.T, transfer []byte) {
-		_, _ = OpenBackupKey(enc, d, "b", transfer)
+		_, _ = OpenBackupKey(enc, d, dev, transfer)
 	})
 }
 

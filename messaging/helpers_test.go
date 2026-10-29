@@ -25,6 +25,7 @@ type world struct {
 	installation ed25519.PrivateKey
 	records      map[string][]DeviceRecord
 	revocations  map[string][]Revocation
+	known        map[string][]Revocation
 	keys         map[string]ed25519.PrivateKey
 }
 
@@ -39,7 +40,7 @@ func newWorld(t testing.TB) *world {
 		t.Fatal(err)
 	}
 	return &world{t: t, service: service, installation: inst,
-		records: make(map[string][]DeviceRecord), revocations: make(map[string][]Revocation),
+		records: make(map[string][]DeviceRecord), revocations: make(map[string][]Revocation), known: make(map[string][]Revocation),
 		keys: make(map[string]ed25519.PrivateKey)}
 }
 
@@ -51,7 +52,7 @@ func (w *world) policy() *Policy {
 	return &Policy{
 		Installation: w.installation.Public().(ed25519.PublicKey),
 		Directory: func(person string) (*Directory, error) {
-			d, _ := NewDirectory(person, w.records[person], w.revocations[person])
+			d, _ := NewDirectory(person, w.records[person], w.revocations[person], w.known[person])
 			return d, nil
 		},
 	}
@@ -90,13 +91,10 @@ func (w *world) device(person, name string) *device {
 		w.t.Fatal(err)
 	}
 	d := &device{id: id, key: key, enc: enc, signer: signer}
-	if d.record, err = NewDeviceRecord(person, name, key, enc.PublicKey()); err != nil {
-		w.t.Fatal(err)
-	}
 	if first := w.records[person]; len(first) == 0 {
-		err = d.record.Sign(name, key)
-	} else {
-		err = d.record.Sign(first[0].ID, w.keys[first[0].Person+"/"+first[0].ID])
+		d.record, err = NewDeviceRecord(person, name, key, enc.PublicKey(), nil)
+	} else if d.record, err = NewDeviceRecord(person, name, key, enc.PublicKey(), &first[0]); err == nil {
+		err = d.record.Sign(w.keys[first[0].Person+"/"+first[0].ID])
 	}
 	if err != nil {
 		w.t.Fatal(err)

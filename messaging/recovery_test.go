@@ -11,6 +11,7 @@ import (
 	"encoding/hex"
 	"errors"
 	"regexp"
+	"slices"
 	"strings"
 	"testing"
 )
@@ -211,59 +212,89 @@ func TestBackupKeyTransfer(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	phone, k := newKeys(t), newKeys(t)
-	approver := record(t, "aiko", "phone", phone, "phone", phone.sig)
-	rec := record(t, "aiko", "tablet", k, "phone", phone.sig)
-	dir, _ := NewDirectory("aiko", []DeviceRecord{approver, rec}, nil)
-	sealed, err := bk.SealTo(rec, "phone", phone.sig)
+	phone, laptop, k, svc := newKeys(t), newKeys(t), newKeys(t), newKeys(t)
+	approver := record(t, "aiko", "phone", phone, nil, nil)
+	lap := record(t, "aiko", "laptop", laptop, &approver, phone.sig)
+	rec := record(t, "aiko", "tablet", k, &approver, phone.sig)
+	recs := []DeviceRecord{approver, lap, rec}
+	dir, _ := NewDirectory("aiko", recs, nil, nil)
+	sealed, err := bk.SealTo(rec, phone.sig)
 	if err != nil {
 		t.Fatal(err)
 	}
-	got, err := OpenBackupKey(k.enc, dir, "tablet", sealed)
+	got, err := OpenBackupKey(k.enc, dir, rec, sealed)
 	if err != nil || !bytes.Equal(got.Bytes(), bk.Bytes()) {
 		t.Fatalf("open: %v", err)
 	}
-	if _, err := OpenBackupKey(k.enc, dir, "phone", sealed); err == nil {
+	if _, err := OpenBackupKey(k.enc, dir, lap, sealed); err == nil {
 		t.Fatal("another device opened the transfer")
 	}
 	stranger, err := ecdh.X25519().GenerateKey(rand.Reader)
 	if err != nil {
 		t.Fatal(err)
 	}
-	if _, err := OpenBackupKey(stranger, dir, "tablet", sealed); err == nil {
+	if _, err := OpenBackupKey(stranger, dir, rec, sealed); err == nil {
 		t.Fatal("another key opened the transfer")
 	}
-	if _, err := bk.SealTo(DeviceRecord{Kind: RecordRecovery}, "phone", phone.sig); err == nil {
-		t.Fatal("sealed to a recovery record")
-	}
-	if _, err := bk.SealTo(rec, "tablet", k.sig); err == nil {
-		t.Fatal("a device approved itself")
+	for name, seal := range map[string]func() ([]byte, error){
+		"a recovery record": func() ([]byte, error) { return bk.SealTo(DeviceRecord{Kind: RecordRecovery}, phone.sig) },
+		"a root":            func() ([]byte, error) { return bk.SealTo(approver, phone.sig) },
+		"another device":    func() ([]byte, error) { return bk.SealTo(rec, laptop.sig) },
+	} {
+		if _, err := seal(); err == nil {
+			t.Errorf("sealed to %s, or by a device that did not approve it", name)
+		}
 	}
 
-	// Whoever reads the directory, the service first, seals a key of its
-	// own choosing: no device of the person signed it, so it is refused.
-	_, forger, err := ed25519.GenerateKey(rand.Reader)
-	if err != nil {
-		t.Fatal(err)
+	// as is a transfer signed by another record, as if it had approved
+	// the tablet.
+	as := func(by DeviceRecord, key ed25519.PrivateKey, chosen *BackupKey) []byte {
+		t.Helper()
+		moved := rec
+		moved.Voucher, moved.VoucherKey = by.ID, by.SignatureKey
+		b, err := chosen.SealTo(moved, key)
+		if err != nil {
+			t.Fatal(err)
+		}
+		return b
 	}
 	chosen, err := NewBackupKey()
 	if err != nil {
 		t.Fatal(err)
 	}
-	forged, err := chosen.SealTo(rec, "phone", forger)
+	// Another device of the person's, or a root the service lists, seals
+	// a key of its own choosing: neither approved the tablet, so it is
+	// refused.
+	svcRoot := record(t, "aiko", "svc", svc, nil, nil)
+	withSvc, _ := NewDirectory("aiko", append(slices.Clone(recs), svcRoot), nil, nil)
+	for name, transfer := range map[string][]byte{"another device": as(lap, laptop.sig, chosen), "the service's root": as(svcRoot, svc.sig, chosen)} {
+		if _, err := OpenBackupKey(k.enc, withSvc, rec, transfer); err == nil {
+			t.Errorf("the tablet took a backup key from %s", name)
+		}
+	}
+	// A key signed by no one is refused.
+	_, forger, err := ed25519.GenerateKey(rand.Reader)
 	if err != nil {
 		t.Fatal(err)
 	}
-	if _, err := OpenBackupKey(k.enc, dir, "tablet", forged); err == nil {
-		t.Fatal("the device took a backup key no device of its person signed")
-	}
-	// A transfer from a device the person revoked is refused.
-	gone := Revocation{Person: "aiko", Key: approver.SignatureKey, Keep: [][]byte{rec.SignatureKey}}
-	if err := gone.Sign("tablet", k.sig); err != nil {
+	forgedKey := rec
+	forgedKey.VoucherKey = forger.Public().(ed25519.PublicKey)
+	forged, err := chosen.SealTo(forgedKey, forger)
+	if err != nil {
 		t.Fatal(err)
 	}
-	revoked, _ := NewDirectory("aiko", []DeviceRecord{approver, rec}, []Revocation{gone})
-	if _, err := OpenBackupKey(k.enc, revoked, "tablet", sealed); err == nil {
+	if _, err := OpenBackupKey(k.enc, dir, rec, forged); err == nil {
+		t.Fatal("the device took a backup key no device of its person signed")
+	}
+	// The device's record must stand as the device holds it.
+	gone, _ := NewDirectory("aiko", []DeviceRecord{approver, lap}, nil, nil)
+	if _, err := OpenBackupKey(k.enc, gone, rec, sealed); err == nil {
+		t.Fatal("a device that does not stand took the backup key")
+	}
+	// A transfer from a device the person revoked is refused.
+	lost := revocation(t, "aiko", approver.SignatureKey, "laptop", laptop.sig, lap.SignatureKey, rec.SignatureKey)
+	revoked, _ := NewDirectory("aiko", recs, []Revocation{lost}, nil)
+	if _, err := OpenBackupKey(k.enc, revoked, rec, sealed); err == nil {
 		t.Fatal("a revoked device's transfer was taken")
 	}
 }

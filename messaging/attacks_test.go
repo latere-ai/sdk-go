@@ -5,10 +5,12 @@ package messaging
 
 import (
 	"bytes"
+	"crypto/ed25519"
 	"crypto/rand"
 	"encoding/base64"
 	"encoding/binary"
 	"fmt"
+	"slices"
 	"strings"
 	"testing"
 	"time"
@@ -275,4 +277,133 @@ func TestAttachmentNamesAndPlaces(t *testing.T) {
 			t.Errorf("%s: a file at an owner or path outside the messaging folder is carried", name)
 		}
 	}
+}
+
+func dirOf(t *testing.T, w *world, person string) *Directory {
+	t.Helper()
+	d, err := w.policy().Directory(person)
+	if err != nil {
+		t.Fatal(err)
+	}
+	return d
+}
+
+// phoneRevoked is the trio with alice's laptop added and her stolen
+// phone, her root, revoked from the laptop and removed from the group.
+func phoneRevoked(t *testing.T) (w *world, phone, laptop, bob, carol *device) {
+	t.Helper()
+	w, phone, bob, carol = trio(t)
+	laptop = w.device("alice", "laptop")
+	if _, err := w.commit(phone, mls.CommitOptions{Add: []*mls.KeyPackage{laptop.kp}}, []*device{bob, carol}, laptop); err != nil {
+		t.Fatal(err)
+	}
+	w.revoke(laptop, phone, laptop)
+	if _, err := w.commit(laptop, mls.CommitOptions{Remove: []uint32{leafOf(t, laptop.group, phone)}}, []*device{bob, carol}); err != nil {
+		t.Fatal(err)
+	}
+	if !dirOf(t, w, "alice").Revoked(phone.record.SignatureKey) {
+		t.Fatal("the phone is not revoked")
+	}
+	return w, phone, laptop, bob, carol
+}
+
+// The thief signs more revocations than the bound with the stolen phone,
+// of keys no record holds, and lists them first; they do not count, and
+// alice's revocation of the phone still does.
+func TestRevocationFlood(t *testing.T) {
+	w, phone, laptop, bob, carol := phoneRevoked(t)
+	var flood []Revocation
+	for range MaxRevocations + 1 {
+		junk := make([]byte, ed25519.PublicKeySize)
+		if _, err := rand.Read(junk); err != nil {
+			t.Fatal(err)
+		}
+		v := Revocation{Person: "alice", Key: junk}
+		if err := v.Sign("phone", phone.key); err != nil {
+			t.Fatal(err)
+		}
+		flood = append(flood, v)
+	}
+	w.revocations["alice"] = append(flood, w.revocations["alice"]...)
+	if !dirOf(t, w, "alice").Revoked(phone.record.SignatureKey) {
+		t.Error("the stolen phone is no longer revoked once revocations it signed come first")
+	}
+	spawn := w.device("alice", "spawn") // vouched for by the phone
+	refused(t, w.externalJoin(t, bob, []*device{bob, laptop, carol}, spawn))
+}
+
+// The service leaves out the laptop, the record that signed alice's
+// revocation of the phone; the revocation bob's app kept still applies,
+// and the phone stays out.
+func TestWithheldSigner(t *testing.T) {
+	w, phone, _, bob, carol := phoneRevoked(t)
+	w.known["alice"] = dirOf(t, w, "alice").Revocations() // what bob's app keeps
+	w.revocations["alice"] = nil
+	w.records["alice"] = slices.DeleteFunc(slices.Clone(w.records["alice"]), func(r DeviceRecord) bool { return r.ID == "laptop" })
+	if !dirOf(t, w, "alice").Revoked(phone.record.SignatureKey) {
+		t.Error("a revocation bob's app kept stops counting when the service leaves out the record that signed it")
+	}
+	refused(t, w.externalJoin(t, bob, []*device{bob, carol}, phone))
+}
+
+// forgedRoot lists a root of the service's own for person, and returns
+// its record and key.
+func forgedRoot(t *testing.T, w *world, person, id string) (DeviceRecord, ed25519.PrivateKey) {
+	t.Helper()
+	k := newKeys(t)
+	r := record(t, person, id, k, nil, nil)
+	w.records[person] = append(w.records[person], r)
+	return r, k.sig
+}
+
+// A root the service lists approves no backup key for alice's new
+// device: only the device that approved it does.
+func TestForgedRootApprovesNoBackupKey(t *testing.T) {
+	w := newWorld(t)
+	w.device("alice", "phone")
+	tablet := w.device("alice", "tablet") // vouched for by the phone
+	svc, svcKey := forgedRoot(t, w, "alice", "svc")
+	serviceKey, err := NewBackupKey()
+	if err != nil {
+		t.Fatal(err)
+	}
+	moved := tablet.record
+	moved.Voucher, moved.VoucherKey = svc.ID, svc.SignatureKey
+	transfer, err := serviceKey.SealTo(moved, svcKey)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err := OpenBackupKey(tablet.enc, dirOf(t, w, "alice"), tablet.record, transfer); err == nil {
+		t.Error("alice's tablet took a backup key the service chose, approved by a root the service listed")
+	}
+}
+
+// A root the service lists cannot revoke alice's only device, so the
+// service cannot remove her and make bob the owner.
+func TestForgedRootRevokesNothing(t *testing.T) {
+	w, alice, bob, carol := trio(t)
+	_, svcKey := forgedRoot(t, w, "alice", "svc")
+	v := Revocation{Person: "alice", Key: alice.record.SignatureKey}
+	if err := v.Sign("svc", svcKey); err != nil {
+		t.Fatal(err)
+	}
+	w.revocations["alice"] = append(w.revocations["alice"], v)
+	msg, err := mls.ProposeExternalRemove(w.service, bob.group.GroupID(), bob.group.Epoch(), 0, leafOf(t, bob.group, alice))
+	if err != nil {
+		t.Fatal(err)
+	}
+	m, err := w.view.Process(msg)
+	if err != nil {
+		t.Fatal(err)
+	}
+	refused(t, w.policy().CheckProposal(w.view, *m.Proposal))
+	for _, d := range []*device{bob, carol} {
+		if _, err := d.group.Process(msg); err != nil {
+			t.Fatal(err)
+		}
+	}
+	s := state(t, bob.group)
+	s.People, s.Owners = []string{"bob", "carol"}, []string{"bob"}
+	_, err = w.commit(bob, mls.CommitOptions{IncludePending: true, ReplaceExtensions: true, Extensions: withState(t, bob.group, s)}, []*device{carol})
+	refused(t, err)
 }

@@ -25,6 +25,21 @@ minor version may break code, and every such change is marked **Breaking**.
   `UserWithdraw` and `MessagesRead`; `UserMessage.SendNow` marks a message
   sent now, and `ModelRequest` gains `FoldSeq`, `NamesReads` and
   `Purpose`.
+- Package `messaging`: `Client`, the client of the messaging service at
+  `/v1/messaging`, for one device of a person: the directory
+  (`Devices`, `Directory`, `RegisterDevice`, `Revoke`), the recovery
+  record and the backup key left for a new device (`PutRecovery`,
+  `Recovery`, `LeaveTransfer`, `TakeTransfer`), key packages
+  (`PublishKeyPackages`, `KeyPackageCount`, `ClaimKeyPackages`),
+  conversations, their log and group info (`CreateConversation`,
+  `Conversations`, `Conversation`, `GroupInfo`, `Send`, `Messages`, which
+  waits up to `MaxWait` for a message), the Welcomes filed for the device
+  (`Welcomes`, `DeleteWelcome`), and whether a person is one of a
+  conversation's people (`IsMember`). A refusal matches the sentinel of
+  its code: `ErrNotYourDevice`, `ErrExists`, `ErrEpochTaken`,
+  `ErrWrongEpoch`, `ErrRefused`, `ErrTooLarge` or
+  `ErrAuthorizerUnavailable`. The models are held to the service's
+  OpenAPI document in `openapi/messaging.json`.
 
 ## [0.17.0] - 2026-10-30
 

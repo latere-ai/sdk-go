@@ -85,6 +85,30 @@
 // characters. It derives the key the backup key is wrapped under and the
 // signing key that vouches for a new device; the service never holds it.
 //
+// # The service
+//
+// A Client reaches the messaging service for one device: the directory,
+// key packages, each conversation's log and group info, the Welcomes
+// filed for the device, and the recovery record and the backup key left
+// for a new device. The service keeps ciphertext and public state; a
+// device checks what it takes from it with Directory and Policy before
+// it trusts or merges anything. The Config's credential is the person's
+// own token:
+//
+//	c := messaging.NewClient(cfg, device)
+//	page, err := c.Messages(ctx, conversation, after, 0, messaging.MaxWait)
+//	if err != nil {
+//		return err
+//	}
+//	for _, m := range page.Messages {
+//		// receive processes the message and, for a commit, merges it
+//		// only once policy.CheckCommit passes, as under Commits.
+//		if err := receive(g, m.Message); err != nil {
+//			return err
+//		}
+//	}
+//	after = page.Next
+//
 // # Limits
 //
 // What this package does not yet prove, so the apps say no more than it

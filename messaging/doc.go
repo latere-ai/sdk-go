@@ -53,6 +53,16 @@
 // (NewCommitNotice), into the person's backup, sealed under their
 // BackupKey, or into a report.
 //
+// # Files
+//
+// A message carries any file as an Attachment. SealAttachment encrypts
+// the file under a key of its own as a stream of authenticated chunks,
+// the ciphertext is uploaded to Storage, and the payload carries where it
+// is, the key, the file's digest and size, its name, its media type and a
+// small preview. OpenAttachment decrypts it and checks the digest, and
+// OpenAttachmentChunk decrypts one chunk for a reader that seeks. History
+// bundles are sealed as the same stream.
+//
 // # The recovery key
 //
 // A RecoveryKey is 128 random bits the person keeps, written as 28

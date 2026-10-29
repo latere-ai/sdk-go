@@ -8,7 +8,9 @@ import (
 	"crypto/sha256"
 	"errors"
 	"fmt"
+	"strings"
 	"time"
+	"unicode/utf8"
 
 	"latere.ai/x/sdk-go/mls"
 )
@@ -123,9 +125,11 @@ func (h HistoryRange) Filter(msgs []*SharedMessage) (kept []*SharedMessage, drop
 // JoinerNotice is what a joining leaf learns of its history share.
 type JoinerNotice struct {
 	Range HistoryRange
-	// Bundle is the address of the sealed bundle at the service; empty
-	// when the range shares nothing.
-	Bundle string
+	// Owner and Ref are where the sealed bundle is: whose Storage space,
+	// as the storage package names it, and its path there. Both are
+	// empty when the range shares nothing.
+	Owner string
+	Ref   string
 	// Digest and Size are the bundle's SHA-256 and length.
 	Digest []byte
 	Size   int64
@@ -138,12 +142,12 @@ func (j *JoinerNotice) validate() error {
 		return err
 	}
 	if j.Range.Kind == RangeNone {
-		if j.Bundle != "" || j.Digest != nil || j.Size != 0 || j.Key != nil {
+		if j.Owner != "" || j.Ref != "" || j.Digest != nil || j.Size != 0 || j.Key != nil {
 			return errors.New("messaging: a notice that shares nothing has no bundle")
 		}
 		return nil
 	}
-	if err := validID("bundle", j.Bundle); err != nil {
+	if err := validPlace(j.Owner, j.Ref); err != nil {
 		return err
 	}
 	if len(j.Digest) != sha256.Size || len(j.Key) != BundleKeySize || j.Size <= 0 || j.Size > MaxBundleBytes {
@@ -220,7 +224,8 @@ func NewCommitNotice(g *mls.Group, rng HistoryRange, joiners []Joiner) ([]byte, 
 		seen[string(sk)] = true
 		plain := encode(func(w *writer) {
 			j.Notice.Range.marshal(w)
-			w.vec8([]byte(j.Notice.Bundle))
+			w.vec8([]byte(j.Notice.Owner))
+			w.vec32([]byte(j.Notice.Ref))
 			w.vec8(j.Notice.Digest)
 			w.u64(uint64(j.Notice.Size))
 			w.vec8(j.Notice.Key)
@@ -320,7 +325,8 @@ func (n *CommitNotice) Open(g *mls.Group, kp *mls.KeyPackage, secrets *mls.KeyPa
 	r := &reader{b: plain}
 	var j JoinerNotice
 	j.Range.unmarshal(r)
-	j.Bundle = string(r.vec8())
+	j.Owner = string(r.vec8())
+	j.Ref = string(r.vec32())
 	if d := r.vec8(); len(d) > 0 {
 		j.Digest = bytes.Clone(d)
 	}
@@ -339,4 +345,23 @@ func (n *CommitNotice) Open(g *mls.Group, kp *mls.KeyPackage, secrets *mls.KeyPa
 		return nil, err
 	}
 	return &j, nil
+}
+
+// MaxRefBytes is the longest path of a file in Storage that a message
+// or notice names.
+const MaxRefBytes = 1024
+
+// validPlace checks where a file is said to be: a space's owner of at
+// most MaxIDBytes and a path of at most MaxRefBytes, both UTF-8 with no
+// control character.
+func validPlace(owner, ref string) error {
+	if owner == "" || len(owner) > MaxIDBytes || ref == "" || len(ref) > MaxRefBytes {
+		return errors.New("messaging: a file is named by its space's owner and its path")
+	}
+	for _, v := range []string{owner, ref} {
+		if !utf8.ValidString(v) || strings.ContainsFunc(v, func(r rune) bool { return r < 0x20 || r == 0x7f }) {
+			return errors.New("messaging: a file's place holds no control character")
+		}
+	}
+	return nil
 }

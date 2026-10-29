@@ -8,7 +8,6 @@ import (
 	"crypto/ed25519"
 	"crypto/rand"
 	"crypto/sha256"
-	"encoding/binary"
 	"errors"
 	"fmt"
 
@@ -128,25 +127,17 @@ func VerifyEntry(e Entry, groupID []byte, check KeyCheck) (*SharedMessage, error
 	return &SharedMessage{Sender: e.Sender, Epoch: sc.Epoch, Payload: p, Entry: e}, nil
 }
 
-// The sizes of a history bundle.
-const (
-	// BundleChunkBytes is how much of a bundle one AES-GCM chunk seals.
-	BundleChunkBytes = 64 << 10
-	// MaxBundleBytes is the most a sealed bundle takes.
-	MaxBundleBytes = 64 << 20
-)
+// MaxBundleBytes is the most a sealed history bundle takes.
+const MaxBundleBytes = 64 << 20
 
-const (
-	bundleVersion = 1
-	bundleAAD     = "latere messaging history bundle v1"
-	gcmTag        = 16
-)
+// bundleVersion is the first byte of a bundle's plaintext.
+const bundleVersion = 1
 
 // BundleKeySize is the size of the key a bundle is sealed under.
-const BundleKeySize = 32
+const BundleKeySize = StreamKeySize
 
 // SealedBundle is a history bundle sealed under a fresh key, for the
-// service to store and the new member to fetch.
+// sharer to upload and the new member to fetch.
 type SealedBundle struct {
 	// Ciphertext is what is uploaded.
 	Ciphertext []byte
@@ -157,9 +148,8 @@ type SealedBundle struct {
 	Digest []byte
 }
 
-// SealBundle seals entries as a history bundle under a fresh key, in
-// chunks of BundleChunkBytes, each chunk's nonce its position and
-// whether it is the last, so a bundle cut short or reordered does not
+// SealBundle seals entries as a history bundle under a fresh key, as a
+// stream (see ChunkBytes), so a bundle cut short or reordered does not
 // open.
 func SealBundle(entries []Entry) (*SealedBundle, error) {
 	plain := encode(func(w *writer) {
@@ -168,34 +158,19 @@ func SealBundle(entries []Entry) (*SealedBundle, error) {
 			w.vec32(e.Bytes())
 		}
 	})
+	if SealedSize(int64(len(plain))) > MaxBundleBytes {
+		return nil, fmt.Errorf("messaging: a history bundle is at most %d bytes", MaxBundleBytes)
+	}
 	key := make([]byte, BundleKeySize)
 	if _, err := rand.Read(key); err != nil {
 		return nil, err
 	}
-	aead, err := gcm(key)
+	out, err := sealBytes(key, bundleInfo, plain, MaxBundleBytes)
 	if err != nil {
 		return nil, err
 	}
-	chunks := (len(plain) + BundleChunkBytes - 1) / BundleChunkBytes
-	if int64(len(plain))+int64(chunks)*gcmTag > MaxBundleBytes {
-		return nil, fmt.Errorf("messaging: a history bundle is at most %d bytes", MaxBundleBytes)
-	}
-	var out []byte
-	for i := range chunks {
-		end := min((i+1)*BundleChunkBytes, len(plain))
-		out = aead.Seal(out, chunkNonce(i, i == chunks-1), plain[i*BundleChunkBytes:end], []byte(bundleAAD))
-	}
 	sum := sha256.Sum256(out)
 	return &SealedBundle{Ciphertext: out, Key: key, Digest: sum[:]}, nil
-}
-
-func chunkNonce(i int, last bool) []byte {
-	nonce := make([]byte, 12)
-	binary.BigEndian.PutUint64(nonce[3:11], uint64(i))
-	if last {
-		nonce[11] = 1
-	}
-	return nonce
 }
 
 // OpenBundle checks a fetched bundle against the digest its notice gave
@@ -212,25 +187,9 @@ func OpenBundle(ciphertext, key, digest []byte) ([]Entry, error) {
 	if len(key) != BundleKeySize {
 		return nil, ErrSealed
 	}
-	aead, err := gcm(key)
+	plain, err := openBytes(key, bundleInfo, ciphertext, MaxBundleBytes)
 	if err != nil {
 		return nil, err
-	}
-	var plain []byte
-	for i := 0; ; i++ {
-		n := BundleChunkBytes + gcmTag
-		last := len(ciphertext) <= n
-		if last {
-			n = len(ciphertext)
-		}
-		plain, err = aead.Open(plain, chunkNonce(i, last), ciphertext[:n], []byte(bundleAAD))
-		if err != nil {
-			return nil, ErrSealed
-		}
-		ciphertext = ciphertext[n:]
-		if last {
-			break
-		}
 	}
 	r := &reader{b: plain}
 	if v := r.u8(); r.err == nil && v != bundleVersion {

@@ -8,6 +8,8 @@ import (
 	"crypto/ed25519"
 	"crypto/sha256"
 	"errors"
+	"reflect"
+	"slices"
 	"strings"
 	"testing"
 	"time"
@@ -25,7 +27,7 @@ func TestPayload(t *testing.T) {
 		t.Fatalf("padded to %d", len(b))
 	}
 	got, err := ParsePayload(b)
-	if err != nil || got != p {
+	if err != nil || !reflect.DeepEqual(got, p) {
 		t.Fatalf("%+v, %v", got, err)
 	}
 	p.Text = strings.Repeat("x", 5000)
@@ -120,7 +122,7 @@ func TestBundle(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if len(sb.Ciphertext) < 3*BundleChunkBytes {
+	if len(sb.Ciphertext) < 3*ChunkBytes {
 		t.Fatalf("bundle of %d bytes", len(sb.Ciphertext))
 	}
 	got, err := OpenBundle(sb.Ciphertext, sb.Key, sb.Digest)
@@ -151,11 +153,13 @@ func TestBundle(t *testing.T) {
 
 	// Cut short at a chunk, a chunk swapped, a changed byte, the wrong
 	// key or digest: none opens.
-	n := BundleChunkBytes + gcmTag
-	swapped := append(append(bytes.Clone(sb.Ciphertext[n:2*n]), sb.Ciphertext[:n]...), sb.Ciphertext[2*n:]...)
+	c0, c1, c2 := ChunkOffset(0), ChunkOffset(1), ChunkOffset(2)
+	swapped := slices.Concat(sb.Ciphertext[:c0], sb.Ciphertext[c1:c2], sb.Ciphertext[c0:c1], sb.Ciphertext[c2:])
 	flipped := bytes.Clone(sb.Ciphertext)
 	flipped[7] ^= 1
-	for name, c := range map[string][]byte{"cut": sb.Ciphertext[:2*n], "swapped": swapped, "flipped": flipped} {
+	version := bytes.Clone(sb.Ciphertext)
+	version[0] = 2
+	for name, c := range map[string][]byte{"cut": sb.Ciphertext[:c2], "swapped": swapped, "flipped": flipped, "version": version} {
 		sum := sha256Sum(c)
 		if _, err := OpenBundle(c, sb.Key, sum); !errors.Is(err, ErrSealed) {
 			t.Errorf("%s: %v", name, err)
@@ -224,7 +228,7 @@ func TestCommitNotice(t *testing.T) {
 		t.Fatal(err)
 	}
 	rng := HistoryRange{Kind: RangeSinceTime, Since: time.UnixMilli(2000).UTC()}
-	jn := JoinerNotice{Range: rng, Bundle: "b1", Digest: sb.Digest, Size: int64(len(sb.Ciphertext)), Key: sb.Key}
+	jn := JoinerNotice{Range: rng, Owner: "me", Ref: "files/messaging/conversations/c/b1", Digest: sb.Digest, Size: int64(len(sb.Ciphertext)), Key: sb.Key}
 	ad, err := NewCommitNotice(alice.group, rng, []Joiner{{KeyPackage: carol.kp, Notice: jn}})
 	if err != nil {
 		t.Fatal(err)
@@ -279,7 +283,7 @@ func TestCommitNotice(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if !cn.Range.equal(rng) || cn.Bundle != "b1" || cn.Size != int64(len(sb.Ciphertext)) {
+	if !cn.Range.equal(rng) || cn.Owner != "me" || cn.Ref != "files/messaging/conversations/c/b1" || cn.Size != int64(len(sb.Ciphertext)) {
 		t.Fatalf("joiner notice %+v", cn)
 	}
 	es, err := OpenBundle(sb.Ciphertext, cn.Key, cn.Digest)

@@ -23,8 +23,10 @@ too.
   code: a change comes with a test against the working group's vectors
   in `mls/testdata` or a test that fails without it, and it builds for
   WebAssembly (`make wasm`).
-- `messaging/`: conversations between people over `mls`, on `mls` and
-  the standard library alone. It calls no API. Its byte formats are
+- `attachment/`: the file a message carries, shared by `agents` and
+  `messaging`. Plain data on the standard library alone.
+- `messaging/`: conversations between people over `mls`, on `mls`,
+  `attachment` and the standard library alone. It calls no API. Its byte formats are
   pinned by tests, since devices and the service of different versions
   read them; a change to one is a new version of that format. It builds
   for WebAssembly too.

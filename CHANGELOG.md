@@ -46,7 +46,12 @@ minor version may break code, and every such change is marked **Breaking**.
   group (`Entry`), history sealed for someone let in and announced in
   the commit that lets them in (`SealBundle`, `NewCommitNotice`), and
   the recovery key and the backup key it unlocks (`RecoveryKey`,
-  `BackupKey`). It builds for WebAssembly.
+  `BackupKey`). A message carries any file: `SealAttachment` encrypts it
+  on the device under a key of its own, as a stream of 64 KiB chunks
+  each sealed with AES-256-GCM, for upload to Storage, and
+  `OpenAttachment` and `OpenAttachmentChunk` decrypt it; history bundles
+  are sealed as the same stream. A file is at most `MaxAttachmentBytes`,
+  2 GiB. It builds for WebAssembly.
 - Package `memory`: what Latere remembers about a person across
   conversations, one Markdown file per memory in the person's Storage,
   for You or one of their projects. `ListMemories` answers the settings,

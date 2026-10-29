@@ -63,6 +63,8 @@ type Payload struct {
 	Reaction string `json:"reaction,omitempty"`
 	// AskedBy is, on a Latere answer, the person who asked.
 	AskedBy string `json:"asked_by,omitempty"`
+	// Attachments are the files a text carries, at most MaxAttachments.
+	Attachments []Attachment `json:"attachments,omitempty"`
 }
 
 // payloadVersion is the first byte of an encoded payload.
@@ -143,6 +145,21 @@ func (p *Payload) validate() error {
 	}
 	if p.AskedBy != "" {
 		if err := validID("person", p.AskedBy); err != nil {
+			return err
+		}
+	}
+	if len(p.Attachments) > 0 && p.Type != PayloadText {
+		return fmt.Errorf("messaging: a %s carries no file", p.Type)
+	}
+	if len(p.Attachments) > MaxAttachments {
+		return fmt.Errorf("messaging: a message carries at most %d files", MaxAttachments)
+	}
+	for i := range p.Attachments {
+		a := &p.Attachments[i]
+		if err := a.validate(); err != nil {
+			return err
+		}
+		if err := validPlace(a.Owner, a.Ref); err != nil {
 			return err
 		}
 	}

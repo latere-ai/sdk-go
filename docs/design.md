@@ -52,6 +52,8 @@ flowchart TD
     app --> messaging
     ds --> messaging
     messaging --> mls
+    messaging --> attachment
+    agents --> attachment
 ```
 
 `latere` is the core: configuration, credentials, the error type, the
@@ -863,10 +865,16 @@ without the group. They travel in a bundle sealed in chunks, with the
 last chunk marked in its nonce so a cut bundle does not open, and the
 bundle's key travels in the commit that lets the person in: under the
 group's exporter for the members, who can see what was shared, and
-under HPKE to each joiner's init key. The recovery key is 128 random
-bits with a check, written in Crockford base32 so it can be read aloud
-and typed without confusion; the keys derived from it are labeled, so
-none can stand in for another.
+under HPKE to each joiner's init key. A file a message carries is
+sealed as the same stream under a key of its own, which only the
+message carries, so the ciphertext can live in Storage beside every
+other file and Storage learns its length and nothing else; `attachment`
+holds the part of a file both kinds of conversation share, so an app
+draws a session's file and a person's file with one type.
+
+The recovery key is 128 random bits with a check, written in Crockford
+base32 so it can be read aloud and typed without confusion; the keys
+derived from it are labeled, so none can stand in for another.
 
 ## What came from other SDKs
 

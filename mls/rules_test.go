@@ -353,3 +353,19 @@ func TestMemberViews(t *testing.T) {
 		t.Fatalf("ratchet tree: %v", err)
 	}
 }
+
+func TestExternalCommitRemoveRejected(t *testing.T) {
+	alice, bob := pair(t, Config{})
+	p := &alice.group.publicState
+	committer := sender{typ: senderNewMemberCommit}
+	props := []resolvedProposal{
+		{p: &proposal{typ: proposalExternalInit, externalInit: []byte{1}}, sender: committer},
+		{p: &proposal{typ: proposalRemove, remove: bob.group.Leaf()}, sender: committer},
+	}
+	if _, err := p.applyProposals(&Config{}, props, committer); !errors.Is(err, errCommit) {
+		t.Fatalf("an external commit that removes a member: %v", err)
+	}
+	if _, err := p.applyProposals(&Config{}, props[1:], committer); !errors.Is(err, errCommit) {
+		t.Fatalf("an external commit without an external init: %v", err)
+	}
+}

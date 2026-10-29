@@ -164,8 +164,15 @@ func (p *publicState) applyProposals(cfg *Config, props []resolvedProposal, comm
 	if reinits > 0 && len(props) > 1 {
 		return nil, commitErr("a reinitialization with other proposals")
 	}
-	if external && (externalInits != 1 || removes > 1) {
-		return nil, commitErr("an external commit needs one external init and at most one remove")
+	if external && externalInits != 1 {
+		return nil, commitErr("an external commit needs exactly one external init")
+	}
+	// RFC 9420 lets an external commit remove the joiner's earlier leaf,
+	// a resync. It lets a stolen signature key join and remove the
+	// device it was stolen from in one step, so this package refuses it:
+	// a returning device joins anew and a member removes the old leaf.
+	if external && removes > 0 {
+		return nil, commitErr("an external commit removes a member")
 	}
 
 	app.tree = p.tree.clone()

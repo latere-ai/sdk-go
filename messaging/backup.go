@@ -7,6 +7,7 @@ import (
 	"crypto/aes"
 	"crypto/cipher"
 	"crypto/ecdh"
+	"crypto/ed25519"
 	"crypto/hkdf"
 	"crypto/hmac"
 	"crypto/hpke"
@@ -14,6 +15,7 @@ import (
 	"crypto/sha256"
 	"encoding/base64"
 	"errors"
+	"fmt"
 )
 
 // A person's history backup is every message their devices can read,
@@ -193,12 +195,40 @@ func transferContext(person, device string) []byte {
 	})
 }
 
+// transferVersion is the first byte of a backup key transfer.
+const transferVersion = 1
+
+// transferSignLabel separates an approver's signature of a transfer from
+// every other use of its key.
+const transferSignLabel = "latere messaging backup key transfer signature v1"
+
+func transferMessage(person, device string, encryptionKey []byte, approver string, sealed []byte) []byte {
+	return encode(func(w *writer) {
+		w.vec8([]byte(transferSignLabel))
+		w.vec8([]byte(person))
+		w.vec8([]byte(device))
+		w.vec8(encryptionKey)
+		w.vec8([]byte(approver))
+		w.vec32(sealed)
+	})
+}
+
 // SealTo seals the backup key to a new device's X25519 key from its
 // directory record, which an approving device does once it has vouched
-// for the device.
-func (b *BackupKey) SealTo(device DeviceRecord) ([]byte, error) {
+// for the device, and signs it with the approving device's key, so the
+// new device takes a backup key only from a device of its person.
+func (b *BackupKey) SealTo(device DeviceRecord, approver string, key ed25519.PrivateKey) ([]byte, error) {
 	if device.Kind != RecordDevice {
 		return nil, errors.New("messaging: a backup key is sealed to a device")
+	}
+	if err := validID("approver", approver); err != nil {
+		return nil, err
+	}
+	if approver == device.ID {
+		return nil, errors.New("messaging: a device does not approve itself")
+	}
+	if len(key) != ed25519.PrivateKeySize {
+		return nil, errors.New("messaging: an approver signs with an Ed25519 key")
 	}
 	pub, err := ecdh.X25519().NewPublicKey(device.EncryptionKey)
 	if err != nil {
@@ -209,18 +239,46 @@ func (b *BackupKey) SealTo(device DeviceRecord) ([]byte, error) {
 		return nil, err
 	}
 	kdf, aead := transferSuite()
-	return hpke.Seal(pk, kdf, aead, transferContext(device.Person, device.ID), b.key[:])
+	sealed, err := hpke.Seal(pk, kdf, aead, transferContext(device.Person, device.ID), b.key[:])
+	if err != nil {
+		return nil, err
+	}
+	sig := ed25519.Sign(key, transferMessage(device.Person, device.ID, device.EncryptionKey, approver, sealed))
+	return encode(func(w *writer) {
+		w.u8(transferVersion)
+		w.vec8([]byte(approver))
+		w.vec32(sealed)
+		w.vec8(sig)
+	}), nil
 }
 
 // OpenBackupKey opens a backup key SealTo sealed to this device, with
-// its X25519 private key.
-func OpenBackupKey(key *ecdh.PrivateKey, person, device string, sealed []byte) (*BackupKey, error) {
+// its X25519 private key, once the signature verifies under a device of
+// the person's that stands in their directory. It returns ErrSealed for a
+// transfer that is not for this device, and an error naming the approver
+// for one no device of the person signed.
+func OpenBackupKey(key *ecdh.PrivateKey, d *Directory, device string, transfer []byte) (*BackupKey, error) {
+	r := &reader{b: transfer}
+	if v := r.u8(); r.err == nil && v != transferVersion {
+		return nil, fmt.Errorf("%w: transfer version %d", errFormat, v)
+	}
+	approver, sealed, sig := string(r.vec8()), r.vec32(), r.vec8()
+	if err := r.done(); err != nil {
+		return nil, err
+	}
+	by, ok := d.Device(approver)
+	if !ok || approver == device {
+		return nil, fmt.Errorf("messaging: the backup key comes from %q, which is not another device of %s", approver, d.Person())
+	}
+	if !ed25519.Verify(by.SignatureKey, transferMessage(d.Person(), device, key.PublicKey().Bytes(), approver, sealed), sig) {
+		return nil, fmt.Errorf("messaging: the backup key's signature does not verify under %s's key", approver)
+	}
 	sk, err := hpke.NewDHKEMPrivateKey(key)
 	if err != nil {
 		return nil, err
 	}
 	kdf, aead := transferSuite()
-	raw, err := hpke.Open(sk, kdf, aead, transferContext(person, device), sealed)
+	raw, err := hpke.Open(sk, kdf, aead, transferContext(d.Person(), device), sealed)
 	if err != nil || len(raw) != BackupKeySize {
 		return nil, ErrSealed
 	}

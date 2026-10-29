@@ -22,8 +22,10 @@ var extensionTypes = []mls.ExtensionType{StateExtension, AttestationExtension}
 // Config is the configuration of a conversation's group: handshake
 // messages in the clear, signed, so the service checks every commit as
 // the devices do; every credential a device's or Latere's member's; no
-// proposal pending that the rules refuse whoever commits it; no key
-// package valid for longer than MaxKeyPackageLifetime.
+// proposal pending that the rules refuse from its sender, as far as the
+// conversation's state decides it; no key package valid for longer than
+// MaxKeyPackageLifetime. Policy.Config also checks a proposal's leaves
+// against the directory.
 func Config() mls.Config {
 	return mls.Config{
 		PublicHandshake: true,
@@ -31,9 +33,19 @@ func Config() mls.Config {
 			_, err := ParseCredential(c)
 			return err
 		},
-		AcceptProposal: func(_ mls.GroupState, pr mls.Proposal) error { return checkProposal(pr) },
+		AcceptProposal: func(g mls.GroupState, pr mls.Proposal) error { return checkProposal(g, pr, nil) },
 		MaxLifetime:    MaxKeyPackageLifetime,
 	}
+}
+
+// Config is the configuration of a conversation's group for a device or
+// the service that checks with the policy: Config, with every proposal
+// that arrives checked by CheckProposal, so none is pending that a
+// commit carrying it would break a rule with.
+func (p *Policy) Config() mls.Config {
+	c := Config()
+	c.AcceptProposal = func(g mls.GroupState, pr mls.Proposal) error { return checkProposal(g, pr, p) }
+	return c
 }
 
 // CreateOptions are the options a conversation's group is created with:

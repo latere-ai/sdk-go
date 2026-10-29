@@ -6,6 +6,7 @@ package messaging
 import (
 	"crypto/ed25519"
 	"crypto/rand"
+	"errors"
 	"slices"
 	"testing"
 
@@ -27,6 +28,7 @@ func letIn(t testing.TB, by *device, s State, joiners ...*device) mls.CommitOpti
 		t.Fatal(err)
 	}
 	opts.AuthenticatedData = ad
+	opts.WelcomeExtensions = []mls.Extension{WelcomeExtension(ad)}
 	return opts
 }
 
@@ -38,7 +40,7 @@ func (w *world) propose(msg []byte, to ...*device) {
 	if err != nil {
 		w.t.Fatalf("the service processing a proposal: %v", err)
 	}
-	if err := CheckProposal(w.view, *m.Proposal); err != nil {
+	if err := w.policy().CheckProposal(w.view, *m.Proposal); err != nil {
 		w.t.Fatalf("the service checking a proposal: %v", err)
 	}
 	for _, d := range to {
@@ -46,7 +48,7 @@ func (w *world) propose(msg []byte, to ...*device) {
 		if err != nil {
 			w.t.Fatalf("%s processing a proposal: %v", d.id, err)
 		}
-		if err := CheckProposal(d.group, *m.Proposal); err != nil {
+		if err := w.policy().CheckProposal(d.group, *m.Proposal); err != nil {
 			w.t.Fatalf("%s checking a proposal: %v", d.id, err)
 		}
 	}
@@ -169,6 +171,25 @@ func TestServiceRemoves(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
+	// Until bob revokes the device, the service removes no one.
+	loose, err := mls.UnmarshalPublicGroup(mustMarshal(t, w.view), Config())
+	if err != nil {
+		t.Fatal(err)
+	}
+	m, err := loose.Process(msg)
+	if err != nil {
+		t.Fatal(err)
+	}
+	refused(t, w.policy().CheckProposal(loose, *m.Proposal), "revoked")
+	strict, err := mls.NewPublicGroup(mustGroupInfo(t, alice), mls.JoinOptions{}, w.policy().Config())
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err := strict.Process(msg); err == nil {
+		t.Fatal("a group with the policy's configuration kept the removal pending")
+	}
+
+	w.revoke(bob, bob)
 	w.propose(msg, alice, bob, carol)
 	s := state(t, carol.group)
 	s.People = []string{"alice", "carol"}
@@ -182,24 +203,111 @@ func TestServiceRemoves(t *testing.T) {
 	}
 }
 
+// The service cannot remove an owner on its own word and so hand the
+// conversation to the next person who joined.
+func TestServiceRemovesNoOwner(t *testing.T) {
+	w, alice, bob, carol := trio(t)
+	msg, err := mls.ProposeExternalRemove(w.service, bob.group.GroupID(), bob.group.Epoch(), 0, leafOf(t, bob.group, alice))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err := w.view.Process(msg); err != nil {
+		t.Fatal(err)
+	}
+	for _, d := range []*device{bob, carol} {
+		m, err := d.group.Process(msg)
+		if err != nil {
+			t.Fatal(err)
+		}
+		refused(t, w.policy().CheckProposal(d.group, *m.Proposal), "revoked")
+	}
+	s := state(t, bob.group)
+	s.People, s.Owners = []string{"bob", "carol"}, []string{"bob"}
+	_, err = w.commit(bob, mls.CommitOptions{IncludePending: true, ReplaceExtensions: true, Extensions: withState(t, bob.group, s)},
+		[]*device{carol})
+	refused(t, err, "revoked")
+}
+
+// A person the service removed is removed, not gone of their own accord,
+// even when they dropped one of their devices themselves.
+func TestLeftOrRemoved(t *testing.T) {
+	w, alice, bob, carol := trio(t)
+	tablet := w.device("bob", "tablet")
+	if _, err := w.commit(bob, mls.CommitOptions{Add: []*mls.KeyPackage{tablet.kp}}, []*device{alice, carol}, tablet); err != nil {
+		t.Fatal(err)
+	}
+	w.revoke(bob, tablet)
+	msg, err := mls.ProposeExternalRemove(w.service, bob.group.GroupID(), bob.group.Epoch(), 0, leafOf(t, bob.group, tablet))
+	if err != nil {
+		t.Fatal(err)
+	}
+	w.propose(msg, alice, bob, carol, tablet)
+	drop, err := bob.group.ProposeRemove(leafOf(t, bob.group, bob), nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	w.propose(drop, alice, carol, tablet)
+	s := state(t, carol.group)
+	s.People = []string{"alice", "carol"}
+	ch, err := w.commit(carol, mls.CommitOptions{IncludePending: true, ReplaceExtensions: true, Extensions: withState(t, carol.group, s)},
+		[]*device{alice})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(ch.Left) != 0 || len(ch.Removed) != 1 || !ch.Removed[0].ByService || ch.Removed[0].Person != "bob" {
+		t.Fatalf("change %+v", ch)
+	}
+}
+
+func mustMarshal(t *testing.T, v *mls.PublicGroup) []byte {
+	t.Helper()
+	b, err := v.MarshalBinary()
+	if err != nil {
+		t.Fatal(err)
+	}
+	return b
+}
+
+func mustGroupInfo(t *testing.T, d *device) []byte {
+	t.Helper()
+	info, err := d.group.GroupInfo(mls.GroupInfoOptions{RatchetTree: true})
+	if err != nil {
+		t.Fatal(err)
+	}
+	return info
+}
+
 func TestCheckProposal(t *testing.T) {
-	w, alice, _, _ := trio(t)
+	w, alice, bob, _ := trio(t)
+	p := w.policy()
 	l := w.latere("x")
 	members := alice.group.Members()
 	service := mls.Sender{Kind: mls.SenderExternal}
-	for _, pr := range []mls.Proposal{
-		{Kind: mls.ProposalAdd, Sender: service},
-		{Kind: mls.ProposalGroupContextExtensions, Sender: service},
-		{Kind: mls.ProposalRemove, Sender: service, Leaf: 99},
-		{Kind: mls.ProposalPSK, Sender: mls.Sender{Kind: mls.SenderMember, Credential: alice.id.Credential()}},
-		{Kind: mls.ProposalReInit, Sender: mls.Sender{Kind: mls.SenderMember, Credential: alice.id.Credential()}},
-		{Kind: mls.ProposalAdd, Sender: mls.Sender{Kind: mls.SenderNewMember}},
-		{Kind: mls.ProposalRemove, Sender: mls.Sender{Kind: mls.SenderMember, Credential: l.id.Credential()}},
+	asBob := mls.Sender{Kind: mls.SenderMember, Credential: bob.id.Credential()}
+	stranger := w.device("dave", "phone")
+	strangerLeaf := mls.Member{Credential: stranger.id.Credential(), SignatureKey: stranger.record.SignatureKey}
+	s := state(t, alice.group)
+	s.Level = LevelReadsAlong
+	for name, pr := range map[string]mls.Proposal{
+		"service add":        {Kind: mls.ProposalAdd, Sender: service},
+		"service extensions": {Kind: mls.ProposalGroupContextExtensions, Sender: service},
+		"service no leaf":    {Kind: mls.ProposalRemove, Sender: service, Leaf: 99},
+		"service unrevoked":  {Kind: mls.ProposalRemove, Sender: service, Leaf: members[1].Leaf},
+		"psk":                {Kind: mls.ProposalPSK, Sender: mls.Sender{Kind: mls.SenderMember, Credential: alice.id.Credential()}},
+		"reinit":             {Kind: mls.ProposalReInit, Sender: mls.Sender{Kind: mls.SenderMember, Credential: alice.id.Credential()}},
+		"new member":         {Kind: mls.ProposalAdd, Sender: mls.Sender{Kind: mls.SenderNewMember}},
+		"latere":             {Kind: mls.ProposalRemove, Sender: mls.Sender{Kind: mls.SenderMember, Credential: l.id.Credential()}},
+		"bob removes alice":  {Kind: mls.ProposalRemove, Sender: asBob, Leaf: members[0].Leaf},
+		"bob adds dave":      {Kind: mls.ProposalAdd, Sender: asBob, Member: &strangerLeaf},
+		"bob sets the level": {Kind: mls.ProposalGroupContextExtensions, Sender: asBob, Extensions: withState(t, alice.group, s)},
 	} {
-		refused(t, CheckProposal(alice.group, pr))
+		if err := p.CheckProposal(alice.group, pr); !errors.Is(err, ErrRefused) {
+			t.Errorf("%s: %v", name, err)
+		}
 	}
+	w.revoke(bob, bob)
 	ok := mls.Proposal{Kind: mls.ProposalRemove, Sender: service, Leaf: members[1].Leaf}
-	if err := CheckProposal(alice.group, ok); err != nil {
+	if err := p.CheckProposal(alice.group, ok); err != nil {
 		t.Fatal(err)
 	}
 }

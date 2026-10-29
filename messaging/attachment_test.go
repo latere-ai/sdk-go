@@ -35,7 +35,7 @@ func sealFile(t testing.TB, plain []byte) (*Attachment, []byte) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	a.Name, a.MediaType, a.Owner, a.Ref = "f.bin", "application/octet-stream", "me", "files/messaging/conversations/c/o"
+	a.Name, a.MediaType, a.Owner, a.Ref = "f.bin", "application/octet-stream", "alice", "files/messaging/conversations/c/o"
 	return a, out.Bytes()
 }
 

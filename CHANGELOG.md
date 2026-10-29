@@ -43,14 +43,17 @@ minor version may break code, and every such change is marked **Breaking**.
   `CreateOptions`, `KeyPackageOptions`), its people, owners and level as
   a group context extension (`State`), the rules each commit and
   proposal is checked against on a device and on the service's view
-  alike (`Policy.CheckCommit`, `CheckProposal`, `CheckMessage`), a
-  person's devices as records vouched for by one another
-  (`DeviceRecord`, `Directory`, `SecurityCode`), a message padded to a
+  alike (`Policy.CheckCommit`, `Policy.CheckProposal`, `Policy.Config`,
+  `CheckMessage`), a person's devices as records vouched for by one
+  another and signed by their own keys (`DeviceRecord`, `Directory`,
+  `SecurityCode`), with a device removed by a signed `Revocation` that
+  the service can neither make nor undo, a message padded to a
   fixed set of sizes (`Payload`), a message that verifies outside its
   group (`Entry`), history sealed for someone let in and announced in
   the commit that lets them in (`SealBundle`, `NewCommitNotice`), and
   the recovery key and the backup key it unlocks (`RecoveryKey`,
-  `BackupKey`). A message carries any file: `SealAttachment` encrypts it
+  `BackupKey`), which reaches a new device signed by the device that
+  approved it. A message carries any file: `SealAttachment` encrypts it
   on the device under a key of its own, as a stream of 64 KiB chunks
   each sealed with AES-256-GCM, for upload to Storage, and
   `OpenAttachment` and `OpenAttachmentChunk` decrypt it; history bundles

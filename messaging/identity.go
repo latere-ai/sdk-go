@@ -28,6 +28,10 @@ const (
 	// AttestationExtension is the leaf extension of Latere's member: the
 	// installation's signature over the group and the leaf's key.
 	AttestationExtension mls.ExtensionType = 0xF5E1
+	// NoticeExtension is the Welcome extension that carries the digest of
+	// the commit's history notice, so a joiner takes the notice the
+	// committer made and no other.
+	NoticeExtension mls.ExtensionType = 0xF5E2
 )
 
 // MaxIDBytes bounds a person's, a device's and a conversation's id.

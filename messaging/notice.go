@@ -5,11 +5,14 @@ package messaging
 
 import (
 	"bytes"
+	"crypto/hmac"
+	"crypto/rand"
 	"crypto/sha256"
 	"errors"
 	"fmt"
 	"strings"
 	"time"
+	"unicode"
 	"unicode/utf8"
 
 	"latere.ai/x/sdk-go/mls"
@@ -17,13 +20,18 @@ import (
 
 // Whoever lets someone in chooses how much of the earlier conversation
 // they get, and the commit that adds them says so in its authenticated
-// data, which its signature covers, as a CommitNotice. The notice has two
-// parts. For the members, the range chosen, sealed under the exporter of
-// the epoch the commit leaves, so every member draws the line and the
-// service reads nothing. For each joining leaf, the range, where the
-// history bundle is, its digest and size and the key it is sealed under,
-// sealed to the init key of the key package the commit adds, so only
-// that device opens it.
+// data, which its signature covers, as a CommitNotice. The notice has a
+// commitment to the range and two parts. For the members, the range
+// chosen, sealed under the exporter of the epoch the commit leaves, so
+// every member draws the line and the service reads nothing. For each
+// joining leaf, the range, where the history bundle is, its digest and
+// size and the key it is sealed under, sealed to the init key of the key
+// package the commit adds, so only that device opens it. Both parts carry
+// the commitment's salt, and each side checks its range against the
+// commitment, so the members and the joiners read one range. A joiner
+// never sees the commit itself, so the commit's Welcome carries the
+// notice's digest in its group info (WelcomeExtension), which the
+// committer signs, and the joiner takes no notice of another digest.
 
 // RangeKind is how much earlier history a joiner gets.
 type RangeKind uint8
@@ -92,6 +100,9 @@ func (h *HistoryRange) unmarshal(r *reader) {
 	h.Kind = RangeKind(r.u8())
 	if ms := int64(r.u64()); ms != 0 {
 		h.Since = time.UnixMilli(ms).UTC()
+		if h.Since.IsZero() {
+			r.fail("a start of the zero time, which is written as 0")
+		}
 	}
 	h.SinceMessage = string(r.vec8())
 }
@@ -164,6 +175,11 @@ const (
 	// HistoryLabel is the EncryptWithLabel label a joiner's part of a
 	// notice is sealed under.
 	HistoryLabel = "conversation history"
+	// commitmentLabel and noticeDigestLabel separate the range's
+	// commitment and the notice's digest from every other hash.
+	commitmentLabel   = "latere messaging history range commitment v1"
+	noticeDigestLabel = "latere messaging history notice digest v1"
+	saltSize          = 32
 )
 
 // joinerContext is the context a joiner's part is sealed under: the
@@ -183,6 +199,26 @@ func membersAAD(groupID []byte, epoch uint64) []byte {
 	})
 }
 
+func commitment(rng HistoryRange, salt []byte) []byte {
+	h := sha256.New()
+	h.Write(encode(func(w *writer) {
+		w.vec8([]byte(commitmentLabel))
+		rng.marshal(w)
+		w.vec8(salt)
+	}))
+	return h.Sum(nil)
+}
+
+// WelcomeExtension is the extension the commit that carries a notice
+// puts in its Welcome, mls.CommitOptions.WelcomeExtensions, for the
+// joiners to check the notice they are handed against.
+func WelcomeExtension(notice []byte) mls.Extension {
+	h := sha256.New()
+	h.Write([]byte(noticeDigestLabel))
+	h.Write(notice)
+	return mls.Extension{Type: NoticeExtension, Data: h.Sum(nil)}
+}
+
 // Joiner is one leaf a commit adds, with what its notice says.
 type Joiner struct {
 	KeyPackage *mls.KeyPackage
@@ -190,19 +226,27 @@ type Joiner struct {
 }
 
 // NewCommitNotice makes the notice of a commit g is about to make, to
-// pass as mls.CommitOptions.AuthenticatedData. The members' part says
-// rng, and so does each joiner's part, sealed to its key package: one
-// commit lets everyone it adds in with one range, so the line every
-// member draws is true of each of them.
+// pass as mls.CommitOptions.AuthenticatedData, with WelcomeExtension of
+// it in mls.CommitOptions.WelcomeExtensions. The members' part says rng,
+// and so does each joiner's part, sealed to its key package: one commit
+// lets everyone it adds in with one range, so the line every member
+// draws is true of each of them.
 func NewCommitNotice(g *mls.Group, rng HistoryRange, joiners []Joiner) ([]byte, error) {
 	if err := rng.validate(); err != nil {
+		return nil, err
+	}
+	salt := make([]byte, saltSize)
+	if _, err := rand.Read(salt); err != nil {
 		return nil, err
 	}
 	key, err := g.Export(noticeExporterLabel, nil, 32)
 	if err != nil {
 		return nil, err
 	}
-	members, err := seal(key, encode(rng.marshal), membersAAD(g.GroupID(), g.Epoch()))
+	members, err := seal(key, encode(func(w *writer) {
+		rng.marshal(w)
+		w.vec8(salt)
+	}), membersAAD(g.GroupID(), g.Epoch()))
 	if err != nil {
 		return nil, err
 	}
@@ -224,6 +268,7 @@ func NewCommitNotice(g *mls.Group, rng HistoryRange, joiners []Joiner) ([]byte, 
 		seen[string(sk)] = true
 		plain := encode(func(w *writer) {
 			j.Notice.Range.marshal(w)
+			w.vec8(salt)
 			w.vec8([]byte(j.Notice.Owner))
 			w.vec32([]byte(j.Notice.Ref))
 			w.vec8(j.Notice.Digest)
@@ -238,6 +283,7 @@ func NewCommitNotice(g *mls.Group, rng HistoryRange, joiners []Joiner) ([]byte, 
 	}
 	return encode(func(w *writer) {
 		w.u8(noticeVersion)
+		w.vec8(commitment(rng, salt))
 		w.vec32(members)
 		w.u16(uint16(len(parts)))
 		for _, p := range parts {
@@ -249,8 +295,10 @@ func NewCommitNotice(g *mls.Group, rng HistoryRange, joiners []Joiner) ([]byte, 
 
 // CommitNotice is a commit's notice, decoded but not opened.
 type CommitNotice struct {
-	members []byte
-	joiners map[string][]byte
+	raw        []byte
+	commitment []byte
+	members    []byte
+	joiners    map[string][]byte
 }
 
 // ParseCommitNotice decodes a commit's authenticated data as a notice.
@@ -261,7 +309,10 @@ func ParseCommitNotice(ad []byte) (*CommitNotice, error) {
 	if v := r.u8(); r.err == nil && v != noticeVersion {
 		return nil, fmt.Errorf("%w: notice version %d", errFormat, v)
 	}
-	n := &CommitNotice{members: r.vec32(), joiners: make(map[string][]byte)}
+	n := &CommitNotice{raw: bytes.Clone(ad), commitment: r.vec8(), members: r.vec32(), joiners: make(map[string][]byte)}
+	if r.err == nil && len(n.commitment) != sha256.Size {
+		r.fail("a commitment of %d bytes", len(n.commitment))
+	}
 	count := int(r.u16())
 	for i := 0; i < count && r.err == nil; i++ {
 		sk, sealed := r.vec32(), r.vec32()
@@ -287,6 +338,24 @@ func (n *CommitNotice) Covers(signatureKey []byte) bool {
 	return ok
 }
 
+// readRange reads a range and its salt and checks them against the
+// commitment.
+func (n *CommitNotice) readRange(r *reader) (HistoryRange, error) {
+	var h HistoryRange
+	h.unmarshal(r)
+	salt := r.vec8()
+	if r.err != nil {
+		return HistoryRange{}, r.err
+	}
+	if err := h.validate(); err != nil {
+		return HistoryRange{}, err
+	}
+	if len(salt) != saltSize || !hmac.Equal(commitment(h, salt), n.commitment) {
+		return HistoryRange{}, errors.New("messaging: the notice's range is not the one its commit committed to")
+	}
+	return h, nil
+}
+
 // Range opens the members' part with the group the commit came to, while
 // it is still at the epoch the commit leaves: before mls.Group.Merge.
 func (n *CommitNotice) Range(g *mls.Group) (HistoryRange, error) {
@@ -299,21 +368,31 @@ func (n *CommitNotice) Range(g *mls.Group) (HistoryRange, error) {
 		return HistoryRange{}, err
 	}
 	r := &reader{b: plain}
-	var h HistoryRange
-	h.unmarshal(r)
-	if err := r.done(); err != nil {
+	h, err := n.readRange(r)
+	if err != nil {
 		return HistoryRange{}, err
 	}
-	if err := h.validate(); err != nil {
+	if err := r.done(); err != nil {
 		return HistoryRange{}, err
 	}
 	return h, nil
 }
 
 // Open opens the joiner's part for the device that joined with kp, with
-// the group it joined: after mls.JoinGroup, before the key package's
-// secrets are deleted.
+// the group it joined: after mls.JoinGroup, before the group is saved and
+// the key package's secrets are deleted. The notice must be the one
+// whose digest the Welcome carries.
 func (n *CommitNotice) Open(g *mls.Group, kp *mls.KeyPackage, secrets *mls.KeyPackageSecrets) (*JoinerNotice, error) {
+	want := WelcomeExtension(n.raw)
+	carried := false
+	for _, e := range g.WelcomeExtensions() {
+		if e.Type == NoticeExtension {
+			carried = hmac.Equal(e.Data, want.Data)
+		}
+	}
+	if !carried {
+		return nil, errors.New("messaging: the notice is not the one the Welcome names")
+	}
 	sealed, ok := n.joiners[string(kp.SignatureKey())]
 	if !ok {
 		return nil, errors.New("messaging: the notice has no part for this device")
@@ -324,7 +403,9 @@ func (n *CommitNotice) Open(g *mls.Group, kp *mls.KeyPackage, secrets *mls.KeyPa
 	}
 	r := &reader{b: plain}
 	var j JoinerNotice
-	j.Range.unmarshal(r)
+	if j.Range, err = n.readRange(r); err != nil {
+		return nil, err
+	}
 	j.Owner = string(r.vec8())
 	j.Ref = string(r.vec32())
 	if d := r.vec8(); len(d) > 0 {
@@ -351,17 +432,33 @@ func (n *CommitNotice) Open(g *mls.Group, kp *mls.KeyPackage, secrets *mls.KeyPa
 // or notice names.
 const MaxRefBytes = 1024
 
-// validPlace checks where a file is said to be: a space's owner of at
-// most MaxIDBytes and a path of at most MaxRefBytes, both UTF-8 with no
-// control character.
+// Folder is the folder of a person's Storage space that holds the
+// ciphertext of what their conversations carry: attachments, history
+// bundles and the backup. A message or notice names a file under it and
+// nowhere else.
+const Folder = "files/messaging"
+
+// validPlace checks where a file is said to be: a space's owner, an id
+// and never "me", which each reader would read as their own space, and
+// a path under Folder of at most MaxRefBytes with no empty, "." or ".."
+// segment and no control character.
 func validPlace(owner, ref string) error {
-	if owner == "" || len(owner) > MaxIDBytes || ref == "" || len(ref) > MaxRefBytes {
-		return errors.New("messaging: a file is named by its space's owner and its path")
+	if err := validID("space owner", owner); err != nil {
+		return err
 	}
-	for _, v := range []string{owner, ref} {
-		if !utf8.ValidString(v) || strings.ContainsFunc(v, func(r rune) bool { return r < 0x20 || r == 0x7f }) {
-			return errors.New("messaging: a file's place holds no control character")
+	if owner == "me" {
+		return errors.New(`messaging: a file's space is named by its owner, never "me"`)
+	}
+	if len(ref) > MaxRefBytes || !strings.HasPrefix(ref, Folder+"/") || !utf8.ValidString(ref) {
+		return fmt.Errorf("messaging: a file is named by its path under %s", Folder)
+	}
+	for seg := range strings.SplitSeq(ref, "/") {
+		if seg == "" || seg == "." || seg == ".." {
+			return errors.New("messaging: a file's path has no empty, . or .. segment")
 		}
+	}
+	if strings.ContainsFunc(ref, func(r rune) bool { return unicode.In(r, unicode.Cc, unicode.Cf, unicode.Zl, unicode.Zp) }) {
+		return errors.New("messaging: a file's path holds no control or format character")
 	}
 	return nil
 }

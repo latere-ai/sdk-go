@@ -24,6 +24,7 @@ type world struct {
 	view         *mls.PublicGroup
 	installation ed25519.PrivateKey
 	records      map[string][]DeviceRecord
+	revocations  map[string][]Revocation
 	keys         map[string]ed25519.PrivateKey
 }
 
@@ -38,7 +39,8 @@ func newWorld(t testing.TB) *world {
 		t.Fatal(err)
 	}
 	return &world{t: t, service: service, installation: inst,
-		records: make(map[string][]DeviceRecord), keys: make(map[string]ed25519.PrivateKey)}
+		records: make(map[string][]DeviceRecord), revocations: make(map[string][]Revocation),
+		keys: make(map[string]ed25519.PrivateKey)}
 }
 
 func (w *world) externalSender() mls.ExternalSender {
@@ -49,7 +51,7 @@ func (w *world) policy() *Policy {
 	return &Policy{
 		Installation: w.installation.Public().(ed25519.PublicKey),
 		Directory: func(person string) (*Directory, error) {
-			d, _ := NewDirectory(person, w.records[person])
+			d, _ := NewDirectory(person, w.records[person], w.revocations[person])
 			return d, nil
 		},
 	}
@@ -88,7 +90,9 @@ func (w *world) device(person, name string) *device {
 		w.t.Fatal(err)
 	}
 	d := &device{id: id, key: key, enc: enc, signer: signer}
-	d.record = NewDeviceRecord(person, name, key.Public().(ed25519.PublicKey), enc.PublicKey())
+	if d.record, err = NewDeviceRecord(person, name, key, enc.PublicKey()); err != nil {
+		w.t.Fatal(err)
+	}
 	if first := w.records[person]; len(first) == 0 {
 		err = d.record.Sign(name, key)
 	} else {
@@ -101,6 +105,22 @@ func (w *world) device(person, name string) *device {
 	w.keys[person+"/"+name] = key
 	d.fresh(w.t)
 	return d
+}
+
+// revoke has by, a device of the same person, revoke d's key, keeping
+// the records of keep, and lists the revocation.
+func (w *world) revoke(by, d *device, keep ...*device) Revocation {
+	w.t.Helper()
+	var keys [][]byte
+	for _, k := range keep {
+		keys = append(keys, k.record.SignatureKey)
+	}
+	v := Revocation{Person: d.id.Person, Key: d.record.SignatureKey, Keep: keys}
+	if err := v.Sign(by.id.Device, by.key); err != nil {
+		w.t.Fatal(err)
+	}
+	w.revocations[d.id.Person] = append(w.revocations[d.id.Person], v)
+	return v
 }
 
 // fresh gives the device a new key package.

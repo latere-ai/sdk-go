@@ -4,6 +4,7 @@
 package messaging
 
 import (
+	"bytes"
 	"encoding/binary"
 	"encoding/json"
 	"errors"
@@ -94,7 +95,9 @@ func EncodePayload(p Payload) ([]byte, error) {
 }
 
 // ParsePayload decodes an encoded payload. It refuses one whose length
-// is not one of PaddedSizes or whose padding is not zeros.
+// is not one of PaddedSizes, whose padding is not zeros, or whose JSON
+// is not exactly what EncodePayload writes for it, so no two decoders
+// read one payload two ways.
 func ParsePayload(b []byte) (Payload, error) {
 	sized := false
 	for _, size := range PaddedSizes {
@@ -118,6 +121,13 @@ func ParsePayload(b []byte) (Payload, error) {
 	}
 	if err := p.validate(); err != nil {
 		return Payload{}, err
+	}
+	canon, err := json.Marshal(p)
+	if err != nil {
+		return Payload{}, err
+	}
+	if !bytes.Equal(canon, b[5:5+n]) {
+		return Payload{}, fmt.Errorf("%w: the payload is not in its one encoding", errFormat)
 	}
 	return p, nil
 }

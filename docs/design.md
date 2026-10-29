@@ -852,12 +852,21 @@ same bytes and a change to it is in a commit the rules see.
 
 Which devices are a person's is not the service's to say. A person's
 devices are directory records, each signed by another of the person's
-records back to a root the person's apps pin; the service stores and
-serves them, and a record it made up verifies against nothing. A
-recovery record holds the public half of a key derived from the
-person's recovery key, so a new device can be vouched for when every
-old one is lost. A removed device's record stays, marked revoked, so
-the vouches it made still verify.
+records back to a root the person's apps pin, and by its own key, so no
+one lists a key they do not hold; the service stores and serves them,
+and a record it made up verifies against nothing. A recovery record
+holds the public half of a key derived from the person's recovery key,
+so a new device can be vouched for when every old one is lost. A device
+is removed by a signed revocation of its key, which names the records
+the key vouched for that stay; a revoked key vouches for nothing after,
+and two revocations of one key that keep different records keep only
+what both name, so a thief who holds a stolen key and argues with the
+person leaves neither side the disputed devices. The service can
+withhold a revocation from a device that never saw it, not undo one, and
+it proposes the removal of a revoked device and nothing else, so it
+cannot take a person out of a conversation or its ownership on its own.
+The backup key reaches a new device sealed to it and signed by the
+approving device, so the service cannot hand a device a key of its own.
 
 History shared with someone let in leaves the group as entries, each
 the original signed message, which `mls.VerifySignedContent` checks
@@ -865,7 +874,11 @@ without the group. They travel in a bundle sealed in chunks, with the
 last chunk marked in its nonce so a cut bundle does not open, and the
 bundle's key travels in the commit that lets the person in: under the
 group's exporter for the members, who can see what was shared, and
-under HPKE to each joiner's init key. A file a message carries is
+under HPKE to each joiner's init key, with a salted commitment to the
+range in the clear so both read one range. A joiner never sees the
+commit, and the service holds every init key, so the commit's Welcome
+carries the notice's digest in its signed group info, and a joiner takes
+no other notice. A file a message carries is
 sealed as the same stream under a key of its own, which only the
 message carries, so the ciphertext can live in Storage beside every
 other file and Storage learns its length and nothing else; `attachment`

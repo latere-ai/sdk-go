@@ -26,7 +26,8 @@ import (
 //     carries such a proposal.
 //   - A person's new device joins on its own by an external commit,
 //     which removes no one.
-//   - The service proposes removals only, of a person's devices.
+//   - The service proposes removals only, of devices whose keys their
+//     person revoked.
 //   - Latere's member commits an update of its own leaf and nothing
 //     else.
 //   - A one-on-one takes its second person in the commit that starts its
@@ -62,8 +63,8 @@ type Removal struct {
 	Person string
 	// By is the member who proposed it; zero when the service did.
 	By Identity
-	// ByService is set when the service proposed it, for a device the
-	// person removed or an account that was deleted.
+	// ByService is set when the service proposed the removal of a
+	// device the person revoked, of each of their devices that left.
 	ByService bool
 }
 
@@ -187,8 +188,8 @@ func (p *Policy) CheckCommit(g Group, c mls.Changes) (*Change, error) {
 			}
 			switch {
 			case external:
-				if target.id.Latere() {
-					return nil, refuse("an owner removes Latere's member, not the service")
+				if err := p.checkServiceRemoval(target); err != nil {
+					return nil, err
 				}
 				removedByService = append(removedByService, pr.Leaf)
 			case target.id.Latere(), target.id.Person != proposer.Person:
@@ -208,7 +209,7 @@ func (p *Policy) CheckCommit(g Group, c mls.Changes) (*Change, error) {
 		}
 	}
 	if len(addedBy) != len(c.Added) || len(removed) != len(c.Removed) {
-		return nil, errors.New("messaging: the commit's proposals and changes disagree")
+		return nil, refuse("the commit's proposals and changes disagree")
 	}
 
 	// The leaves after the commit.
@@ -293,28 +294,48 @@ func (p *Policy) CheckCommit(g Group, c mls.Changes) (*Change, error) {
 		return nil, refuse("the commit's state lists the people it leaves in the group")
 	}
 	ch.Joined = newPeople
+	// A person whose every leaf goes left when they proposed each
+	// removal themselves; otherwise someone removed them: a member when
+	// any member did, the service when only the service and they did.
+	type gone struct {
+		byService bool
+		by        *Identity
+	}
+	goneBy := make(map[string]*gone)
+	var goneOrder []string
 	for _, m := range c.Removed {
 		l := leaves[m.Leaf]
 		if l.id.Latere() {
 			ch.LatereRemoved = true
 			continue
 		}
-		by := removed[m.Leaf]
 		if has[l.id.Person] {
 			ch.DevicesRemoved = append(ch.DevicesRemoved, l.id)
 			continue
 		}
-		if slices.Contains(ch.Left, l.id.Person) || slices.ContainsFunc(ch.Removed, func(r Removal) bool { return r.Person == l.id.Person }) {
-			continue
+		g, seen := goneBy[l.id.Person]
+		if !seen {
+			g = &gone{}
+			goneBy[l.id.Person] = g
+			goneOrder = append(goneOrder, l.id.Person)
 		}
-		service := slices.Contains(removedByService, m.Leaf)
+		by := removed[m.Leaf]
 		switch {
-		case !service && by.Person == l.id.Person:
-			ch.Left = append(ch.Left, l.id.Person)
-		case service:
-			ch.Removed = append(ch.Removed, Removal{Person: l.id.Person, ByService: true})
+		case slices.Contains(removedByService, m.Leaf):
+			g.byService = true
+		case by.Person != l.id.Person && g.by == nil:
+			who := by
+			g.by = &who
+		}
+	}
+	for _, person := range goneOrder {
+		switch g := goneBy[person]; {
+		case g.by != nil:
+			ch.Removed = append(ch.Removed, Removal{Person: person, By: *g.by})
+		case g.byService:
+			ch.Removed = append(ch.Removed, Removal{Person: person, ByService: true})
 		default:
-			ch.Removed = append(ch.Removed, Removal{Person: l.id.Person, By: by})
+			ch.Left = append(ch.Left, person)
 		}
 	}
 
@@ -439,57 +460,138 @@ func sameOtherExtensions(a, b []mls.Extension) bool {
 }
 
 // CheckProposal checks a proposal as it arrives, before any commit
-// carries it, so a device discards one the rules refuse whoever
-// commits it: the service proposes removals of people's devices alone,
-// Latere's member proposes nothing, and a conversation takes no
-// pre-shared key, reinitialization or proposal from a joining client.
-func CheckProposal(g Group, pr mls.Proposal) error {
-	if err := checkProposal(pr); err != nil {
+// carries it, so a device discards one the rules refuse whoever commits
+// it, as Policy.Config has every group do: the service proposes the
+// removal of a revoked device alone; Latere's member proposes nothing;
+// an owner proposes adding a person or Latere's member, removing another
+// person or Latere's member, and a change of the state; a person
+// proposes adding and removing their own devices; every leaf proposed is
+// one the directory or the installation vouches for; and a conversation
+// takes no pre-shared key, reinitialization or proposal from a joining
+// client.
+func (p *Policy) CheckProposal(g Group, pr mls.Proposal) error { return checkProposal(g, pr, p) }
+
+// checkProposal is CheckProposal; with no policy it decides what the
+// conversation's state decides alone, which Config has every group
+// check.
+func checkProposal(g Group, pr mls.Proposal, p *Policy) error {
+	st, err := ParseState(g.Extensions())
+	if err != nil {
 		return err
 	}
-	if pr.Sender.Kind == mls.SenderExternal {
+	target := func(leafIndex uint32) (leaf, error) {
 		for _, m := range g.Members() {
-			if m.Leaf == pr.Leaf {
+			if m.Leaf == leafIndex {
 				id, err := ParseCredential(m.Credential)
 				if err != nil {
-					return err
+					return leaf{}, err
 				}
-				if id.Latere() {
-					return refuse("an owner removes Latere's member, not the service")
-				}
-				return nil
+				return leaf{m, id}, nil
 			}
 		}
-		return refuse("a removal is of a leaf not in the group")
+		return leaf{}, refuse("a removal is of a leaf not in the group")
 	}
-	return nil
-}
-
-// checkProposal is what CheckProposal decides from the proposal alone,
-// which Config has every group check before a proposal becomes pending.
-func checkProposal(pr mls.Proposal) error {
+	var proposer Identity
 	switch pr.Sender.Kind {
 	case mls.SenderExternal:
 		if pr.Kind != mls.ProposalRemove {
 			return refuse("the service proposes removals alone")
 		}
-		return nil
-	case mls.SenderMember:
-		id, err := ParseCredential(pr.Sender.Credential)
+		t, err := target(pr.Leaf)
 		if err != nil {
 			return err
 		}
-		if id.Latere() {
+		if p == nil {
+			if t.id.Latere() {
+				return refuse("an owner removes Latere's member, not the service")
+			}
+			return nil
+		}
+		return p.checkServiceRemoval(t)
+	case mls.SenderMember:
+		if proposer, err = ParseCredential(pr.Sender.Credential); err != nil {
+			return err
+		}
+		if proposer.Latere() {
 			return refuse("Latere's member proposes nothing")
 		}
 	default:
 		return refuse("a proposal comes from a member or the service")
 	}
+	owner := st.Owner(proposer.Person)
 	switch pr.Kind {
-	case mls.ProposalAdd, mls.ProposalRemove, mls.ProposalUpdate, mls.ProposalGroupContextExtensions:
-		return nil
+	case mls.ProposalAdd:
+		if pr.Member == nil {
+			return refuse("an add names the device it adds")
+		}
+		id, err := ParseCredential(pr.Member.Credential)
+		if err != nil {
+			return err
+		}
+		switch {
+		case id.Latere() && !owner:
+			return refuse("only an owner lets Latere in")
+		case !id.Latere() && st.Has(id.Person) && id.Person != proposer.Person:
+			return refuse("a person adds their own devices")
+		case !id.Latere() && !st.Has(id.Person) && !owner:
+			return refuse("only an owner adds a person")
+		}
+		if p != nil {
+			return p.checkLeaf(g.GroupID(), id, *pr.Member)
+		}
+	case mls.ProposalRemove:
+		t, err := target(pr.Leaf)
+		if err != nil {
+			return err
+		}
+		if (t.id.Latere() || t.id.Person != proposer.Person) && !owner {
+			return refuse("only an owner removes another person or Latere's member")
+		}
+	case mls.ProposalUpdate:
+		if p != nil && pr.Member != nil {
+			id, err := ParseCredential(pr.Member.Credential)
+			if err != nil {
+				return err
+			}
+			if id != proposer {
+				return refuse("an update keeps the leaf's identity")
+			}
+			return p.checkLeaf(g.GroupID(), id, *pr.Member)
+		}
+	case mls.ProposalGroupContextExtensions:
+		if !owner {
+			return refuse("only an owner proposes a change of the conversation's state")
+		}
+		next, err := ParseState(pr.Extensions)
+		if err != nil {
+			return refuse("the proposal's state: %v", err)
+		}
+		if next.Kind != st.Kind || !sameOtherExtensions(g.Extensions(), pr.Extensions) {
+			return refuse("a proposal changes no extension but the conversation's state")
+		}
+	default:
+		return refuse("a conversation takes no %v proposal", pr.Kind)
 	}
-	return refuse("a conversation takes no %v proposal", pr.Kind)
+	return nil
+}
+
+// checkServiceRemoval checks a removal the service proposes: of a device
+// of a person, never Latere's member, whose key the person revoked.
+func (p *Policy) checkServiceRemoval(t leaf) error {
+	if t.id.Latere() {
+		return refuse("an owner removes Latere's member, not the service")
+	}
+	if p.Directory == nil {
+		return errors.New("messaging: the policy has no directory")
+	}
+	d, err := p.Directory(t.id.Person)
+	if err != nil {
+		return err
+	}
+	if !d.Revoked(t.member.SignatureKey) {
+		return refuse("the service removes a device only once its person revoked it")
+	}
+	return nil
 }
 
 // CheckMessage checks an application message's sender against the

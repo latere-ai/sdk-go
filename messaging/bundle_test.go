@@ -228,7 +228,7 @@ func TestCommitNotice(t *testing.T) {
 		t.Fatal(err)
 	}
 	rng := HistoryRange{Kind: RangeSinceTime, Since: time.UnixMilli(2000).UTC()}
-	jn := JoinerNotice{Range: rng, Owner: "me", Ref: "files/messaging/conversations/c/b1", Digest: sb.Digest, Size: int64(len(sb.Ciphertext)), Key: sb.Key}
+	jn := JoinerNotice{Range: rng, Owner: "alice", Ref: "files/messaging/conversations/c/b1", Digest: sb.Digest, Size: int64(len(sb.Ciphertext)), Key: sb.Key}
 	ad, err := NewCommitNotice(alice.group, rng, []Joiner{{KeyPackage: carol.kp, Notice: jn}})
 	if err != nil {
 		t.Fatal(err)
@@ -238,7 +238,8 @@ func TestCommitNotice(t *testing.T) {
 	}
 	s := state(t, alice.group)
 	s.People = append(s.People, "carol")
-	opts := mls.CommitOptions{Add: []*mls.KeyPackage{carol.kp}, ReplaceExtensions: true, Extensions: withState(t, alice.group, s), AuthenticatedData: ad}
+	opts := mls.CommitOptions{Add: []*mls.KeyPackage{carol.kp}, ReplaceExtensions: true, Extensions: withState(t, alice.group, s),
+		AuthenticatedData: ad, WelcomeExtensions: []mls.Extension{WelcomeExtension(ad)}}
 	sc, err := alice.group.Commit(opts)
 	if err != nil {
 		t.Fatal(err)
@@ -283,7 +284,7 @@ func TestCommitNotice(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if !cn.Range.equal(rng) || cn.Owner != "me" || cn.Ref != "files/messaging/conversations/c/b1" || cn.Size != int64(len(sb.Ciphertext)) {
+	if !cn.Range.equal(rng) || cn.Owner != "alice" || cn.Ref != "files/messaging/conversations/c/b1" || cn.Size != int64(len(sb.Ciphertext)) {
 		t.Fatalf("joiner notice %+v", cn)
 	}
 	es, err := OpenBundle(sb.Ciphertext, cn.Key, cn.Digest)

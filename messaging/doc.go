@@ -17,17 +17,25 @@
 // # Devices and the directory
 //
 // A person's devices are in the directory as DeviceRecords, each
-// vouched for by another of the same person: the first device for
-// itself, later ones by an approved device or by the recovery key.
-// NewDirectory keeps the records whose vouches chain to a root, and a
-// root an app has not pinned for a person is a changed security code.
+// vouched for by another of the same person, the first device for
+// itself and later ones by an approved device or by the recovery key,
+// and each signed by its own key. A key the person no longer holds is
+// revoked by a Revocation one of their records signs. NewDirectory keeps
+// the records whose vouches chain to a root through keys no one revoked,
+// and a root an app has not pinned for a person is a changed security
+// code. The apps keep the revocations they have seen and pass them in
+// with the service's, so the service can neither undo a revocation nor
+// keep it from a device that saw it.
 //
 // # Commits
 //
 // A device checks every commit before merging it, with
 // Policy.CheckCommit, and the service checks the same before accepting
-// one; CheckProposal and CheckMessage check what arrives between
-// commits. The application merges a commit only if the check passes:
+// one; Policy.CheckProposal and CheckMessage check what arrives between
+// commits, and a group made with Policy.Config keeps no proposal pending
+// that the rules refuse. The service proposes nothing but the removal of
+// a device its person revoked. The application merges a commit only if
+// the check passes:
 //
 //	msg, err := g.Process(b)
 //	if err != nil {
@@ -50,8 +58,10 @@
 // sent with mls.Group.Encrypt. A message leaves its group as an Entry,
 // which verifies without the group: into a history share for someone
 // let in, sealed by SealBundle and announced by the commit's notice
-// (NewCommitNotice), into the person's backup, sealed under their
-// BackupKey, or into a report.
+// (NewCommitNotice, with WelcomeExtension in the commit's Welcome), into
+// the person's backup, sealed under their BackupKey, or into a report.
+// A new device of the person takes the backup key from another of their
+// devices, sealed to it and signed (BackupKey.SealTo).
 //
 // # Files
 //
@@ -68,4 +78,27 @@
 // A RecoveryKey is 128 random bits the person keeps, written as 28
 // characters. It derives the key the backup key is wrapped under and the
 // signing key that vouches for a new device; the service never holds it.
+//
+// # Limits
+//
+// What this package does not yet prove, so the apps say no more than it
+// does:
+//
+//   - An Entry proves who signed a message, not that it was sent to the
+//     conversation: VerifyEntry checks the signature against the group
+//     context the entry carries, so a member can date their own entries
+//     as they like, and a sharer can put in a bundle entries signed in
+//     another group under the conversation's id. A shared message is
+//     shown as its sender's, not as proof of the conversation's past.
+//   - The messages a device sent before its key was revoked stop
+//     verifying when the KeyCheck refuses a key no record stands for.
+//   - The service can list a new root for a person, whose devices then
+//     join on their own; the only sign is a changed security code.
+//   - A chunk opened alone is checked against the file's key, not its
+//     digest, so a sender can seal for a seeking reader other bytes than
+//     the whole file opens to; OpenAttachment checks the digest.
+//   - A revoked device keeps the backup key it was given. The backup key
+//     does not change on a revocation, so a revoked device that can still
+//     read the person's Storage reads their backup; removing a device
+//     also ends its sign-in, and Storage decides every read.
 package messaging

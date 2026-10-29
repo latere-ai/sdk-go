@@ -40,6 +40,12 @@ minor version may break code, and every such change is marked **Breaking**.
   the changes, every one when nil. The refusals match `ErrRunNotFound`,
   `ErrRunRunning`, `ErrRunNotWaiting`, `ErrRunBusy`,
   `ErrRunChangeUnknown` and `ErrRunsUnavailable`.
+- Package `account`: `ApplyManagedAgent` takes an optional
+  `ApplyManagedAgentParams`, whose `TimeZone`, an IANA name such as
+  `Europe/Berlin`, is the person's time zone, sent as the
+  `Latere-Time-Zone` header. The Always on items Latere gives a person
+  with the apply, such as Tidy memory, run at night in it; without it,
+  in UTC. A call that passes no params is unchanged.
 
 ## [0.15.0] - 2026-10-30
 

@@ -69,9 +69,11 @@ func ExampleClient_ListDevices() {
 }
 
 // Making sure the caller has their copy of a managed agent before creating
-// a session with it.
+// a session with it, in the person's time zone, so the Always on items
+// Latere gives them run at night where they live.
 func ExampleClient_ApplyManagedAgent() {
-	applied, err := client().ApplyManagedAgent(context.Background(), "latere-chat")
+	applied, err := client().ApplyManagedAgent(context.Background(), "latere-chat",
+		&account.ApplyManagedAgentParams{TimeZone: "Europe/Berlin"})
 	if err != nil {
 		log.Fatal(err)
 	}

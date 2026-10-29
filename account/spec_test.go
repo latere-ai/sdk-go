@@ -232,6 +232,28 @@ func TestEndpointsAreInTheDocument(t *testing.T) {
 	}
 }
 
+// The header ApplyManagedAgent names the person's time zone in is one the
+// apply's route takes.
+func TestTheApplyTakesATimeZone(t *testing.T) {
+	var op struct {
+		Parameters []struct {
+			Name string `json:"name"`
+			In   string `json:"in"`
+		} `json:"parameters"`
+	}
+	if err := json.Unmarshal(loadDocument(t).Paths["/v1/account/agents/{id}"]["put"], &op); err != nil {
+		t.Fatal(err)
+	}
+	if !slices.ContainsFunc(op.Parameters, func(p struct {
+		Name string `json:"name"`
+		In   string `json:"in"`
+	}) bool {
+		return p.Name == "Latere-Time-Zone" && p.In == "header"
+	}) {
+		t.Errorf("PUT /v1/account/agents/{id} takes no header Latere-Time-Zone: %+v", op.Parameters)
+	}
+}
+
 // TestTheRenameFitsItsSchema: the body RenameDevice sends is the one the
 // route takes, which allows no other member, and its name's bound is
 // MaxDeviceName.

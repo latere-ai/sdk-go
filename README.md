@@ -491,6 +491,17 @@ A person's computers are managed with their own sign-in; a key's token is
 refused with 403. Removing a computer the person no longer holds succeeds,
 so a removal is safe to repeat.
 
+`ApplyManagedAgent` makes the caller's copy of a managed agent, such as
+`latere-chat`, exist at its live version before a session starts with
+it. In the person's personal context it also gives them, once, Tidy
+memory, which tidies their memory at night in the time zone the apply
+names; without one, it runs at night in UTC:
+
+```go
+_, err = acct.ApplyManagedAgent(ctx, "latere-chat",
+	&account.ApplyManagedAgentParams{TimeZone: "Europe/Berlin"})
+```
+
 The package also keeps what a person's clients share:
 
 - **Links that share a conversation:** `CreateShare` makes one,

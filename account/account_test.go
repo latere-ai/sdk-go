@@ -94,6 +94,40 @@ func TestReads(t *testing.T) {
 	}
 }
 
+// An apply names the person's time zone when it is given one, and sends
+// no zone otherwise.
+func TestTheTimeZoneOfAnApply(t *testing.T) {
+	var zones []string
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		zone, sent := r.Header["Latere-Time-Zone"]
+		if !sent {
+			zone = []string{"none"}
+		}
+		zones = append(zones, zone...)
+		fmt.Fprint(w, `{"id":"latere-chat","version":7,"model":"tier/quick","agent":{"id":"agent_1","version":3}}`)
+	}))
+	t.Cleanup(srv.Close)
+	cfg, err := latere.NewConfig(latere.WithBaseURL(srv.URL), latere.WithTokenSource(latere.StaticToken("tok")))
+	if err != nil {
+		t.Fatal(err)
+	}
+	c := account.New(cfg)
+	for _, params := range [][]*account.ApplyManagedAgentParams{
+		{{TimeZone: "Europe/Berlin"}}, nil, {nil}, {{}},
+	} {
+		if _, err := c.ApplyManagedAgent(t.Context(), "latere-chat", params...); err != nil {
+			t.Fatal(err)
+		}
+	}
+	if want := []string{"Europe/Berlin", "none", "none", "none"}; fmt.Sprint(zones) != fmt.Sprint(want) {
+		t.Errorf("the applies sent the zones %v, want %v", zones, want)
+	}
+	two := []*account.ApplyManagedAgentParams{{TimeZone: "Europe/Berlin"}, {TimeZone: "Asia/Tokyo"}}
+	if _, err := c.ApplyManagedAgent(t.Context(), "latere-chat", two...); err == nil || len(zones) != 4 {
+		t.Errorf("an apply of two params: %v, after %d requests", err, len(zones))
+	}
+}
+
 func TestAnOrganizationMembersWallet(t *testing.T) {
 	c, _ := fakeAPI(t, map[string]string{
 		"GET /v1/account/wallet": `{"state":"Exhausted","limit_resets_at":"2026-11-01T00:00:00Z"}`,

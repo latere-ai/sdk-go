@@ -91,6 +91,15 @@ Per-call options are not offered. A call that needs a shorter deadline
 uses its context; a part of a program that needs another retry policy
 builds a second `Config`.
 
+A call released without parameters that later gains some takes them as a
+trailing variadic params struct, as `account.ApplyManagedAgent(ctx, id,
+params...)` takes the person's time zone, so a call written before
+compiles unchanged; at most one is read, and more than one is refused
+before any request. This is not the per-call option declined above: the
+struct holds what the API's route takes, here the zone its
+`Latere-Time-Zone` header carries, as any params struct holds a route's
+parameters, and nothing about how the SDK sends the request.
+
 ## Credentials
 
 Every request carries a bearer token from a `latere.TokenSource`, an

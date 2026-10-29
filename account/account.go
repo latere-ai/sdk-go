@@ -55,17 +55,46 @@ func (c *Client) get(ctx context.Context, path string, out any) error {
 	return c.cfg.Do(ctx, &latere.Request{Method: http.MethodGet, Path: path}, out)
 }
 
+// timeZoneHeader carries the person's time zone on a managed agent's
+// apply.
+const timeZoneHeader = "Latere-Time-Zone"
+
+// ApplyManagedAgentParams are the choices of a managed agent's apply.
+type ApplyManagedAgentParams struct {
+	// TimeZone is the person's time zone, an IANA name such as
+	// "Europe/Berlin", which the Always on items Latere gives them run in:
+	// Tidy memory tidies their memory at night there. Empty, or a name the
+	// API does not know, is UTC, so an item runs at night in UTC; "Local",
+	// the name time.Local has on most machines, is no IANA name and is UTC
+	// too. Latere gives an item once, at the apply in the person's
+	// personal context that first gives it, and a later apply with another
+	// zone does not move it, so a program sends the zone on every apply.
+	TimeZone string
+}
+
 // ApplyManagedAgent makes sure the caller has their own copy of a managed
 // agent Latere publishes, such as "latere-chat", at its live version, and
 // returns the copy. Sessions with the agent are then created with
 // agents.CreateSessionParams{Agent: id}. Calling it again changes nothing
-// unless a newer version went live.
-func (c *Client) ApplyManagedAgent(ctx context.Context, id string) (*AppliedAgent, error) {
+// unless a newer version went live. In the person's personal context the
+// apply also gives them, once, the Always on item Tidy memory, which runs
+// at night in params' TimeZone.
+//
+// params are optional, so a call written before they existed is
+// unchanged: at most one, nil or none for the defaults; more than one is
+// refused before any request.
+func (c *Client) ApplyManagedAgent(ctx context.Context, id string, params ...*ApplyManagedAgentParams) (*AppliedAgent, error) {
 	if id == "" {
 		return nil, errors.New("account: the managed agent's id is empty")
 	}
-	var out AppliedAgent
+	if len(params) > 1 {
+		return nil, errors.New("account: ApplyManagedAgent takes at most one ApplyManagedAgentParams")
+	}
 	req := &latere.Request{Method: http.MethodPut, Path: "/v1/account/agents/" + url.PathEscape(id)}
+	if len(params) == 1 && params[0] != nil && params[0].TimeZone != "" {
+		req.Header = http.Header{timeZoneHeader: {params[0].TimeZone}}
+	}
+	var out AppliedAgent
 	if err := c.cfg.Do(ctx, req, &out); err != nil {
 		return nil, err
 	}

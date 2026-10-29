@@ -7,6 +7,10 @@ minor version may break code, and every such change is marked **Breaking**.
 
 ## [Unreleased]
 
+## [0.15.0] - 2026-10-30
+
+Packages `mls` and `messaging` have had no external security audit yet.
+
 ### Added
 
 - Package `mls`: Messaging Layer Security, RFC 9420, in pure Go on the

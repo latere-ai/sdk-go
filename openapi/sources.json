@@ -21,7 +21,7 @@
   },
   "messaging": {
     "url": "https://platform.latere.ai/docs/messaging/openapi.yaml",
-    "sha256": "f453595e02bdc6866a091d54ff9ca510a6a2e74e45c3e11dd808f2d3d6e7fc0c"
+    "sha256": "99ec29682aaf51c57319e7148b13582559b61e7ad760a8d061e4e9a15c9111d7"
   },
   "storage": {
     "url": "https://platform.latere.ai/docs/storage/openapi.yaml",

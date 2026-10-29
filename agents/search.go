@@ -101,8 +101,8 @@ func (m *SessionMatch) UnmarshalJSON(b []byte) error {
 }
 
 // An EventMatch is an event of a session's log whose text matched a
-// search: a message a person sent, an answer the agent wrote on the
-// session's own thread, or a person's answer to a question.
+// search: a message a person sent, an answer the agent wrote in the
+// session's own conversation, or a person's answer to a question.
 type EventMatch struct {
 	// Seq is the event's place in the session's log, by which a program
 	// shows it in the conversation.
@@ -134,10 +134,10 @@ var errNoQuery = errors.New("agents: SearchSessionsParams.Query is required")
 // SearchSessions returns an iterator over the sessions whose messages,
 // answers and answers to questions hold every word of params.Query,
 // newest first as ListSessions orders them, fetching pages as the loop
-// needs them. A tool's output, a subagent's thread, a file and a redacted
-// event are never searched. A page may hold fewer sessions than its
-// limit while more follow, since a session the caller may not read is
-// left out. An empty Query yields an error before any request.
+// needs them. A tool's output, a subagent's conversation, a file and a
+// redacted event are never searched. A page may hold fewer sessions than
+// its limit while more follow, since a session the caller may not read
+// is left out. An empty Query yields an error before any request.
 func (c *Client) SearchSessions(ctx context.Context, params *SearchSessionsParams) iter.Seq2[*SessionMatch, error] {
 	return latere.Items(ctx, func(ctx context.Context, cursor string) (*latere.Page[*SessionMatch], error) {
 		return c.searchPage(ctx, params, cursor)

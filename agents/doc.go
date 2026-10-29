@@ -176,7 +176,7 @@
 // # Context
 //
 // A Session's ContextReport says how full its context is and what fills
-// it, from the latest model request of its own thread, and each
+// it, from the latest model request of its own conversation, and each
 // EventModelRequest's ModelRequest carries the report of that request as
 // its Context. ContextReport.UsedFraction answers the share of the window
 // used, and ContextReport.PartsInOrder the parts that fill it: the

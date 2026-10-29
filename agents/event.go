@@ -82,9 +82,9 @@ type Event struct {
 	Turn int `json:"turn,omitempty"`
 	// Step is the step of the turn the event belongs to, when it has one.
 	Step int `json:"step,omitempty"`
-	// Thread names the thread of a helper agent the event belongs to; empty
-	// for the session's own thread.
-	Thread string `json:"thread,omitempty"`
+	// Subagent names the subagent whose conversation the event belongs to;
+	// empty for the session's own conversation.
+	Subagent string `json:"subagent,omitempty"`
 	// Payload is the event's content, whose shape depends on Type; read it
 	// with Decode.
 	Payload json.RawMessage `json:"payload"`
@@ -637,7 +637,7 @@ type ToolUse struct {
 	Reason string `json:"reason,omitempty"`
 	// Attended reports whether a person began the call's turn: false for
 	// a turn a trigger's or a wake's message began, which nobody watches,
-	// and for a helper agent's call in such a turn. Nil on a call recorded
+	// and for a subagent's call in such a turn. Nil on a call recorded
 	// before the API wrote it.
 	Attended *bool `json:"attended,omitempty"`
 }
@@ -702,9 +702,10 @@ type ModelRequest struct {
 	// dollar; nil when it was not priced.
 	CostMicroUSD *int64 `json:"cost_usd_micro,omitempty"`
 	// Context is how full the request left the model's input window, and
-	// what filled it, for a step of a thread and a compaction; nil for a
-	// request beside the conversation, such as one for the session's
-	// title, and on a request recorded before the API wrote it.
+	// what filled it, for a step of the session's own conversation or of
+	// a subagent's, and for a compaction; nil for a request beside the
+	// conversation, such as one for the session's title, and on a request
+	// recorded before the API wrote it.
 	Context *ContextReport `json:"context,omitempty"`
 }
 

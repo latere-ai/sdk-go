@@ -55,12 +55,13 @@ type SharedPage struct {
 	// Share is the link the page is read through.
 	Share Share `json:"share"`
 	// Events are the page's events, at most 500. A reader sees the
-	// session's own thread alone, and of it the messages, the answers,
-	// the tool calls and their results, the answers to questions, the
-	// interrupts, the status and model changes, the compactions and the
-	// files kept, each with what of its payload a reader may see; a
-	// redacted event's payload is {"tombstone": true}. Decode them as the
-	// events of ListEvents; a shared event names no SessionID.
+	// session's own conversation alone, never a subagent's, and of it the
+	// messages, the answers, the tool calls and their results, the answers
+	// to questions, the interrupts, the status and model changes, the
+	// compactions and the files kept, each with what of its payload a
+	// reader may see; a redacted event's payload is {"tombstone": true}.
+	// Decode them as the events of ListEvents; a shared event names no
+	// SessionID.
 	Events []*Event `json:"events"`
 	// NextCursor names the next page in SharedPageParams.Cursor; empty on
 	// the last.

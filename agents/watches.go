@@ -492,7 +492,7 @@ func (c *Client) readOffers(ctx context.Context, id string, calls map[string]*Wa
 		if !last.IsZero() && e.Time.After(last.Add(clockSlack)) {
 			return nil
 		}
-		if e.Type != EventAgentToolUse || e.Thread != "" {
+		if e.Type != EventAgentToolUse || e.Subagent != "" {
 			continue
 		}
 		var use ToolUse

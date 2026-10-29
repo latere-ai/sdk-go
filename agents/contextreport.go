@@ -7,9 +7,9 @@ import "slices"
 
 // A ContextReport is how full a model request's input window was, and
 // what filled it: the Context of an EventModelRequest, and the latest of
-// them for the session's own thread as Session.ContextReport. A program
-// shows how full a conversation's context is from UsedFraction, and what
-// fills it from PartsInOrder.
+// them for the session's own conversation as Session.ContextReport. A
+// program shows how full a conversation's context is from UsedFraction,
+// and what fills it from PartsInOrder.
 type ContextReport struct {
 	// Window is the model's input window, in tokens; zero when the
 	// model catalog names none.

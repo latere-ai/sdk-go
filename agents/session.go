@@ -119,8 +119,8 @@ type Session struct {
 	Budget *Budget `json:"budget,omitempty"`
 	// ContextReport is how full the session's context is, and what fills
 	// it: the Context of the latest model request of the session's own
-	// thread that records one. Nil before any. A helper agent's requests
-	// and a title's leave it as it was.
+	// conversation that records one. Nil before any. A subagent's
+	// requests and a title's leave it as it was.
 	ContextReport *ContextReport `json:"context_report,omitempty"`
 	// Folder is the session's folder of files in Storage, where it keeps
 	// the files its messages carried and those its answers showed or

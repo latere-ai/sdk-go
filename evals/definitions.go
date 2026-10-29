@@ -579,8 +579,8 @@ type Task struct {
 	// time.ParseDuration reads it; empty for the platform's default.
 	Timeout string `json:"timeout,omitempty"`
 	// MaxTurns bounds the model responses of the system under test's own
-	// thread, which some kinds of candidate take as advice alone; zero for
-	// no bound.
+	// conversation, not its subagents', which some kinds of candidate take
+	// as advice alone; zero for no bound.
 	MaxTurns int `json:"max_turns,omitempty"`
 	// Evidence are files of the workspace kept as evidence besides the
 	// transcript.

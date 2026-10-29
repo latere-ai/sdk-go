@@ -7,6 +7,17 @@ minor version may break code, and every such change is marked **Breaking**.
 
 ## [Unreleased]
 
+### Changed
+
+- **Breaking:** Package `agents`: a subagent's events and deltas are
+  named by `Event.Subagent` and `Delta.Subagent`, read from the JSON
+  field `subagent`, the name the agents API now gives the subagent whose
+  conversation they belong to. `Event.Thread` and `Delta.Thread`, and
+  the JSON field `thread`, are gone; the API's `thread.started`,
+  `thread.message` and `thread.ended` events are now `subagent.started`,
+  `subagent.message` and `subagent.ended`. Against an agents API that
+  still sends `thread`, both fields read empty.
+
 ## [0.13.0] - 2026-10-25
 
 ### Added

@@ -44,10 +44,11 @@ func TestStreamFollowsUntilTheSessionEnds(t *testing.T) {
 		if r.Header.Get("Last-Event-ID") == "" {
 			fmt.Fprint(w, frame(2, "user.message", `{"content":[{"type":"text","text":"Hi"}]}`))
 			fmt.Fprint(w, "event: delta\ndata: {\"turn\":1,\"step\":1,\"block\":0,\"kind\":\"text\",\"text\":\"He\"}\n\n")
+			fmt.Fprint(w, "event: delta\ndata: {\"subagent\":\"sub_1\",\"turn\":1,\"step\":1,\"block\":0,\"kind\":\"text\",\"text\":\"Lo\"}\n\n")
 			fmt.Fprint(w, frame(3, "session.status", `{"status":"running"}`))
 			return // the connection drops mid-session
 		}
-		fmt.Fprint(w, frame(4, "agent.message", `{}`))
+		fmt.Fprint(w, strings.Replace(frame(4, "agent.message", `{}`), `"seq":4,`, `"seq":4,"subagent":"sub_1",`, 1))
 		fmt.Fprint(w, frame(5, "session.status", `{"status":"ended","stop_reason":"completed"}`))
 		fmt.Fprint(w, frame(6, "never.read", `{}`))
 	})
@@ -58,12 +59,12 @@ func TestStreamFollowsUntilTheSessionEnds(t *testing.T) {
 		}
 		switch {
 		case item.Delta != nil:
-			got = append(got, "delta:"+item.Delta.Text)
+			got = append(got, "delta:"+item.Delta.Subagent+":"+item.Delta.Text)
 		case item.Event != nil:
-			got = append(got, fmt.Sprintf("%d:%s", item.Event.Seq, item.Event.Type))
+			got = append(got, fmt.Sprintf("%d:%s:%s", item.Event.Seq, item.Event.Type, item.Event.Subagent))
 		}
 	}
-	if strings.Join(got, ",") != "2:user.message,delta:He,3:session.status,4:agent.message,5:session.status" {
+	if strings.Join(got, ",") != "2:user.message:,delta::He,delta:sub_1:Lo,3:session.status:,4:agent.message:sub_1,5:session.status:" {
 		t.Errorf("streamed %v", got)
 	}
 	if queries[0] != "deltas=1&from_seq=2" || strings.Join(resumes, ",") != ",3" {

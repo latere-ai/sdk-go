@@ -301,7 +301,7 @@ turn, `Attended`: false on a turn a trigger or a wake began, which
 nobody watches.
 
 A `Session`'s `ContextReport` says how full its context is and what
-fills it, from the latest model request of its own thread; each
+fills it, from the latest model request of its own conversation; each
 `EventModelRequest`'s `ModelRequest` carries the same report for that
 request as its `Context`:
 

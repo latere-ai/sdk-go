@@ -252,7 +252,7 @@ func TestWatchesAreReadInOnePass(t *testing.T) {
 		logEvent("ses_a", 1, 0, "user.message", `{"sender":{"subject":"alice","kind":"person"},"content":[{"type":"text","text":"Every Monday, plan my week."}]}`),
 		logEvent("ses_a", 2, 1, "agent.tool_use", heldCall("toolu_1", `{"action":"propose","name":"Monday plan","ask":"Plan the week.","why":"Every Monday at 9:00 I plan your week.","schedule":"0 9 * * 1","timeZone":"Europe/Berlin"}`)),
 		logEvent("ses_a", 3, 2, "user.tool_confirmation", `{"tool_use_id":"toolu_1","decision":"allow"}`),
-		strings.Replace(logEvent("ses_a", 4, 3, "agent.tool_use", heldCall("toolu_2", `{"action":"propose","why":"A helper's call."}`)), `"seq":4,`, `"seq":4,"thread":"thr_1",`, 1),
+		strings.Replace(logEvent("ses_a", 4, 3, "agent.tool_use", heldCall("toolu_2", `{"action":"propose","why":"A subagent's call."}`)), `"seq":4,`, `"seq":4,"subagent":"sub_1",`, 1),
 		logEvent("ses_a", 5, 5, "agent.tool_use", heldCall("toolu_2", `{"action":"propose","name":"Retry test on main","ask":"Run the retry test.","why":"After each push to main I run it and tell you if it fails.","on":{"product":"github","verbs":["push"]}}`)),
 		logEvent("ses_a", 6, 6, "user.tool_confirmation", `{"tool_use_id":"toolu_2","decision":"allow"}`),
 	}

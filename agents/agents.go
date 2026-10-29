@@ -859,9 +859,9 @@ type StreamItem struct {
 // A Delta is a live fragment of a response as the agent writes it. Deltas
 // are not stored: the EventAgentMessage that follows holds the response.
 type Delta struct {
-	// Thread names the helper agent's thread the response belongs to;
-	// empty for the session's own.
-	Thread string `json:"thread,omitempty"`
+	// Subagent names the subagent whose response it is; empty for the
+	// session's own conversation.
+	Subagent string `json:"subagent,omitempty"`
 	// Turn is the turn the response belongs to.
 	Turn int `json:"turn"`
 	// Step is the step of the turn the response answers; a turn takes a

@@ -141,7 +141,6 @@ var leftOut = map[string]string{
 	"Event.payload":          "kept raw and decoded on demand with Event.Decode, since its shape follows the event's type",
 	"TriggerStatus.owner":    "the subject the trigger acts as, which its reader already is",
 	"TriggerStatus.identity": "the identity the trigger's sessions are started with, which no client reads yet",
-	"Event.thread":           "the document's name for Event.subagent, which the API no longer sends; take it off once the document names subagent",
 }
 
 // aheadOfTheDocument is the fields models read that the published
@@ -149,10 +148,7 @@ var leftOut = map[string]string{
 // JSON name, each with the schema it will join and what it is. checkModel
 // takes them as read, and TestFieldsAheadOfTheDocumentAreStillAhead fails
 // once the document describes one, so the model is then held to it.
-var aheadOfTheDocument = map[string]ahead{
-	"Event.subagent": {"EventEnvelope", "the subagent whose conversation an event belongs to"},
-	"Delta.subagent": {"Delta", "the subagent whose response a delta carries"},
-}
+var aheadOfTheDocument = map[string]ahead{}
 
 // ahead is a field of aheadOfTheDocument: the schema it will join, a
 // component's name or "event:" and an event's type for its payload, and

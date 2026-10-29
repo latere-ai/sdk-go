@@ -193,7 +193,7 @@ func (k *KeyPackage) Ref() []byte {
 func (k *KeyPackage) CipherSuite() CipherSuite { return k.kp.suite }
 
 // Credential returns the client's credential.
-func (k *KeyPackage) Credential() Credential { return k.kp.leaf.credential }
+func (k *KeyPackage) Credential() Credential { return k.kp.leaf.credential.clone() }
 
 // SignatureKey returns the client's signature public key.
 func (k *KeyPackage) SignatureKey() []byte { return bytes.Clone(k.kp.leaf.signatureKey) }
@@ -206,6 +206,46 @@ func (k *KeyPackage) LeafExtensions() []Extension { return cloneExtensions(k.kp.
 
 // Extensions returns the key package's own extensions.
 func (k *KeyPackage) Extensions() []Extension { return cloneExtensions(k.kp.extensions) }
+
+// mlsLabels are the EncryptWithLabel labels MLS uses itself, which an
+// application's sealing never takes.
+var mlsLabels = []string{"Welcome", "UpdatePathNode"}
+
+// Seal encrypts plaintext to the key package's init key with
+// EncryptWithLabel, RFC 9420, Section 5.1.3, under an application's
+// label and context, for the client that made it to open with
+// KeyPackageSecrets.Open. The label may not be one MLS uses.
+func (k *KeyPackage) Seal(label string, context, plaintext []byte) ([]byte, error) {
+	if label == "" || slices.Contains(mlsLabels, label) {
+		return nil, fmt.Errorf("mls: %q is not a label for an application", label)
+	}
+	s, err := suiteFor(k.kp.suite)
+	if err != nil {
+		return nil, err
+	}
+	kem, ct, err := s.encryptWithLabel(k.kp.initKey, label, context, plaintext)
+	if err != nil {
+		return nil, err
+	}
+	return encode((&hpkeCiphertext{kemOutput: kem, ciphertext: ct}).marshal), nil
+}
+
+// Open decrypts what KeyPackage.Seal sealed to kp, whose secrets these
+// are, under the same label and context.
+func (k *KeyPackageSecrets) Open(kp *KeyPackage, label string, context, sealed []byte) ([]byte, error) {
+	if label == "" || slices.Contains(mlsLabels, label) {
+		return nil, fmt.Errorf("mls: %q is not a label for an application", label)
+	}
+	s, err := suiteFor(kp.kp.suite)
+	if err != nil {
+		return nil, err
+	}
+	var c hpkeCiphertext
+	if err := decode(bytes.Clone(sealed), c.unmarshal); err != nil {
+		return nil, err
+	}
+	return s.decryptWithLabel(k.initPriv, label, context, c.kemOutput, c.ciphertext)
+}
 
 // Bytes encodes the secrets for storage beside the key package. They are
 // private keys.
@@ -231,7 +271,9 @@ func ParseKeyPackageSecrets(b []byte) (*KeyPackageSecrets, error) {
 
 // checkLeafSelf checks what a leaf says of itself: its keys are valid for
 // the suite, its signature verifies, its credential and extensions are
-// in its capabilities, and its capabilities include the suite.
+// in its capabilities. Its capabilities need not list the group's suite:
+// RFC 9420 puts that on the client making the leaf, and the suite is
+// fixed by the group context and the key package's signed suite.
 func checkLeafSelf(s *suite, l *leafNode, groupID []byte, leafIndex uint32) error {
 	if err := s.checkHPKEPublicKey(l.encryptionKey); err != nil {
 		return err

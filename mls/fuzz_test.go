@@ -147,3 +147,128 @@ func FuzzVerifySignedContent(f *testing.F) {
 		}
 	})
 }
+
+// FuzzSignedCommit reads the input as a commit's body, signs it validly,
+// as a member with its membership tag or as a new member with a
+// re-signed path leaf, and has a member and a public view process and
+// merge it. FuzzProcess stops at the signature; this reaches the
+// proposal list, the path and the tree checks with hostile content.
+func FuzzSignedCommit(f *testing.F) {
+	alice, bob, _ := trio(f, Config{PublicHandshake: true})
+	mallory := newClient(f, testSuite, "mallory")
+	dave := newClient(f, testSuite, "dave")
+	for _, opts := range []CommitOptions{{}, {Add: []*KeyPackage{dave.kp}}, {Remove: []uint32{2}}} {
+		sc, err := bob.group.Commit(opts)
+		if err != nil {
+			f.Fatal(err)
+		}
+		m, err := parseMessage(sc.Message())
+		if err != nil {
+			f.Fatal(err)
+		}
+		body := encode(m.public.content.commit.marshal)
+		f.Add(uint8(0), body)
+		f.Add(uint8(1), body)
+	}
+	gi, err := bob.group.GroupInfo(GroupInfoOptions{RatchetTree: true, ExternalPub: true})
+	if err != nil {
+		f.Fatal(err)
+	}
+	_, ext, err := JoinExternal(gi, mallory.signer, mallory.cred, ExternalJoinOptions{}, Config{})
+	if err != nil {
+		f.Fatal(err)
+	}
+	m, err := parseMessage(ext)
+	if err != nil {
+		f.Fatal(err)
+	}
+	f.Add(uint8(1), encode(m.public.content.commit.marshal))
+	aliceState, err := alice.group.MarshalBinary()
+	if err != nil {
+		f.Fatal(err)
+	}
+	bobState, err := bob.group.MarshalBinary()
+	if err != nil {
+		f.Fatal(err)
+	}
+	aliceInfo, err := alice.group.GroupInfo(GroupInfoOptions{RatchetTree: true})
+	if err != nil {
+		f.Fatal(err)
+	}
+	f.Fuzz(func(t *testing.T, mode uint8, body []byte) {
+		var c commit
+		if decode(body, c.unmarshal) != nil {
+			return
+		}
+		a, err := UnmarshalGroup(aliceState, Config{})
+		if err != nil {
+			t.Fatal(err)
+		}
+		b, err := UnmarshalGroup(bobState, Config{})
+		if err != nil {
+			t.Fatal(err)
+		}
+		ac := &authenticatedContent{
+			wireFormat: WireFormatPublicMessage,
+			content: framedContent{
+				groupID: b.ctx.groupID, epoch: b.ctx.epoch,
+				sender:      sender{typ: senderMember, index: b.Leaf()},
+				contentType: contentCommit, commit: &c,
+			},
+			auth: framedContentAuthData{confirmationTag: make([]byte, 32)},
+		}
+		key := b.signer
+		if mode&1 == 1 {
+			if c.path == nil {
+				return
+			}
+			ac.content.sender = sender{typ: senderNewMemberCommit}
+			c.path.leaf.signatureKey = mallory.signer.PublicKey()
+			if c.path.leaf.sign(b.s, mallory.signer, b.ctx.groupID, a.tree.freeLeaf()) != nil {
+				return
+			}
+			key = mallory.signer
+		}
+		ctx := b.ctxBytes()
+		if err := b.s.signContent(key, ac, ctx); err != nil {
+			return
+		}
+		pm := &publicMessage{content: ac.content, auth: ac.auth}
+		if ac.content.sender.typ == senderMember {
+			pm.membershipTag = b.s.membershipTag(b.es.membership, ac, ctx)
+		}
+		msg := encode((&mlsMessage{wireFormat: WireFormatPublicMessage, public: pm}).marshal)
+		if m, err := a.Process(msg); err == nil && m.Commit != nil {
+			_ = a.Merge(m.Commit) // only a panic matters here
+		}
+		if pg, err := NewPublicGroup(aliceInfo, JoinOptions{}, Config{}); err == nil {
+			if m, err := pg.Process(msg); err == nil && m.Commit != nil {
+				_ = pg.Merge(m.Commit) // only a panic matters here
+			}
+		}
+	})
+}
+
+// FuzzTreeValidators runs every check a joiner runs on a tree, and the
+// path helpers, on an arbitrary parsed tree.
+func FuzzTreeValidators(f *testing.F) {
+	alice, _, _ := trio(f, Config{})
+	f.Add(alice.group.tree.bytes())
+	s := alice.group.s
+	f.Fuzz(func(t *testing.T, b []byte) {
+		tree, err := parseTree(b)
+		if err != nil || tree.numLeaves() > 1<<12 {
+			return
+		}
+		// Only a panic matters: each check may refuse the tree.
+		_ = tree.treeHash(s)
+		_ = tree.verifyParentHashes(s)
+		_ = tree.verifyUnmergedLeaves()
+		_ = tree.verifyUniqueKeys()
+		p := &publicState{s: s, ctx: alice.group.ctx}
+		_ = p.checkGroupExtensions(tree, nil)
+		for _, i := range tree.members() {
+			_ = tree.filteredDirectPath(i)
+		}
+	})
+}

@@ -103,6 +103,21 @@ func cloneExtensions(exts []Extension) []Extension {
 	return out
 }
 
+// clone returns a copy of the credential that shares no memory with it.
+func (c Credential) clone() Credential {
+	out := Credential{Type: c.Type, Identity: bytes.Clone(c.Identity)}
+	for _, cert := range c.Certificates {
+		out.Certificates = append(out.Certificates, bytes.Clone(cert))
+	}
+	return out
+}
+
+// equal reports whether two credentials are the same.
+func (c Credential) equal(o Credential) bool {
+	return c.Type == o.Type && bytes.Equal(c.Identity, o.Identity) &&
+		slices.EqualFunc(c.Certificates, o.Certificates, bytes.Equal)
+}
+
 // CredentialType is the kind of a member's credential.
 type CredentialType uint16
 
@@ -164,6 +179,18 @@ type Capabilities struct {
 	Extensions   []ExtensionType
 	Proposals    []uint16
 	Credentials  []CredentialType
+}
+
+// clone returns a copy of the capabilities that shares no memory with
+// them.
+func (c Capabilities) clone() Capabilities {
+	return Capabilities{
+		Versions:     slices.Clone(c.Versions),
+		CipherSuites: slices.Clone(c.CipherSuites),
+		Extensions:   slices.Clone(c.Extensions),
+		Proposals:    slices.Clone(c.Proposals),
+		Credentials:  slices.Clone(c.Credentials),
+	}
 }
 
 func (c *Capabilities) marshal(w *writer) {
@@ -1045,6 +1072,30 @@ type requiredCapabilities struct {
 	extensions  []ExtensionType
 	proposals   []uint16
 	credentials []CredentialType
+}
+
+// RequiredCapabilitiesExtension returns the group context extension that
+// requires every member to support the extension types, proposal kinds
+// and credential types listed, so a client that does not understand
+// them cannot be added.
+func RequiredCapabilitiesExtension(extensions []ExtensionType, proposals []ProposalKind, credentials []CredentialType) Extension {
+	return Extension{Type: ExtensionRequiredCapabilities, Data: encode(func(w *writer) {
+		w.nested(func(w *writer) {
+			for _, t := range extensions {
+				w.u16(uint16(t))
+			}
+		})
+		w.nested(func(w *writer) {
+			for _, p := range proposals {
+				w.u16(uint16(p))
+			}
+		})
+		w.nested(func(w *writer) {
+			for _, c := range credentials {
+				w.u16(uint16(c))
+			}
+		})
+	})}
 }
 
 func unmarshalRequiredCapabilities(data []byte) (requiredCapabilities, error) {

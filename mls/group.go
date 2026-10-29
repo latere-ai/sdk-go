@@ -8,6 +8,7 @@ import (
 	"crypto/rand"
 	"errors"
 	"fmt"
+	"slices"
 	"time"
 )
 
@@ -28,6 +29,18 @@ type Config struct {
 	// Nil accepts every credential, which is right only when the
 	// application checks the members of each staged commit itself.
 	CheckCredential func(cred Credential, signatureKey []byte) error
+	// AcceptProposal decides whether a proposal that arrives in a message
+	// of its own may become pending, which lets a commit with
+	// IncludePending carry it. It runs after the proposal is checked on
+	// its own. Nil accepts a member's proposals and an external sender's
+	// removals, and refuses the rest, a client proposing its own add and
+	// an external sender's other proposals, which RFC 9420 leaves to the
+	// application (Section 12.1.8).
+	AcceptProposal func(Proposal) error
+	// CheckSuccessor decides whether a leaf's new credential, in an
+	// update or a committer's path, may replace the one it had, RFC
+	// 9420, Section 5.3.1. Nil accepts only the same credential.
+	CheckSuccessor func(old, new Credential) error
 	// PSKs supplies the external PSKs commits and Welcomes may name.
 	PSKs PSKStore
 	// Now is the clock for key package lifetimes; nil uses time.Now.
@@ -45,6 +58,29 @@ type Config struct {
 	// OmitRatchetTree leaves the ratchet tree out of the group info a
 	// Welcome carries, for a delivery service that hands it out.
 	OmitRatchetTree bool
+}
+
+func (c *Config) acceptProposal(p Proposal) error {
+	if c.AcceptProposal != nil {
+		return c.AcceptProposal(p)
+	}
+	switch {
+	case p.Sender.Kind == SenderMember:
+		return nil
+	case p.Sender.Kind == SenderExternal && p.Kind == ProposalRemove:
+		return nil
+	}
+	return errors.New("mls: the group takes no such proposal from outside it")
+}
+
+func (c *Config) successor(old, new Credential) error {
+	if c.CheckSuccessor != nil {
+		return c.CheckSuccessor(old.clone(), new.clone())
+	}
+	if !old.equal(new) {
+		return errors.New("mls: a leaf's new credential is not its old one")
+	}
+	return nil
 }
 
 func (c *Config) now() time.Time {
@@ -187,6 +223,7 @@ func CreateGroup(groupID []byte, signer *SignatureKey, cred Credential, opts Cre
 	g.confirmationTag = s.confirmationTag(g.es.confirmation, nil)
 	g.interim = s.interimTranscriptHash(nil, g.confirmationTag)
 	g.st = newSecretTree(s, g.es.encryption, g.tree.numLeaves())
+	g.es.encryption = nil // consumed by the secret tree, RFC 9420, Section 9.2
 	g.resumption = []resumptionPSK{{epoch: 0, psk: g.es.resumption}}
 	return g, nil
 }
@@ -244,9 +281,9 @@ type Member struct {
 func memberOf(i uint32, l *leafNode) Member {
 	return Member{
 		Leaf:         i,
-		Credential:   l.credential,
+		Credential:   l.credential.clone(),
 		SignatureKey: bytes.Clone(l.signatureKey),
-		Capabilities: l.capabilities,
+		Capabilities: l.capabilities.clone(),
 		Extensions:   cloneExtensions(l.extensions),
 	}
 }
@@ -359,6 +396,27 @@ const (
 	ProposalGroupContextExtensions ProposalKind = 7
 )
 
+// String names the kind as RFC 9420 does.
+func (k ProposalKind) String() string {
+	switch k {
+	case ProposalAdd:
+		return "add"
+	case ProposalUpdate:
+		return "update"
+	case ProposalRemove:
+		return "remove"
+	case ProposalPSK:
+		return "psk"
+	case ProposalReInit:
+		return "reinit"
+	case ProposalExternalInit:
+		return "external_init"
+	case ProposalGroupContextExtensions:
+		return "group_context_extensions"
+	}
+	return fmt.Sprintf("proposal(%d)", uint16(k))
+}
+
 // Proposal describes a pending proposal.
 type Proposal struct {
 	Kind ProposalKind
@@ -367,7 +425,9 @@ type Proposal struct {
 	Sender Sender
 	// Leaf is the leaf a remove or an update is for.
 	Leaf uint32
-	// Member is the client an add adds, or an update's new leaf.
+	// Member is the client an add adds, or an update's new leaf. A
+	// pending add's Member.Leaf is 0, since its leaf is known only when a
+	// commit applies it; in Changes.Proposals it is the leaf it took.
 	Member *Member
 	// Extensions is a group context extensions proposal's new list.
 	Extensions []Extension
@@ -379,24 +439,24 @@ func (p *publicState) describeSender(sd sender, a *authenticatedContent) Sender 
 	case senderMember:
 		out.Kind, out.Leaf = SenderMember, sd.index
 		if l := p.tree.leaf(sd.index); l != nil {
-			out.Credential, out.SignatureKey = l.credential, bytes.Clone(l.signatureKey)
+			out.Credential, out.SignatureKey = l.credential.clone(), bytes.Clone(l.signatureKey)
 		}
 	case senderExternal:
 		out.Kind, out.ExternalIndex = SenderExternal, sd.index
 		if es, err := p.externalSenders(); err == nil && int(sd.index) < len(es) {
-			out.Credential, out.SignatureKey = es[sd.index].credential, bytes.Clone(es[sd.index].signatureKey)
+			out.Credential, out.SignatureKey = es[sd.index].credential.clone(), bytes.Clone(es[sd.index].signatureKey)
 		}
 	case senderNewMemberProposal:
 		out.Kind = SenderNewMember
 		if a != nil && a.content.proposal != nil && a.content.proposal.add != nil {
 			l := &a.content.proposal.add.leaf
-			out.Credential, out.SignatureKey = l.credential, bytes.Clone(l.signatureKey)
+			out.Credential, out.SignatureKey = l.credential.clone(), bytes.Clone(l.signatureKey)
 		}
 	case senderNewMemberCommit:
 		out.Kind = SenderNewMember
 		if a != nil && a.content.commit != nil && a.content.commit.path != nil {
 			l := &a.content.commit.path.leaf
-			out.Credential, out.SignatureKey = l.credential, bytes.Clone(l.signatureKey)
+			out.Credential, out.SignatureKey = l.credential.clone(), bytes.Clone(l.signatureKey)
 		}
 	}
 	return out
@@ -551,7 +611,15 @@ func (g *Group) Process(message []byte) (*Message, error) {
 	switch m.wireFormat {
 	case WireFormatPublicMessage:
 		a, err = g.unprotectPublic(m.public, g.es.membership)
+		if err == nil && a.content.sender.typ == senderMember && a.content.sender.index == g.priv.leaf {
+			return nil, ErrOwnMessage
+		}
 	case WireFormatPrivateMessage:
+		// A group whose handshakes are public takes none encrypted, which
+		// would change it past what a delivery service can follow.
+		if g.cfg.PublicHandshake && m.private.contentType != contentApplication {
+			return nil, errors.New("mls: this group's proposals and commits are public messages")
+		}
 		a, err = g.unprotectPrivate(m.private)
 	default:
 		return nil, fmt.Errorf("mls: a group processes public and private messages, not wire format %d", m.wireFormat)
@@ -570,7 +638,7 @@ func (g *Group) Process(message []byte) (*Message, error) {
 		out.ApplicationData = a.content.applicationData
 		out.Signed = signedRecord(g.s.id, a, g.ctxBytes())
 	case contentProposal:
-		pp, err := g.checkProposalMessage(a)
+		pp, err := g.checkProposalMessage(&g.cfg, g.pending, a)
 		if err != nil {
 			return nil, err
 		}
@@ -671,17 +739,64 @@ func (g *Group) unprotectPrivate(m *privateMessage) (*authenticatedContent, erro
 	return a, nil
 }
 
-// checkProposalMessage checks a proposal on its own, as far as it can be
-// before a commit covers it, and returns it as pending.
-func (p *publicState) checkProposalMessage(a *authenticatedContent) (pendingProposal, error) {
+// checkProposalMessage checks a proposal on its own against the current
+// epoch, as RFC 9420, Section 12.1 has each kind checked, asks the
+// configuration whether to accept it, and returns it as pending.
+func (p *publicState) checkProposalMessage(cfg *Config, pending []pendingProposal, a *authenticatedContent) (pendingProposal, error) {
 	pr := a.content.proposal
-	if pr.typ == proposalExternalInit {
+	sd := a.content.sender
+	ref := p.s.proposalRef(a)
+	if slices.ContainsFunc(pending, func(pp pendingProposal) bool { return bytes.Equal(pp.ref, ref) }) {
+		return pendingProposal{}, errors.New("mls: the proposal is already pending")
+	}
+	switch pr.typ {
+	case proposalExternalInit:
 		return pendingProposal{}, errors.New("mls: an external init is only valid inline in an external commit")
+	case proposalUpdate:
+		if sd.typ != senderMember {
+			return pendingProposal{}, errors.New("mls: only a member proposes an update")
+		}
+		old := p.tree.leaf(sd.index)
+		if pr.update.source != leafSourceUpdate || bytes.Equal(old.encryptionKey, pr.update.encryptionKey) {
+			return pendingProposal{}, errors.New("mls: an update has source update and a new encryption key")
+		}
+		if err := cfg.successor(old.credential, pr.update.credential); err != nil {
+			return pendingProposal{}, err
+		}
+		if err := p.checkLeafInGroup(cfg, pr.update, sd.index, p.ctx.extensions); err != nil {
+			return pendingProposal{}, err
+		}
+	case proposalRemove:
+		if p.tree.leaf(pr.remove) == nil {
+			return pendingProposal{}, fmt.Errorf("mls: remove of leaf %d, which holds no member", pr.remove)
+		}
+	case proposalAdd:
+		if err := p.checkKeyPackage(cfg, pr.add, p.ctx.extensions); err != nil {
+			return pendingProposal{}, err
+		}
+		for _, m := range p.tree.members() {
+			if bytes.Equal(p.tree.leaf(m).signatureKey, pr.add.leaf.signatureKey) {
+				return pendingProposal{}, errors.New("mls: an add of a client already in the group")
+			}
+		}
+	case proposalPSK:
+		if len(pr.psk.nonce) != p.s.nh || pr.psk.typ == pskResumption && pr.psk.usage != resumptionApplication {
+			return pendingProposal{}, errors.New("mls: a PSK proposal of the wrong nonce or usage")
+		}
+	case proposalGroupContextExtensions:
+		if err := p.checkGroupExtensions(p.tree, pr.extensions); err != nil {
+			return pendingProposal{}, err
+		}
+	case proposalReInit:
+		if pr.reinit.version < protocolVersionMLS10 {
+			return pendingProposal{}, errors.New("mls: reinitialization to an older version")
+		}
 	}
-	if pr.typ == proposalUpdate && a.content.sender.typ != senderMember {
-		return pendingProposal{}, errors.New("mls: only a member proposes an update")
+	pp := pendingProposal{ref: ref, proposal: pr, sender: sd}
+	if err := cfg.acceptProposal(*p.describeProposal(pp)); err != nil {
+		return pendingProposal{}, err
 	}
-	return pendingProposal{ref: p.s.proposalRef(a), proposal: pr, sender: a.content.sender}, nil
+	return pp, nil
 }
 
 // signedRecord encodes an application message's content with its

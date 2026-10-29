@@ -12,7 +12,8 @@ import (
 // epochSecrets are the secrets an epoch's key schedule derives, RFC
 // 9420, Section 8.
 type epochSecrets struct {
-	senderData    []byte
+	senderData []byte
+	// encryption seeds the secret tree and is deleted once it has.
 	encryption    []byte
 	exporter      []byte
 	external      []byte

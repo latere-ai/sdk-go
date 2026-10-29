@@ -57,6 +57,8 @@ type applied struct {
 	tree              *ratchetTree
 	extensions        []Extension
 	extensionsChanged bool
+	props             []resolvedProposal
+	replaced          []Member // the leaves updates replace, as they were
 	adds              []uint32 // the leaves of added members, in the commit's order
 	addKeyPackages    []*keyPackage
 	removed           []Member
@@ -72,7 +74,7 @@ type applied struct {
 // tree.
 func (p *publicState) applyProposals(cfg *Config, props []resolvedProposal, committer sender) (*applied, error) {
 	external := committer.typ == senderNewMemberCommit
-	app := &applied{extensions: p.ctx.extensions}
+	app := &applied{extensions: p.ctx.extensions, props: props}
 	if len(props) == 0 {
 		app.pathRequired = true
 	}
@@ -192,12 +194,17 @@ func (p *publicState) applyProposals(cfg *Config, props []resolvedProposal, comm
 		if l.source != leafSourceUpdate {
 			return nil, commitErr("an update's leaf has source %d", l.source)
 		}
-		if old := app.tree.leaf(i); old == nil || bytes.Equal(old.encryptionKey, l.encryptionKey) {
+		old := app.tree.leaf(i)
+		if old == nil || bytes.Equal(old.encryptionKey, l.encryptionKey) {
 			return nil, commitErr("an update for leaf %d keeps its encryption key", i)
+		}
+		if err := cfg.successor(old.credential, l.credential); err != nil {
+			return nil, err
 		}
 		if err := p.checkLeafInGroup(cfg, l, i, app.extensions); err != nil {
 			return nil, err
 		}
+		app.replaced = append(app.replaced, memberOf(i, old))
 		app.tree.nodes[leafNodeIndex(i)] = node{leaf: l}
 		app.tree.blankPath(i)
 		app.updated = append(app.updated, i)
@@ -226,6 +233,9 @@ func (p *publicState) applyProposals(cfg *Config, props []resolvedProposal, comm
 		l := kp.leaf
 		app.adds = append(app.adds, app.tree.addLeaf(&l))
 		app.addKeyPackages = append(app.addKeyPackages, kp)
+		if app.tree.numLeaves() > MaxLeaves {
+			return nil, errTooLarge
+		}
 	}
 	for _, rp := range props {
 		switch rp.p.typ {
@@ -352,6 +362,14 @@ type Changes struct {
 	// Updated are the members whose leaves the commit replaces, as they
 	// are after it, the committer's own when the commit has a path.
 	Updated []Member
+	// Replaced are the leaves Updated replace, as they were before the
+	// commit, in the same order.
+	Replaced []Member
+	// Proposals are the proposals the commit applies, in its order, each
+	// with who proposed it: the committer for one the commit carries
+	// inline, which has no Ref. An add's Member.Leaf is the leaf it
+	// takes.
+	Proposals []Proposal
 	// Extensions are the group context's extensions after the commit.
 	Extensions        []Extension
 	ExtensionsChanged bool
@@ -400,6 +418,29 @@ type stagedPublic struct {
 	next          groupContext
 	interim       []byte
 	changes       Changes
+	// replacedCommitter is the committer's leaf before its path.
+	replacedCommitter Member
+}
+
+// describeProposals describes the proposals a commit applies, in its
+// order, with who proposed each: an inline one is the committer's.
+func (p *publicState) describeProposals(app *applied, committer Sender) []Proposal {
+	var out []Proposal
+	add := 0
+	for _, rp := range app.props {
+		d := p.describeProposal(pendingProposal{ref: rp.ref, proposal: rp.p, sender: rp.sender})
+		if rp.ref == nil {
+			d.Sender = committer
+			d.Sender.Credential = committer.Credential.clone()
+			d.Sender.SignatureKey = bytes.Clone(committer.SignatureKey)
+		}
+		if rp.p.typ == proposalAdd && add < len(app.adds) {
+			d.Member.Leaf = app.adds[add]
+			add++
+		}
+		out = append(out, *d)
+	}
+	return out
 }
 
 // stagePublic checks a commit and applies it to a copy of the public
@@ -430,6 +471,9 @@ func (p *publicState) stagePublic(cfg *Config, pending []pendingProposal, a *aut
 		if sp.committerLeaf == app.tree.numLeaves() {
 			app.tree.extend()
 		}
+		if app.tree.numLeaves() > MaxLeaves {
+			return nil, errTooLarge
+		}
 	}
 	if c.path != nil {
 		l := &c.path.leaf
@@ -440,9 +484,14 @@ func (p *publicState) stagePublic(cfg *Config, pending []pendingProposal, a *aut
 			return nil, err
 		}
 		if !external {
-			if bytes.Equal(app.tree.leaf(sp.committerLeaf).encryptionKey, l.encryptionKey) {
+			old := app.tree.leaf(sp.committerLeaf)
+			if bytes.Equal(old.encryptionKey, l.encryptionKey) {
 				return nil, commitErr("the committer's leaf keeps its encryption key")
 			}
+			if err := cfg.successor(old.credential, l.credential); err != nil {
+				return nil, err
+			}
+			sp.replacedCommitter = memberOf(sp.committerLeaf, old)
 		}
 		keys := [][]byte{l.encryptionKey}
 		for _, n := range c.path.nodes {
@@ -500,9 +549,12 @@ func (p *publicState) stagePublic(cfg *Config, pending []pendingProposal, a *aut
 	for _, i := range app.updated {
 		ch.Updated = append(ch.Updated, memberOf(i, app.tree.leaf(i)))
 	}
+	ch.Replaced = slices.Clone(app.replaced)
 	if c.path != nil && !external {
 		ch.Updated = append(ch.Updated, memberOf(sp.committerLeaf, app.tree.leaf(sp.committerLeaf)))
+		ch.Replaced = append(ch.Replaced, sp.replacedCommitter)
 	}
+	ch.Proposals = p.describeProposals(app, ch.Sender)
 	sp.changes = ch
 	return sp, nil
 }
@@ -576,6 +628,7 @@ func (g *Group) nextEpoch(sp *stagedPublic, priv *privateTree, es epochSecrets, 
 		es:     es,
 		st:     newSecretTree(g.s, es.encryption, sp.app.tree.numLeaves()),
 	}
+	next.es.encryption = nil // consumed by the secret tree, RFC 9420, Section 9.2
 	next.resumption = append(slices.Clone(g.resumption), resumptionPSK{epoch: sp.next.epoch, psk: es.resumption})
 	if over := len(next.resumption) - ResumptionPSKEpochs; over > 0 {
 		next.resumption = next.resumption[over:]
@@ -617,22 +670,35 @@ func (g *Group) pskSecret(ids []preSharedKeyID) ([]byte, error) {
 
 // Merge applies a staged commit, which this group staged in its current
 // epoch, and moves the group to the epoch it starts. A commit that
-// removes this member leaves the group inactive.
+// removes this member, or reinitializes the group, leaves it inactive
+// with every secret deleted; Epoch and Members then describe the epoch
+// it was removed from. A removed member cannot derive the next epoch, so
+// it stages its removal without checking the commit's confirmation tag:
+// take a removal as final once the delivery service says the commit won
+// its epoch.
 func (g *Group) Merge(c *StagedCommit) error {
 	if c == nil || c.owner != g || c.epoch != g.ctx.epoch || g.status != statusActive {
 		return ErrStaleCommit
 	}
 	if c.changes.RemovesSelf {
-		g.status = statusRemoved
-		g.es = epochSecrets{}
-		g.st = nil
-		g.priv = &privateTree{leaf: g.priv.leaf}
-		g.pending = nil
-		g.resumption = nil
+		g.close(statusRemoved)
 		return nil
 	}
 	*g = *c.next
+	if g.status == statusReInit {
+		g.close(statusReInit)
+	}
 	return nil
+}
+
+// close leaves the group inactive and deletes its secrets.
+func (g *Group) close(status groupStatus) {
+	g.status = status
+	g.es = epochSecrets{}
+	g.st = nil
+	g.priv = &privateTree{leaf: g.priv.leaf}
+	g.pending = nil
+	g.resumption = nil
 }
 
 // CommitOptions sets what Commit changes.
@@ -784,6 +850,8 @@ func (g *Group) Commit(opts CommitOptions) (*StagedCommit, error) {
 		sc.changes.Updated = append(sc.changes.Updated, memberOf(i, tree.leaf(i)))
 	}
 	sc.changes.Updated = append(sc.changes.Updated, memberOf(g.priv.leaf, tree.leaf(g.priv.leaf)))
+	sc.changes.Replaced = append(slices.Clone(app.replaced), memberOf(g.priv.leaf, own))
+	sc.changes.Proposals = g.describeProposals(app, sc.changes.Sender)
 
 	sc.groupInfo, err = sc.next.signedGroupInfo(true, true)
 	if err != nil {

@@ -789,6 +789,14 @@ reinitializing or branching, resync joins and X.509 validation, is
 listed in its documentation; each is code a group can work without, and
 each would widen what has to be right.
 
+Two decisions are the application's, and `Config` takes both as
+functions: which proposals from outside the group a member keeps
+(`AcceptProposal`; by default only a removal from an external sender),
+and whether a leaf that replaces another is the same member
+(`CheckSuccessor`; by default only with the same credential). A staged
+commit's `Changes` names who proposed each change, so the application's
+rules can tell a person leaving from a person removed.
+
 ## What came from other SDKs
 
 The design borrows from three widely used Go SDKs:

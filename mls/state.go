@@ -11,14 +11,16 @@ import (
 )
 
 // stateVersion is the version of the encoding MarshalBinary writes.
-const stateVersion uint8 = 1
+const stateVersion uint8 = 2
 
 // MarshalBinary encodes the member's whole state of the group, its
 // private keys and the secrets of the current epoch included, so the
 // group survives a restart. The encoding is secret: store it as the
 // member's private keys are stored, and replace it after every change,
 // since an old copy can decrypt messages the current state has deleted
-// the keys of.
+// the keys of. Store it after every Encrypt and Commit, before sending
+// what they return: an older state restored would encrypt again with a
+// key and nonce already used.
 func (g *Group) MarshalBinary() ([]byte, error) {
 	signer, err := g.signer.Bytes()
 	if err != nil {
@@ -62,9 +64,10 @@ func (g *Group) MarshalBinary() ([]byte, error) {
 	}), nil
 }
 
-// list returns the epoch's secrets in their encoding order.
+// list returns the epoch's secrets in their encoding order: all but the
+// encryption secret, which the secret tree consumed.
 func (es *epochSecrets) list() []*[]byte {
-	return []*[]byte{&es.senderData, &es.encryption, &es.exporter, &es.external, &es.confirmation,
+	return []*[]byte{&es.senderData, &es.exporter, &es.external, &es.confirmation,
 		&es.membership, &es.resumption, &es.authenticator, &es.init}
 }
 

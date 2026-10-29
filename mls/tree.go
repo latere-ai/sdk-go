@@ -127,8 +127,8 @@ func unmarshalTree(r *reader) *ratchetTree {
 			}
 		}
 		t.nodes = append(t.nodes, n)
-		if len(t.nodes) > 1<<31 {
-			r.fail("tree too large")
+		if len(t.nodes) > 2*MaxLeaves-1 {
+			r.fail("tree of more than %d leaves", MaxLeaves)
 		}
 	})
 	if r.err != nil {
@@ -405,6 +405,15 @@ func (t *ratchetTree) blankPath(leaf uint32) {
 }
 
 // extend doubles the tree with a blank right half and a blank root.
+// MaxLeaves bounds a group's leaves, so a tree a delivery service hands
+// out, which is parsed and hashed before anything signed vouches for it,
+// costs a bounded amount of memory and time.
+const MaxLeaves = 1 << 16
+
+// errTooLarge is the error for a change that grows a group past
+// MaxLeaves.
+var errTooLarge = fmt.Errorf("mls: a group has at most %d leaves", MaxLeaves)
+
 func (t *ratchetTree) extend() {
 	w := len(t.nodes)
 	t.nodes = append(t.nodes, make([]node, w+1)...)

@@ -235,6 +235,7 @@ func JoinGroup(welcomeMessage []byte, kp *KeyPackage, secrets *KeyPackageSecrets
 	g.confirmationTag = gi.confirmationTag
 	g.interim = s.interimTranscriptHash(g.ctx.confirmedTranscriptHash, gi.confirmationTag)
 	g.st = newSecretTree(s, g.es.encryption, tree.numLeaves())
+	g.es.encryption = nil // consumed by the secret tree, RFC 9420, Section 9.2
 	g.resumption = []resumptionPSK{{epoch: g.ctx.epoch, psk: g.es.resumption}}
 	return g, nil
 }

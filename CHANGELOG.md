@@ -25,6 +25,15 @@ minor version may break code, and every such change is marked **Breaking**.
   `VerifySignedContent` checks a message's original signature after it
   is shared with a member who joined later. The package builds for
   WebAssembly.
+  The application decides which proposals from outside the group a
+  member keeps (`Config.AcceptProposal`) and whether a replacing leaf is
+  the same member (`Config.CheckSuccessor`); a staged commit's `Changes`
+  names who proposed each change (`Proposals`) and which leaves it
+  replaced (`Replaced`). `KeyPackage.Seal` and `KeyPackageSecrets.Open`
+  encrypt to a key package's init key under a label of the
+  application's, and `RequiredCapabilitiesExtension` builds the group
+  context extension that names what every member must support. A group
+  holds at most `MaxLeaves` leaves.
 
 ## [0.14.0] - 2026-10-29
 

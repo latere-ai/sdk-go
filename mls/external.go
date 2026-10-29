@@ -79,10 +79,13 @@ func JoinExternal(groupInfoMessage []byte, signer *SignatureKey, cred Credential
 	if leaf == app.tree.numLeaves() {
 		app.tree.extend()
 	}
+	if app.tree.numLeaves() > MaxLeaves {
+		return nil, nil, errTooLarge
+	}
 	tmpl := leafTemplate{
 		signatureKey: signer.PublicKey(),
 		credential:   cred,
-		capabilities: defaultCapabilities(s.id, cred.Type, append(append([]ExtensionType{}, opts.SupportedExtensions...), extensionTypes(gi.context.extensions)...), opts.LeafExtensions),
+		capabilities: defaultCapabilities(s.id, cred.Type, opts.SupportedExtensions, opts.LeafExtensions),
 		extensions:   cloneExtensions(opts.LeafExtensions),
 	}
 	provisional := groupContext{

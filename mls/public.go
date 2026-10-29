@@ -119,7 +119,7 @@ func (p *PublicGroup) Process(message []byte) (*Message, error) {
 	}
 	switch a.content.contentType {
 	case contentProposal:
-		pp, err := p.checkProposalMessage(a)
+		pp, err := p.checkProposalMessage(&p.cfg, p.pending, a)
 		if err != nil {
 			return nil, err
 		}

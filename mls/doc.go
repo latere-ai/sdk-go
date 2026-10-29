@@ -55,10 +55,14 @@
 //
 // The package checks what RFC 9420 requires. Who may join, who may add
 // whom and what a credential means are the application's: Config's
-// CheckCredential vets every credential the group takes in, and a
-// staged commit's Changes say what it does before it is merged. A
-// credential's identity is opaque bytes here; binding it to a person is
-// the application's.
+// CheckCredential vets every credential the group takes in,
+// CheckSuccessor whether a leaf may change its credential, and
+// AcceptProposal which proposals may wait for a commit, refusing by
+// default those from outside the group but an external sender's
+// removal. A staged commit's Changes say what it does, and who proposed
+// each part, before it is merged; check a commit this member made the
+// same way before sending it. A credential's identity is opaque bytes
+// here; binding it to a person is the application's.
 //
 // Not implemented: sending Update proposals (a commit renews the
 // committer's keys instead), reinitializing or branching a group (a

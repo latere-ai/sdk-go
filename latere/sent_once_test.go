@@ -17,6 +17,7 @@ import (
 	"latere.ai/x/sdk-go/connections"
 	"latere.ai/x/sdk-go/latere"
 	"latere.ai/x/sdk-go/llm"
+	"latere.ai/x/sdk-go/memory"
 	"latere.ai/x/sdk-go/storage"
 )
 
@@ -37,7 +38,7 @@ func TestTheCallsSentOnceAndThePatchesRetried(t *testing.T) {
 		t.Fatal(err)
 	}
 	ag, ap, cs, ml := agents.New(cfg), apps.New(cfg), connections.New(cfg), llm.New(cfg)
-	ac, st := account.New(cfg), storage.New(cfg)
+	ac, st, me := account.New(cfg), storage.New(cfg), memory.New(cfg)
 	ctx := t.Context()
 	title := "t"
 	calls := map[string]struct {
@@ -104,6 +105,30 @@ func TestTheCallsSentOnceAndThePatchesRetried(t *testing.T) {
 			_, err := ap.CreateFramePass(ctx, "tides", "https://tides.latere.app/")
 			return err
 		}, 1 + latere.DefaultMaxRetries},
+		"AddMemory": {func(ctx context.Context) error {
+			_, err := me.AddMemory(ctx, &memory.AddMemoryParams{Description: title})
+			return err
+		}, 1},
+		"RestoreMemory": {func(ctx context.Context) error {
+			_, err := me.RestoreMemory(ctx, memory.Ref{ID: "trains"})
+			return err
+		}, 1},
+		"UpdateMemory, a move": {func(ctx context.Context) error {
+			_, err := me.UpdateMemory(ctx, memory.Ref{ID: "trains"}, &memory.UpdateMemoryParams{Scope: memory.ScopeProject, Project: "prj_1"})
+			return err
+		}, 1},
+		"UpdateMemory": {func(ctx context.Context) error {
+			_, err := me.UpdateMemory(ctx, memory.Ref{ID: "trains"}, &memory.UpdateMemoryParams{Name: &title})
+			return err
+		}, 1 + latere.DefaultMaxRetries},
+		"UpdateSettings": {func(ctx context.Context) error {
+			_, err := me.UpdateSettings(ctx, &memory.UpdateSettingsParams{})
+			return err
+		}, 1 + latere.DefaultMaxRetries},
+		"ImportMemory": {func(ctx context.Context) error {
+			_, err := me.ImportMemory(ctx, &memory.ImportMemoryParams{Text: title})
+			return err
+		}, 1},
 	}
 	for name, tc := range calls {
 		sends.Store(0)

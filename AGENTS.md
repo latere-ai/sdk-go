@@ -9,7 +9,7 @@ too.
 - `latere/`: the core every package shares (configuration, credentials,
   errors, retries, pagination, streams). Capability packages call the API
   only through it.
-- `agents/`, `account/`, `apps/`, `connections/`, `evals/`, `llm/`, `storage/`, `web/`: one package per
+- `agents/`, `account/`, `apps/`, `connections/`, `evals/`, `llm/`, `memory/`, `storage/`, `web/`: one package per
   capability of the API, named for the capability (`llm` for the models
   capability, since `models` is a common package name in the programs that
   import it).

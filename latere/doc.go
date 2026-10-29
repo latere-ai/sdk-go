@@ -10,6 +10,7 @@
 //
 //	latere.ai/x/sdk-go/agents       sessions with agents, their events and files, and triggers
 //	latere.ai/x/sdk-go/account      your Effort levels, wallet, preferences and computers
+//	latere.ai/x/sdk-go/memory       what Latere remembers about a person across conversations
 //	latere.ai/x/sdk-go/apps         apps, their deploys, build logs and releases
 //	latere.ai/x/sdk-go/connections  the services a person connects for agents to use
 //	latere.ai/x/sdk-go/storage      files in Storage: upload, read, list, link
@@ -97,6 +98,10 @@
 //	storage.StartUpload               the storage API takes no key; an open upload lapses
 //	storage.MoveFile, MoveFolder      a repeat finds nothing left to move
 //	llm.Generate, llm.Stream          the model may have run and been billed
+//	memory.AddMemory                  the account API takes no key on it
+//	memory.ImportMemory               the account API takes no key on it
+//	memory.RestoreMemory              a repeat finds nothing left to restore
+//	memory.UpdateMemory, a move       a repeat finds nothing left to move
 //
 // storage.CompleteUpload is sent again after an answer of a server error,
 // which leaves the upload open, but never after a failure on the network,

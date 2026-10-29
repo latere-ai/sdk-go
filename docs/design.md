@@ -24,6 +24,7 @@ work; the README says how to use them.
 flowchart TD
     agents --> latere
     account --> latere
+    memory --> latere
     apps --> latere
     connections --> latere
     evals --> latere
@@ -36,6 +37,7 @@ flowchart TD
     latere --> sse[internal/sse]
     app[your program] --> agents
     app --> account
+    app --> memory
     app --> apps
     app --> connections
     app --> evals
@@ -54,7 +56,7 @@ flowchart TD
 
 `latere` is the core: configuration, credentials, the error type, the
 request loop, pagination and streams. A capability package (`agents`,
-`account`, `apps`, `connections`, `evals`, `llm`, `storage`, `web`, and those to come) holds typed
+`account`, `apps`, `connections`, `evals`, `llm`, `memory`, `storage`, `web`, and those to come) holds typed
 models and one method per endpoint, and calls the API only through
 `Config.Do`, `Config.Open`, `Config.Stream` and `latere.Items`. `signin` is separate
 because most programs, those that run with a key, never sign a person in;
@@ -193,6 +195,23 @@ session or send a message twice. The calls a key cannot make safe carry
   second project, counted against the person's bound.
 - `account.StartCheckout`: a repeat opens a second payment page. An
   unpaid page adds nothing, so the caller may start another.
+- `memory.AddMemory`: the account part reads no key on it either, and an
+  add makes the memory's id from its name, the first one free, so a
+  repeat would save the memory twice under two ids.
+- `memory.ImportMemory`: the account part reads no key on it. It leaves
+  out each line whose memory the scope holds already, so an import sent
+  again after the first finished saves nothing twice, but a repeat that
+  reached it while the first was still saving, after a gateway gave up on
+  it, could. The caller sends it again instead, once the first is over:
+  the lines saved before count as skipped.
+- `memory.RestoreMemory`: a repeat after a lost answer would find nothing
+  left to restore and be refused with 404, though the restore succeeded;
+  `GetMemory` tells.
+- `memory.UpdateMemory` when it moves a memory: the move deletes the
+  memory where it was, so a repeat would be refused with 404 as
+  `storage.MoveFile`'s is; `ListMemories` tells where it is. A change in
+  place only sets values and carries `RetryAlways`, as any such `PATCH`
+  does, so the one method takes its rule from what the change does.
 
 A few `POST`s take no key and are still safe to repeat, so they carry
 `RetryAlways`: `account.IssueTriggerHook` and
@@ -659,6 +678,16 @@ cookies and caching, stays in the program: the SDK's part is to make the
 call and hand back what the program passes on, not to serve HTTP. Each
 package keeps its own reader type, since a package imports no other
 capability's, and the three differ in what their answers say.
+
+`memory.ExportMemory` opens a zip the API writes as it reads each memory
+from Storage, after it has answered 200, so a failure partway can only
+stop the zip: the answer itself ends cleanly, and the cut is invisible to
+HTTP. A zip always ends with its end record, so `memory.Export` keeps the
+last bytes it read, as many as the record and its longest comment can
+take, and at the end of the body answers `ErrExportIncomplete` in place of
+`io.EOF` when they do not end with one. A program that copies the export
+to a file learns the export did not finish from the copy's error, without
+opening the zip, and nothing is held whole.
 
 ## Site icons
 

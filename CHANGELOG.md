@@ -47,6 +47,25 @@ minor version may break code, and every such change is marked **Breaking**.
   the commit that lets them in (`SealBundle`, `NewCommitNotice`), and
   the recovery key and the backup key it unlocks (`RecoveryKey`,
   `BackupKey`). It builds for WebAssembly.
+- Package `memory`: what Latere remembers about a person across
+  conversations, one Markdown file per memory in the person's Storage,
+  for You or one of their projects. `ListMemories` answers the settings,
+  every memory without its body, the projects' names, the bounds a memory
+  is held to (`Limits`) and the words of an import (`ImportPrompt`).
+  `GetMemory`, `UpdateMemory` and `DeleteMemory` address one memory by a
+  `Ref`, which `Memory.Ref` returns; a change or a delete under `IfMatch`
+  is refused with `ErrChanged` when the memory changed since it was read,
+  and `UpdateMemory` with `Scope` and `Project` moves a memory between You
+  and a project. `AddMemory` saves what the person typed, `ForgetEverything`
+  deletes every memory, `UpdateSettings` turns Remember new things and
+  Include sensitive topics on or off, `ListForgotten` and `RestoreMemory`
+  bring back what a conversation forgot, `ExportMemory` streams a zip of
+  every memory, ending its read with `ErrExportIncomplete` when the zip
+  stops before its end, and `ImportMemory` saves what another assistant
+  remembers. Each refusal code a program branches on has an error to test
+  with `errors.Is`, such as `ErrPersonalOnly` for an organization's token
+  and `ErrAgentToken` for a conversation's agent's. `AddMemory`,
+  `ImportMemory`, `RestoreMemory` and a move are sent once.
 
 ## [0.14.0] - 2026-10-29
 

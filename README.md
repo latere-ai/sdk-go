@@ -24,6 +24,7 @@ they share. Import the ones you use:
 | [`connections`](https://pkg.go.dev/latere.ai/x/sdk-go/connections) | The services a person connects once, such as a calendar or an MCP server, which agents then use |
 | [`storage`](https://pkg.go.dev/latere.ai/x/sdk-go/storage) | Files in Latere Storage: upload a file of any size, read, list, move, delete, and link to it; what others shared with you |
 | [`account`](https://pkg.go.dev/latere.ai/x/sdk-go/account) | Your Effort levels, wallet and payment pages, preferences, pins and bookmarks, share links, projects, trigger links and addresses, and computers |
+| [`memory`](https://pkg.go.dev/latere.ai/x/sdk-go/memory) | What Latere remembers about a person across conversations: list, add, change, move, delete, restore, export and import memories, and the memory settings |
 | [`apps`](https://pkg.go.dev/latere.ai/x/sdk-go/apps) | Apps: create, list, change, delete; their deploys, build logs, pictures, releases, visits, gallery listing and who may open them |
 | [`evals`](https://pkg.go.dev/latere.ai/x/sdk-go/evals) | Evals: the definitions, experiments, cells and comparisons of experiments on agents, and an experiment followed as it runs |
 | [`llm`](https://pkg.go.dev/latere.ai/x/sdk-go/llm) | Calling models in the Lux dialect: generate, stream, count tokens, list models |
@@ -525,6 +526,62 @@ down:
 is as true as the source the token came from, and the API, which the token
 is presented to, verifies it.
 
+## Memory
+
+Package `memory` is how a program shows a person what Latere remembers
+about them across conversations, and lets them change it. Each memory is
+one Markdown file in the person's Storage, in one of two kinds of scope:
+You, which every conversation in their personal context reads, or one of
+their projects, which only that project's conversations read.
+
+```go
+mem := memory.New(cfg)
+list, err := mem.ListMemories(ctx) // the settings and every memory, without bodies
+for _, group := range list.Limits.Types {
+	for _, m := range list.Memories {
+		if m.Type == group {
+			fmt.Println(group, m.Name, m.Description)
+		}
+	}
+}
+m, err := mem.GetMemory(ctx, list.Memories[0].Ref()) // one memory, with its body
+desc := "Keep lists under four things."
+_, err = mem.UpdateMemory(ctx, m.Ref(), &memory.UpdateMemoryParams{Description: &desc, IfMatch: m.Checksum})
+```
+
+A `Ref` addresses one memory by its scope, its project and its id, and
+`Memory.Ref` returns the one a list answered. A change or a delete that
+names the checksum it read is refused with `memory.ErrChanged` when the
+memory changed since, so it never overwrites what a conversation saved
+in the meantime; `UpdateMemory` with `Scope` and `Project` moves a memory
+between You and a project. The package also covers:
+
+- `AddMemory` saves what the person typed, and is sent once.
+- `DeleteMemory` deletes one memory for good, and `ForgetEverything`
+  every memory of the person and their projects; a program asks the
+  person to confirm first.
+- `UpdateSettings` turns Remember new things and Include sensitive topics
+  on or off. Turning sensitive topics off deletes every memory marked
+  sensitive, and says how many.
+- `ListForgotten` lists what conversations forgot in the last 30 days, and
+  `RestoreMemory` brings one back. It is sent once.
+- `ExportMemory` streams a zip of every memory as Markdown files; a zip
+  that stops before its end ends the read with
+  `memory.ErrExportIncomplete`, so a program asks again. `ImportMemory`
+  saves what another assistant remembers, pasted as it answered the
+  list's `ImportPrompt`, and leaves out what the scope holds already. It
+  is sent once; after a failure, the same text again saves the rest.
+
+The bounds a memory is held to, and the import prompt, come with the list
+in `Limits` and `ImportPrompt`, so a program never writes its own. Memory
+is kept for a person in their personal context: an organization's token
+is refused with `memory.ErrPersonalOnly`, and a conversation's agent's
+with `memory.ErrAgentToken`, since an agent changes memory with its file
+tools. Each refusal code a program branches on has its own error to test
+with `errors.Is`: `ErrNotFound`, `ErrTaken`, `ErrNameTaken`,
+`ErrTooLarge`, `ErrInvalidField`, `ErrUnavailable` and
+`ErrStorageUnavailable` beside the ones above.
+
 ## Apps
 
 An app is a git repository and an address. A push to a branch builds a
@@ -911,6 +968,10 @@ never again after a failure:
 | `storage.StartUpload` | the storage API takes no key; an upload left open lapses by itself |
 | `storage.MoveFile`, `storage.MoveFolder` | the storage API takes no key; a repeat finds nothing left to move |
 | `llm.Generate`, `llm.Stream` | the model may have run and been billed |
+| `memory.AddMemory` | the account API takes no key on it; a repeat saves the memory twice |
+| `memory.ImportMemory` | the account API takes no key on it; calling it again with the same text saves what a failed import left out |
+| `memory.RestoreMemory` | a repeat finds nothing left to restore |
+| `memory.UpdateMemory`, when it moves a memory | a repeat finds nothing left to move; a change in place is retried |
 
 A repeat that reaches the API while the first request is still being
 answered gets 409 (`latere.ErrConflict`) even though the first succeeds;

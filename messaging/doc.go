@@ -118,9 +118,10 @@
 //   - A member removed since an epoch, Latere's among them, may keep
 //     that epoch's secrets, and the service may keep its group info. A
 //     device that joins on its own from it is read by that member, so
-//     Policy.JoinExternal takes the conversation's epoch the approving
-//     device hands over the pairing and refuses an earlier one; with
-//     none given, the group info of any epoch is taken. A Welcome of an
+//     Policy.JoinExternal takes the conversation and its epoch the
+//     approving device hands over the pairing, and refuses a group info
+//     of another conversation or an earlier epoch; with no epoch given,
+//     the conversation's group info of any epoch is taken. A Welcome of an
 //     old epoch reaches a device only through a key package it uses
 //     twice, its last resort.
 //   - The revocations an app keeps grow with what it was shown: one for

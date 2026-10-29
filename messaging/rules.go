@@ -461,15 +461,23 @@ func (p *Policy) JoinGroup(welcome []byte, kp *mls.KeyPackage, secrets *mls.KeyP
 // group Latere's member made has no other kind; until a person commits,
 // the device joins by a Welcome from another of its person's devices.
 //
-// minEpoch is the conversation's epoch as the device approving this one
-// knew it, handed over the pairing with the conversation: a group info
-// of an earlier epoch is refused, since a member removed since then,
-// Latere's among them, may still hold that epoch's secrets and read
-// what the device sends. Zero takes a group info of any epoch.
-func (p *Policy) JoinExternal(groupInfo []byte, signer *mls.SignatureKey, id Identity, minEpoch uint64) (*mls.Group, []byte, error) {
+// conversation is the conversation the device asked the service for,
+// and minEpoch its epoch as the device approving this one knew it, both
+// handed over the pairing: a group info of another conversation is
+// refused, and so is one of an earlier epoch, since a member removed
+// since then, Latere's among them, may still hold that epoch's secrets
+// and read what the device sends. A minEpoch of zero takes a group info
+// of the conversation of any epoch.
+func (p *Policy) JoinExternal(groupInfo []byte, signer *mls.SignatureKey, id Identity, conversation string, minEpoch uint64) (*mls.Group, []byte, error) {
 	info, err := mls.PeekMessage(groupInfo)
 	if err != nil {
 		return nil, nil, err
+	}
+	if info.WireFormat != mls.WireFormatGroupInfo {
+		return nil, nil, refuse("the message is not a group info")
+	}
+	if !bytes.Equal(info.GroupID, GroupID(conversation)) {
+		return nil, nil, refuse("the group info is of another conversation than %q", conversation)
 	}
 	if info.Epoch < minEpoch {
 		return nil, nil, refuse("the group info is of epoch %d, before the conversation's epoch %d the device was given", info.Epoch, minEpoch)

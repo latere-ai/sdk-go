@@ -283,6 +283,17 @@ func leafOf(t testing.TB, g *mls.Group, d *device) uint32 {
 
 // refused fails the test unless err is a refusal, for the reason given
 // when there is one.
+// conversationOf is the conversation a group info is of, for a test
+// whose join is refused for something else.
+func conversationOf(t testing.TB, groupInfo []byte) string {
+	t.Helper()
+	info, err := mls.PeekMessage(groupInfo)
+	if err != nil {
+		t.Fatal(err)
+	}
+	return string(info.GroupID)
+}
+
 func refused(t testing.TB, err error, reason ...string) {
 	t.Helper()
 	if !errors.Is(err, ErrRefused) {

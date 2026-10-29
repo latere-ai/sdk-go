@@ -40,7 +40,9 @@ minor version may break code, and every such change is marked **Breaking**.
   encrypt to a key package's init key under a label of the
   application's, and `RequiredCapabilitiesExtension` builds the group
   context extension that names what every member must support. A group
-  holds at most `MaxLeaves` leaves.
+  holds at most `MaxLeaves` leaves. An Ed25519 key of small order, under
+  which a signature anyone can make verifies, is refused as a signature
+  key, and no signature verifies under one.
 - Package `messaging`: conversations between people over `mls`. It
   holds the profile of a conversation's group (`Config`,
   `CreateOptions`, `KeyPackageOptions`), its people, owners and level as
@@ -55,8 +57,10 @@ minor version may break code, and every such change is marked **Breaking**.
   neither make nor undo and the apps keep as known
   (`Directory.Revocations`, `Directory.CheckRevocation`), with the checks
   the service runs before it keeps a record, a record vouched for again
-  staying under its root (`Directory.CheckRecord`), and the recovery
-  record of a given recovery key (`Directory.RecoveryFor`), a group a device joins checked leaf by leaf
+  staying under its root (`Directory.CheckRecord`), a record, an entry
+  and an installation key refused when its Ed25519 key is of small
+  order, and the recovery record of a given recovery key
+  (`Directory.RecoveryFor`), a group a device joins checked leaf by leaf
   against the directory and refused when Latere's member signed its
   group info or, joining on its own, when it is of another conversation
   or of an epoch before the one the approving device handed over

@@ -13,6 +13,7 @@ import (
 	"slices"
 	"strings"
 
+	"latere.ai/x/sdk-go/internal/ed25519key"
 	"latere.ai/x/sdk-go/mls"
 )
 
@@ -173,6 +174,9 @@ func (r *DeviceRecord) validate() error {
 	}
 	if len(r.SignatureKey) != ed25519.PublicKeySize || len(r.VoucherKey) != ed25519.PublicKeySize {
 		return errors.New("messaging: a record's signature key and its voucher's are Ed25519 keys")
+	}
+	if ed25519key.SmallOrder(r.SignatureKey) || ed25519key.SmallOrder(r.VoucherKey) {
+		return errors.New("messaging: a record's signature key and its voucher's are not of small order")
 	}
 	if r.Root() != bytes.Equal(r.VoucherKey, r.SignatureKey) {
 		return errors.New("messaging: a root, and only a root, is vouched for by its own key")

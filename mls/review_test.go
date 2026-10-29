@@ -406,3 +406,41 @@ func TestRemovalDeletesSecrets(t *testing.T) {
 		t.Fatalf("export: %v", err)
 	}
 }
+
+// identityKey is the Ed25519 encoding of the identity point, a key of
+// small order, and universal a signature that verifies under it over
+// every message: R the identity, S zero.
+var identityKey = append([]byte{1}, make([]byte, 31)...)
+
+func universal() []byte { return append(slices.Clone(identityKey), make([]byte, 32)...) }
+
+// Under an Ed25519 key of small order a signature anyone makes verifies,
+// so such a key proves nothing about who signed. A key package whose
+// leaf holds the identity point's key, signed with the signature that
+// verifies over everything, is refused, and no signature verifies under
+// such a key.
+func TestSmallOrderSignatureKey(t *testing.T) {
+	s, err := suiteFor(testSuite)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := s.checkSignaturePublicKey(identityKey); err == nil {
+		t.Error("the identity point is taken as a signature key")
+	}
+	if err := s.verifyWithLabel(identityKey, "LeafNodeTBS", []byte("anything"), universal()); err == nil {
+		t.Error("a signature under the identity point verifies")
+	}
+	if err := s.verifyWithLabel(slices.Clone(identityKey), "x", nil, universal()); !errors.Is(err, errSignature) {
+		t.Errorf("got %v, want errSignature", err)
+	}
+
+	c := newClient(t, testSuite, "mallory")
+	kp := c.kp.kp
+	kp.leaf.signatureKey = slices.Clone(identityKey)
+	kp.leaf.signature = universal()
+	kp.signature = universal()
+	forged := encode((&mlsMessage{wireFormat: WireFormatKeyPackage, keyPackage: &kp}).marshal)
+	if _, err := ParseKeyPackage(forged); err == nil {
+		t.Error("a key package of the identity point's key, signed by no one, was taken")
+	}
+}

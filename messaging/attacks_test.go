@@ -975,3 +975,64 @@ func TestStaleGroupInfoRefused(t *testing.T) {
 		t.Error("bytes that are no message were joined")
 	}
 }
+
+// identityKey is the Ed25519 encoding of the identity point, a key of
+// small order, and universal a signature that verifies under it over
+// every message: R the identity, S zero.
+var identityKey = append([]byte{1}, make([]byte, 31)...)
+
+func universal() []byte { return append(slices.Clone(identityKey), make([]byte, 32)...) }
+
+// The thief, holding alice's phone, lists a device whose key is the
+// identity point, whose proof of possession is a signature anyone makes.
+// Were it taken, anyone, the service among them, could vouch for devices
+// under it and sign revocations as it with no key of alice's. A key of
+// small order is refused wherever it would sign: in a record, as the
+// installation's key, and as an entry's.
+func TestSmallOrderKeyRefused(t *testing.T) {
+	w := newWorld(t)
+	phone := w.device("alice", "phone")
+	w.device("alice", "laptop")
+	if !ed25519.Verify(identityKey, []byte("anything at all"), universal()) {
+		t.Fatal("the universal signature does not verify, so this test shows nothing")
+	}
+	enc := newKeys(t).enc
+	weak := DeviceRecord{Person: "alice", ID: "w", Kind: RecordDevice, SignatureKey: slices.Clone(identityKey),
+		EncryptionKey: enc.PublicKey().Bytes(), Voucher: phone.record.ID, VoucherKey: phone.record.SignatureKey}
+	weak.Possession = universal()
+	if err := weak.Sign(phone.key); err == nil {
+		t.Error("the phone signed a record whose key is the identity point")
+	}
+	weak.Vouch = ed25519.Sign(phone.key, weak.body(vouchLabel)) // as the thief's own code would
+	if err := dirOf(t, w, "alice").CheckRecord(weak); err == nil {
+		t.Error("CheckRecord took a record whose key is the identity point")
+	}
+	w.records["alice"] = append(w.records["alice"], weak)
+	sk := newKeys(t)
+	if _, err := NewDeviceRecord("alice", "svc", sk.sig, sk.enc.PublicKey(), &weak); err == nil {
+		t.Error("a record was made under a voucher whose key is the identity point")
+	}
+	minted := DeviceRecord{Person: "alice", ID: "svc", Kind: RecordDevice, SignatureKey: sk.sig.Public().(ed25519.PublicKey),
+		EncryptionKey: sk.enc.PublicKey().Bytes(), Voucher: weak.ID, VoucherKey: weak.SignatureKey}
+	minted.Possession = ed25519.Sign(sk.sig, minted.body(possessionLabel))
+	minted.Vouch = universal() // no key of alice's
+	w.records["alice"] = append(w.records["alice"], minted)
+	d := dirOf(t, w, "alice")
+	for _, id := range []string{"w", "svc"} {
+		if _, ok := d.Device(id); ok {
+			t.Errorf("%s stands as alice's", id)
+		}
+	}
+
+	conv := NewConversationID()
+	l := w.latere(conv)
+	m := mls.Member{Credential: l.kp.Credential(), SignatureKey: l.kp.SignatureKey(),
+		Extensions: []mls.Extension{{Type: AttestationExtension, Data: universal()}}}
+	if err := CheckLatere(slices.Clone(identityKey), GroupID(conv), m); err == nil {
+		t.Error("an installation key of small order attested a member")
+	}
+	if _, err := VerifyEntry(Entry{SignatureKey: slices.Clone(identityKey)}, GroupID(conv), w.keyCheck(GroupID(conv))); err == nil ||
+		!strings.Contains(err.Error(), "small order") {
+		t.Errorf("an entry under a key of small order: got %v, want a refusal for its key", err)
+	}
+}

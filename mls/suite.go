@@ -20,6 +20,8 @@ import (
 	"errors"
 	"fmt"
 	"hash"
+
+	"latere.ai/x/sdk-go/internal/ed25519key"
 )
 
 // CipherSuite names an MLS cipher suite by its code point in the IANA
@@ -244,6 +246,9 @@ func (s *suite) verifyWithLabel(pub []byte, label string, content, sig []byte) e
 		if len(pub) != ed25519.PublicKeySize {
 			return fmt.Errorf("%w: Ed25519 key of %d bytes", errSignature, len(pub))
 		}
+		if ed25519key.SmallOrder(pub) {
+			return fmt.Errorf("%w: Ed25519 key of small order", errSignature)
+		}
 		if !ed25519.Verify(ed25519.PublicKey(pub), msg, sig) {
 			return errSignature
 		}
@@ -262,11 +267,15 @@ func (s *suite) verifyWithLabel(pub []byte, label string, content, sig []byte) e
 }
 
 // checkSignaturePublicKey reports whether pub is a valid signature
-// public key for the suite.
+// public key for the suite. An Ed25519 key of small order is not: a
+// signature anyone can make verifies under it.
 func (s *suite) checkSignaturePublicKey(pub []byte) error {
 	if s.sigCurve == nil {
 		if len(pub) != ed25519.PublicKeySize {
 			return fmt.Errorf("mls: Ed25519 public key of %d bytes", len(pub))
+		}
+		if ed25519key.SmallOrder(pub) {
+			return errors.New("mls: Ed25519 public key of small order")
 		}
 		return nil
 	}

@@ -11,6 +11,7 @@ import (
 	"fmt"
 	"strings"
 
+	"latere.ai/x/sdk-go/internal/ed25519key"
 	"latere.ai/x/sdk-go/mls"
 )
 
@@ -189,7 +190,7 @@ func CheckLatere(installation ed25519.PublicKey, groupID []byte, m mls.Member) e
 	if !id.Latere() || !bytes.Equal(GroupID(id.Conversation), groupID) {
 		return errors.New("messaging: leaf is not Latere's member of this conversation")
 	}
-	if len(installation) != ed25519.PublicKeySize {
+	if len(installation) != ed25519.PublicKeySize || ed25519key.SmallOrder(installation) {
 		return errors.New("messaging: no installation key to check Latere's member against")
 	}
 	for _, e := range m.Extensions {

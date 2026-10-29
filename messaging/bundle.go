@@ -11,6 +11,7 @@ import (
 	"errors"
 	"fmt"
 
+	"latere.ai/x/sdk-go/internal/ed25519key"
 	"latere.ai/x/sdk-go/mls"
 )
 
@@ -104,8 +105,8 @@ type KeyCheck func(sender Identity, signatureKey, attestation []byte) error
 // this group in the suite of conversations, that check accepts the key for
 // the sender, and that the payload parses.
 func VerifyEntry(e Entry, groupID []byte, check KeyCheck) (*SharedMessage, error) {
-	if len(e.SignatureKey) != ed25519.PublicKeySize {
-		return nil, errors.New("messaging: an entry's key is an Ed25519 key")
+	if len(e.SignatureKey) != ed25519.PublicKeySize || ed25519key.SmallOrder(e.SignatureKey) {
+		return nil, errors.New("messaging: an entry's key is an Ed25519 key not of small order")
 	}
 	sc, err := mls.VerifySignedContent(e.Signed, e.SignatureKey)
 	if err != nil {

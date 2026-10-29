@@ -801,8 +801,10 @@ AES-GCM. The ChaCha20-Poly1305 suite needs a ChaCha20-Poly1305 the
 standard library does not export, and the X448 suites need X448 and
 Ed448.
 
-The package calls no API and imports nothing else of the SDK: it is the
-protocol, which the platform's messaging client, the Mac and iPhone apps
+The package calls no API and imports nothing else of the SDK but the
+check that refuses an Ed25519 key of small order, under which a
+signature anyone can make verifies, which `messaging` applies to the
+keys of the directory as well: it is the protocol, which the platform's messaging client, the Mac and iPhone apps
 through the shared core, and a browser compiled to WebAssembly all run,
 and which the server that delivers messages runs as `PublicGroup` to
 check what members send without reading it.

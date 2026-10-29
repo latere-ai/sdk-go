@@ -21,7 +21,8 @@ minor version may break code, and every such change is marked **Breaking**.
   and remove members (`Commit`, `Process`) and applies them with `Merge`,
   encrypts and opens messages (`Encrypt`, `Process`), and keeps its state
   between runs (`MarshalBinary`, `UnmarshalGroup`). `PublicGroup`
-  follows a group for the server that delivers it, holding no key.
+  follows a group for the server that delivers it, holding no key, with
+  the proposals it keeps for a commit (`PendingProposals`).
   `VerifySignedContent` checks a message's original signature after it
   is shared with a member who joined later. The package builds for
   WebAssembly.

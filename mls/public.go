@@ -103,6 +103,16 @@ func (p *PublicGroup) Members() []Member { return p.members() }
 // Extensions returns the group context's extensions.
 func (p *PublicGroup) Extensions() []Extension { return cloneExtensions(p.ctx.extensions) }
 
+// PendingProposals returns the proposals of the current epoch the view
+// keeps for a commit to name.
+func (p *PublicGroup) PendingProposals() []Proposal {
+	var out []Proposal
+	for _, pp := range p.pending {
+		out = append(out, *p.describeProposal(pp))
+	}
+	return out
+}
+
 // RatchetTree returns the group's ratchet tree.
 func (p *PublicGroup) RatchetTree() []byte { return p.tree.bytes() }
 

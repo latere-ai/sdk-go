@@ -197,6 +197,9 @@ func testLifecycle(t *testing.T, cs CipherSuite, cfg Config) {
 		if _, err := ds.Process(prop); err != nil {
 			t.Fatal(err)
 		}
+		if pp := ds.PendingProposals(); len(pp) != 1 || pp[0].Kind != ProposalRemove || pp[0].Leaf != carol.group.Leaf() {
+			t.Fatalf("the view keeps %+v", pp)
+		}
 	}
 	if _, err := bob.group.Encrypt([]byte("too soon"), nil); !errors.Is(err, ErrPendingProposals) {
 		t.Fatalf("encrypt with a pending proposal: %v", err)

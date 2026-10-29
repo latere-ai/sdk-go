@@ -38,7 +38,7 @@ func TestValidate(t *testing.T) {
 	if err := ok.Validate(); err != nil {
 		t.Fatal(err)
 	}
-	for _, name := range []string{"", ".", "..", "a/b", `a\b`, "a\nb", "a\x00b", "\xff", strings.Repeat("x", attachment.MaxNameBytes+1)} {
+	for _, name := range []string{"", ".", "..", "a/b", `a\b`, "a\nb", "a\x00b", "\xff", "invoice\u202efdp.exe", "a\u0085b", "report\u200b.pdf", strings.Repeat("x", attachment.MaxNameBytes+1)} {
 		a := ok
 		a.Name = name
 		if err := a.Validate(); err == nil {

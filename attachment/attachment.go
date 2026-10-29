@@ -19,6 +19,7 @@ import (
 	"fmt"
 	"hash"
 	"strings"
+	"unicode"
 	"unicode/utf8"
 )
 
@@ -121,8 +122,13 @@ func ValidName(name string) error {
 		return errors.New("attachment: a file name is UTF-8")
 	}
 	for _, r := range name {
-		if r == '/' || r == '\\' || r < 0x20 || r == 0x7f {
+		if r == '/' || r == '\\' {
 			return fmt.Errorf("attachment: %q is not one path segment", name)
+		}
+		// Controls, and format characters such as a right-to-left
+		// override, which would draw a name another way than it reads.
+		if unicode.In(r, unicode.Cc, unicode.Cf, unicode.Zl, unicode.Zp) {
+			return fmt.Errorf("attachment: %q holds a control or format character", name)
 		}
 	}
 	return nil

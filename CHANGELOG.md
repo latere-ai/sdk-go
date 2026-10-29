@@ -7,6 +7,8 @@ minor version may break code, and every such change is marked **Breaking**.
 
 ## [Unreleased]
 
+## [0.14.0] - 2026-10-29
+
 ### Changed
 
 - **Breaking:** Package `agents`: a subagent's events and deltas are

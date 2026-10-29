@@ -34,6 +34,19 @@ minor version may break code, and every such change is marked **Breaking**.
   application's, and `RequiredCapabilitiesExtension` builds the group
   context extension that names what every member must support. A group
   holds at most `MaxLeaves` leaves.
+- Package `messaging`: conversations between people over `mls`. It
+  holds the profile of a conversation's group (`Config`,
+  `CreateOptions`, `KeyPackageOptions`), its people, owners and level as
+  a group context extension (`State`), the rules each commit and
+  proposal is checked against on a device and on the service's view
+  alike (`Policy.CheckCommit`, `CheckProposal`, `CheckMessage`), a
+  person's devices as records vouched for by one another
+  (`DeviceRecord`, `Directory`, `SecurityCode`), a message padded to a
+  fixed set of sizes (`Payload`), a message that verifies outside its
+  group (`Entry`), history sealed for someone let in and announced in
+  the commit that lets them in (`SealBundle`, `NewCommitNotice`), and
+  the recovery key and the backup key it unlocks (`RecoveryKey`,
+  `BackupKey`). It builds for WebAssembly.
 
 ## [0.14.0] - 2026-10-29
 

@@ -47,6 +47,9 @@ flowchart TD
     server[a server that applies routines] --> routine
     app --> mls
     ds[a delivery service] --> mls
+    app --> messaging
+    ds --> messaging
+    messaging --> mls
 ```
 
 `latere` is the core: configuration, credentials, the error type, the
@@ -796,6 +799,45 @@ and whether a leaf that replaces another is the same member
 (`CheckSuccessor`; by default only with the same credential). A staged
 commit's `Changes` names who proposed each change, so the application's
 rules can tell a person leaving from a person removed.
+
+## Conversations
+
+`messaging` is what every device of a conversation between people agrees
+on, over `mls`: the profile of a conversation's group, the rules a
+commit is checked against, and the formats of what leaves the group. It
+is separate from `mls` because `mls` is the protocol and knows no
+people, and it is in the SDK because the apps, a browser and the service
+that delivers messages must decide every commit the same way.
+
+The rules are one function, `Policy.CheckCommit`, of a group and a
+staged commit's changes, before the commit is merged. It takes the
+interface `Group`, which both `mls.Group` and `mls.PublicGroup` meet, so
+the service refuses a commit with the same code a device would refuse it
+with, before delivering it; a test runs every scenario on the committer,
+the members and the service's view and requires the same answer from
+each. The conversation's state, its people, owners and level, is a group
+context extension in a canonical encoding, so every member holds the
+same bytes and a change to it is in a commit the rules see.
+
+Which devices are a person's is not the service's to say. A person's
+devices are directory records, each signed by another of the person's
+records back to a root the person's apps pin; the service stores and
+serves them, and a record it made up verifies against nothing. A
+recovery record holds the public half of a key derived from the
+person's recovery key, so a new device can be vouched for when every
+old one is lost. A removed device's record stays, marked revoked, so
+the vouches it made still verify.
+
+History shared with someone let in leaves the group as entries, each
+the original signed message, which `mls.VerifySignedContent` checks
+without the group. They travel in a bundle sealed in chunks, with the
+last chunk marked in its nonce so a cut bundle does not open, and the
+bundle's key travels in the commit that lets the person in: under the
+group's exporter for the members, who can see what was shared, and
+under HPKE to each joiner's init key. The recovery key is 128 random
+bits with a check, written in Crockford base32 so it can be read aloud
+and typed without confusion; the keys derived from it are labeled, so
+none can stand in for another.
 
 ## What came from other SDKs
 

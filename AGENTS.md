@@ -23,6 +23,11 @@ too.
   code: a change comes with a test against the working group's vectors
   in `mls/testdata` or a test that fails without it, and it builds for
   WebAssembly (`make wasm`).
+- `messaging/`: conversations between people over `mls`, on `mls` and
+  the standard library alone. It calls no API. Its byte formats are
+  pinned by tests, since devices and the service of different versions
+  read them; a change to one is a new version of that format. It builds
+  for WebAssembly too.
 - `internal/sse/`: the server-sent events reader.
 - `openapi/`: the API's documents the spec tests read. Refresh them with
   `make openapi`; never edit them by hand.

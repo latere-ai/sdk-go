@@ -1,0 +1,509 @@
+// Copyright 2026 Latere AI
+// SPDX-License-Identifier: Apache-2.0
+
+package messaging
+
+import (
+	"bytes"
+	"crypto/ed25519"
+	"errors"
+	"fmt"
+	"slices"
+
+	"latere.ai/x/sdk-go/mls"
+)
+
+// Every device checks each commit before it merges it, and the service
+// checks the same before it accepts one, with Policy.CheckCommit: who
+// proposed each change, against the conversation's state of the epoch
+// the commit leaves.
+//
+//   - An owner adds a person, with all their devices, removes another
+//     person, makes or unmakes an owner, sets the level, and adds or
+//     removes Latere's member.
+//   - A person adds and removes their own devices, and leaves by
+//     proposing the removal of their own leaves; any member's commit
+//     carries such a proposal.
+//   - A person's new device joins on its own by an external commit,
+//     which removes no one.
+//   - The service proposes removals only, of a person's devices.
+//   - Latere's member commits an update of its own leaf and nothing
+//     else.
+//   - A one-on-one takes its second person in the commit that starts its
+//     first epoch, and never a third.
+//
+// After the commit every leaf is a device of a listed person or Latere's
+// member; every listed person has a device; Latere's member is in the
+// group exactly when the level is not Off; and the owners are people of
+// the conversation. When the last owner leaves, the person who joined
+// first becomes the owner, written by the same commit.
+
+// ErrRefused is the error for a commit, proposal or message the rules
+// refuse. The errors CheckCommit, CheckProposal and CheckMessage return
+// for a rule wrap it.
+var ErrRefused = errors.New("messaging: refused by the conversation's rules")
+
+func refuse(format string, args ...any) error {
+	return fmt.Errorf("%w: %s", ErrRefused, fmt.Sprintf(format, args...))
+}
+
+// Policy is what commits are checked against.
+type Policy struct {
+	// Installation is the installation's Latere key, which Latere's
+	// member's attestation verifies under. The apps pin it.
+	Installation ed25519.PublicKey
+	// Directory returns the verified directory of a person, as
+	// NewDirectory makes it from the records the service lists.
+	Directory func(person string) (*Directory, error)
+}
+
+// Removal is a person a commit removes, and who proposed it.
+type Removal struct {
+	Person string
+	// By is the member who proposed it; zero when the service did.
+	By Identity
+	// ByService is set when the service proposed it, for a device the
+	// person removed or an account that was deleted.
+	ByService bool
+}
+
+// Change is what a commit does to a conversation, in its own terms, for
+// the line every member's device draws from the commit itself.
+type Change struct {
+	// By is the committer.
+	By Identity
+	// Before and After are the state of the epoch the commit leaves and
+	// of the one it starts. Owners and the level changed if they differ.
+	Before, After State
+	// Joined are the people the commit adds, in the order they joined.
+	Joined []string
+	// Left are the people it removes who proposed it themselves.
+	Left []string
+	// Removed are the people it removes on someone else's proposal.
+	Removed []Removal
+	// DevicesAdded and DevicesRemoved are devices of people who stay.
+	DevicesAdded, DevicesRemoved []Identity
+	// ExternalJoin is set when a person's new device joined on its own;
+	// it is the one device in DevicesAdded.
+	ExternalJoin bool
+	// LatereAdded and LatereRemoved say whether Latere's member joined
+	// or left.
+	LatereAdded, LatereRemoved bool
+}
+
+// leaf is a leaf of the group with whose it is.
+type leaf struct {
+	member mls.Member
+	id     Identity
+}
+
+// Group is the epoch a commit or proposal comes to: an mls.Group, or the
+// service's mls.PublicGroup, before the commit is merged.
+type Group interface {
+	GroupID() []byte
+	Extensions() []mls.Extension
+	Members() []mls.Member
+}
+
+// CheckCommit checks a staged commit against the rules, with the group
+// at the epoch the commit leaves. It returns what the commit does, or an
+// error wrapping ErrRefused for a rule it breaks.
+func (p *Policy) CheckCommit(g Group, c mls.Changes) (*Change, error) {
+	extensions := g.Extensions()
+	before, err := ParseState(extensions)
+	if err != nil {
+		return nil, err
+	}
+	after := before
+	if c.ExtensionsChanged {
+		if after, err = ParseState(c.Extensions); err != nil {
+			return nil, refuse("the commit's state: %v", err)
+		}
+		if !sameOtherExtensions(extensions, c.Extensions) {
+			return nil, refuse("a commit changes no extension but the conversation's state")
+		}
+	}
+	if after.Kind != before.Kind {
+		return nil, refuse("a conversation's kind does not change")
+	}
+	members := g.Members()
+	leaves := make(map[uint32]leaf, len(members))
+	for _, m := range members {
+		id, err := ParseCredential(m.Credential)
+		if err != nil {
+			return nil, err
+		}
+		leaves[m.Leaf] = leaf{m, id}
+	}
+	ch := &Change{Before: before.Clone(), After: after.Clone()}
+	if c.ExternalJoin {
+		return ch, p.checkExternalJoin(g.GroupID(), before, c, ch)
+	}
+	if c.Sender.Kind != mls.SenderMember {
+		return nil, refuse("a commit comes from a member or a joining device")
+	}
+	by, ok := leaves[c.Sender.Leaf]
+	if !ok {
+		return nil, refuse("the committer is not in the group")
+	}
+	ch.By = by.id
+	if by.id.Latere() && (len(c.Proposals) > 0 || len(c.Added) > 0 || len(c.Removed) > 0 || c.ExtensionsChanged) {
+		return nil, refuse("Latere's member commits an update of its own leaf alone")
+	}
+
+	// Who proposed what. A commit's own proposals are the committer's.
+	var stateBy *Identity
+	removed := make(map[uint32]Identity) // leaf to who proposed it, zero for the service
+	var removedByService []uint32
+	addedBy := make([]Identity, 0, len(c.Added))
+	for _, pr := range c.Proposals {
+		var proposer Identity
+		external := false
+		switch pr.Sender.Kind {
+		case mls.SenderMember:
+			l, ok := leaves[pr.Sender.Leaf]
+			if !ok {
+				return nil, refuse("a proposal comes from a leaf not in the group")
+			}
+			proposer = l.id
+		case mls.SenderExternal:
+			external = true
+		default:
+			return nil, refuse("a proposal comes from a member or the service")
+		}
+		if external && pr.Kind != mls.ProposalRemove {
+			return nil, refuse("the service proposes removals alone")
+		}
+		if !external && proposer.Latere() {
+			return nil, refuse("Latere's member proposes nothing")
+		}
+		switch pr.Kind {
+		case mls.ProposalAdd:
+			addedBy = append(addedBy, proposer)
+		case mls.ProposalRemove:
+			target, ok := leaves[pr.Leaf]
+			if !ok {
+				return nil, refuse("a removal is of a leaf not in the group")
+			}
+			switch {
+			case external:
+				if target.id.Latere() {
+					return nil, refuse("an owner removes Latere's member, not the service")
+				}
+				removedByService = append(removedByService, pr.Leaf)
+			case target.id.Latere(), target.id.Person != proposer.Person:
+				if !before.Owner(proposer.Person) {
+					return nil, refuse("only an owner removes another person or Latere's member")
+				}
+			}
+			removed[pr.Leaf] = proposer
+		case mls.ProposalUpdate:
+			// MLS lets a leaf propose only its own update; the updated
+			// leaf is checked with the others below.
+		case mls.ProposalGroupContextExtensions:
+			who := proposer
+			stateBy = &who
+		default:
+			return nil, refuse("a conversation takes no %v proposal", pr.Kind)
+		}
+	}
+	if len(addedBy) != len(c.Added) || len(removed) != len(c.Removed) {
+		return nil, errors.New("messaging: the commit's proposals and changes disagree")
+	}
+
+	// The leaves after the commit.
+	groupID := g.GroupID()
+	next := make(map[uint32]leaf, len(leaves))
+	for i, l := range leaves {
+		next[i] = l
+	}
+	for _, m := range c.Removed {
+		delete(next, m.Leaf)
+	}
+	for _, m := range c.Updated {
+		id, err := ParseCredential(m.Credential)
+		if err != nil {
+			return nil, err
+		}
+		old, ok := leaves[m.Leaf]
+		if !ok || old.id != id {
+			return nil, refuse("an update keeps the leaf's identity")
+		}
+		if err := p.checkLeaf(groupID, id, m); err != nil {
+			return nil, err
+		}
+		next[m.Leaf] = leaf{m, id}
+	}
+	var newPeople []string
+	for i, m := range c.Added {
+		id, err := ParseCredential(m.Credential)
+		if err != nil {
+			return nil, err
+		}
+		proposer := addedBy[i]
+		switch {
+		case id.Latere():
+			if !before.Owner(proposer.Person) {
+				return nil, refuse("only an owner lets Latere in")
+			}
+			ch.LatereAdded = true
+		case before.Has(id.Person):
+			if proposer.Person != id.Person {
+				return nil, refuse("a person adds their own devices")
+			}
+			ch.DevicesAdded = append(ch.DevicesAdded, id)
+		default:
+			if !before.Owner(proposer.Person) {
+				return nil, refuse("only an owner adds a person")
+			}
+			if before.Kind == KindOneOnOne && c.Epoch != 1 {
+				return nil, refuse("a one-on-one takes its second person when it starts, and never a third")
+			}
+			if !slices.Contains(newPeople, id.Person) {
+				newPeople = append(newPeople, id.Person)
+			}
+		}
+		if err := p.checkLeaf(groupID, id, m); err != nil {
+			return nil, err
+		}
+		next[m.Leaf] = leaf{m, id}
+	}
+
+	// Who is left, and whether the state says so.
+	has := make(map[string]bool)
+	latere := 0
+	for _, l := range next {
+		if l.id.Latere() {
+			latere++
+		} else {
+			has[l.id.Person] = true
+		}
+	}
+	var people []string
+	for _, person := range before.People {
+		if has[person] {
+			people = append(people, person)
+		}
+	}
+	people = append(people, newPeople...)
+	if len(people) != len(has) {
+		return nil, refuse("every leaf is a device of a person of the conversation")
+	}
+	if !slices.Equal(people, after.People) {
+		return nil, refuse("the commit's state lists the people it leaves in the group")
+	}
+	ch.Joined = newPeople
+	for _, m := range c.Removed {
+		l := leaves[m.Leaf]
+		if l.id.Latere() {
+			ch.LatereRemoved = true
+			continue
+		}
+		by := removed[m.Leaf]
+		if has[l.id.Person] {
+			ch.DevicesRemoved = append(ch.DevicesRemoved, l.id)
+			continue
+		}
+		if slices.Contains(ch.Left, l.id.Person) || slices.ContainsFunc(ch.Removed, func(r Removal) bool { return r.Person == l.id.Person }) {
+			continue
+		}
+		service := slices.Contains(removedByService, m.Leaf)
+		switch {
+		case !service && by.Person == l.id.Person:
+			ch.Left = append(ch.Left, l.id.Person)
+		case service:
+			ch.Removed = append(ch.Removed, Removal{Person: l.id.Person, ByService: true})
+		default:
+			ch.Removed = append(ch.Removed, Removal{Person: l.id.Person, By: by})
+		}
+	}
+
+	// Owners: those who stay, unless an owner changed them, or the
+	// first person when the last owner left.
+	var kept []string
+	for _, o := range before.Owners {
+		if has[o] {
+			kept = append(kept, o)
+		}
+	}
+	if !slices.Equal(kept, after.Owners) {
+		switch {
+		case len(kept) == 0:
+			if !slices.Equal(after.Owners, people[:1]) {
+				return nil, refuse("when the last owner leaves, the person who joined first is the owner")
+			}
+		case stateBy == nil || !before.Owner(stateBy.Person) || !has[stateBy.Person]:
+			return nil, refuse("only an owner changes the owners")
+		}
+	}
+	if after.Level != before.Level && (stateBy == nil || !before.Owner(stateBy.Person) || !has[stateBy.Person]) {
+		return nil, refuse("only an owner sets the level")
+	}
+	if latere > 1 {
+		return nil, refuse("a conversation has one Latere member")
+	}
+	if (latere == 1) != (after.Level != LevelOff) {
+		return nil, refuse("Latere's member is in the group exactly when the level is not Off")
+	}
+
+	// A commit that lets a person or Latere in tells them what history
+	// they get.
+	if len(newPeople) > 0 || ch.LatereAdded {
+		n, err := ParseCommitNotice(c.AuthenticatedData)
+		if err != nil {
+			return nil, refuse("a commit that lets someone in carries its history notice: %v", err)
+		}
+		for _, m := range c.Added {
+			id, _ := ParseCredential(m.Credential) // parsed above
+			if (id.Latere() || slices.Contains(newPeople, id.Person)) && !n.Covers(m.SignatureKey) {
+				return nil, refuse("the history notice has no part for a leaf the commit adds")
+			}
+		}
+	}
+	return ch, nil
+}
+
+// checkExternalJoin checks a commit by a person's new device joining on
+// its own: a device of a person of the conversation, vouched for, that
+// changes nothing else.
+func (p *Policy) checkExternalJoin(groupID []byte, before State, c mls.Changes, ch *Change) error {
+	if c.Sender.Kind != mls.SenderNewMember {
+		return refuse("a commit comes from a member or a joining device")
+	}
+	if len(c.Added) != 1 || len(c.Removed) != 0 || c.ExtensionsChanged {
+		return refuse("a device joining on its own changes nothing else")
+	}
+	for _, pr := range c.Proposals {
+		if pr.Kind != mls.ProposalExternalInit {
+			return refuse("a device joining on its own makes no %v proposal", pr.Kind)
+		}
+	}
+	m := c.Added[0]
+	id, err := ParseCredential(m.Credential)
+	if err != nil {
+		return err
+	}
+	if id.Latere() || !before.Has(id.Person) {
+		return refuse("a device joins on its own only for a person of the conversation")
+	}
+	if err := p.checkLeaf(groupID, id, m); err != nil {
+		return err
+	}
+	ch.By = id
+	ch.ExternalJoin = true
+	ch.DevicesAdded = []Identity{id}
+	return nil
+}
+
+// checkLeaf checks a leaf the commit adds or updates: a device of its
+// person in the directory, or Latere's member attested for the group,
+// in the suite of conversations.
+func (p *Policy) checkLeaf(groupID []byte, id Identity, m mls.Member) error {
+	if !slices.Contains(m.Capabilities.CipherSuites, Suite) {
+		return refuse("a leaf supports the suite of conversations")
+	}
+	if id.Latere() {
+		if err := CheckLatere(p.Installation, groupID, m); err != nil {
+			return fmt.Errorf("%w: %v", ErrRefused, err)
+		}
+		return nil
+	}
+	if p.Directory == nil {
+		return errors.New("messaging: the policy has no directory")
+	}
+	d, err := p.Directory(id.Person)
+	if err != nil {
+		return err
+	}
+	if err := d.CheckMember(m); err != nil {
+		return fmt.Errorf("%w: %v", ErrRefused, err)
+	}
+	return nil
+}
+
+// sameOtherExtensions reports whether two lists hold the same extensions
+// apart from the conversation's state.
+func sameOtherExtensions(a, b []mls.Extension) bool {
+	other := func(exts []mls.Extension) []mls.Extension {
+		var out []mls.Extension
+		for _, e := range exts {
+			if e.Type != StateExtension {
+				out = append(out, e)
+			}
+		}
+		return out
+	}
+	return slices.EqualFunc(other(a), other(b), func(x, y mls.Extension) bool {
+		return x.Type == y.Type && bytes.Equal(x.Data, y.Data)
+	})
+}
+
+// CheckProposal checks a proposal as it arrives, before any commit
+// carries it, so a device discards one the rules refuse whoever
+// commits it: the service proposes removals of people's devices alone,
+// Latere's member proposes nothing, and a conversation takes no
+// pre-shared key, reinitialization or proposal from a joining client.
+func CheckProposal(g Group, pr mls.Proposal) error {
+	if err := checkProposal(pr); err != nil {
+		return err
+	}
+	if pr.Sender.Kind == mls.SenderExternal {
+		for _, m := range g.Members() {
+			if m.Leaf == pr.Leaf {
+				id, err := ParseCredential(m.Credential)
+				if err != nil {
+					return err
+				}
+				if id.Latere() {
+					return refuse("an owner removes Latere's member, not the service")
+				}
+				return nil
+			}
+		}
+		return refuse("a removal is of a leaf not in the group")
+	}
+	return nil
+}
+
+// checkProposal is what CheckProposal decides from the proposal alone,
+// which Config has every group check before a proposal becomes pending.
+func checkProposal(pr mls.Proposal) error {
+	switch pr.Sender.Kind {
+	case mls.SenderExternal:
+		if pr.Kind != mls.ProposalRemove {
+			return refuse("the service proposes removals alone")
+		}
+		return nil
+	case mls.SenderMember:
+		id, err := ParseCredential(pr.Sender.Credential)
+		if err != nil {
+			return err
+		}
+		if id.Latere() {
+			return refuse("Latere's member proposes nothing")
+		}
+	default:
+		return refuse("a proposal comes from a member or the service")
+	}
+	switch pr.Kind {
+	case mls.ProposalAdd, mls.ProposalRemove, mls.ProposalUpdate, mls.ProposalGroupContextExtensions:
+		return nil
+	}
+	return refuse("a conversation takes no %v proposal", pr.Kind)
+}
+
+// CheckMessage checks an application message's sender against the
+// state: Latere's member posts to the group only under Takes part.
+func CheckMessage(s State, sender mls.Sender) error {
+	if sender.Kind != mls.SenderMember {
+		return refuse("a message comes from a member")
+	}
+	id, err := ParseCredential(sender.Credential)
+	if err != nil {
+		return err
+	}
+	if id.Latere() && s.Level != LevelTakesPart {
+		return refuse("Latere's member posts to the group only when Latere takes part")
+	}
+	return nil
+}

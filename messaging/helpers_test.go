@@ -74,6 +74,17 @@ type device struct {
 // person's first device as a root, later ones vouched for by the first.
 func (w *world) device(person, name string) *device {
 	w.t.Helper()
+	var voucher *DeviceRecord
+	if first := w.records[person]; len(first) > 0 {
+		voucher = &first[0]
+	}
+	return w.deviceUnder(person, name, voucher)
+}
+
+// deviceUnder makes and lists a device of person vouched for by
+// voucher, signed with the voucher's key, or a root for a nil voucher.
+func (w *world) deviceUnder(person, name string, voucher *DeviceRecord) *device {
+	w.t.Helper()
 	_, key, err := ed25519.GenerateKey(rand.Reader)
 	if err != nil {
 		w.t.Fatal(err)
@@ -91,10 +102,8 @@ func (w *world) device(person, name string) *device {
 		w.t.Fatal(err)
 	}
 	d := &device{id: id, key: key, enc: enc, signer: signer}
-	if first := w.records[person]; len(first) == 0 {
-		d.record, err = NewDeviceRecord(person, name, key, enc.PublicKey(), nil)
-	} else if d.record, err = NewDeviceRecord(person, name, key, enc.PublicKey(), &first[0]); err == nil {
-		err = d.record.Sign(w.keys[first[0].Person+"/"+first[0].ID])
+	if d.record, err = NewDeviceRecord(person, name, key, enc.PublicKey(), voucher); err == nil && voucher != nil {
+		err = d.record.Sign(w.keys[voucher.Person+"/"+voucher.ID])
 	}
 	if err != nil {
 		w.t.Fatal(err)

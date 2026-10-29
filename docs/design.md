@@ -859,15 +859,21 @@ serves them, and a record it made up verifies against nothing but a root
 of its own, which shows as a changed security code. A recovery record
 holds the public half of a key derived from the person's recovery key,
 so a new device can be vouched for under the old root when every old
-device is lost. A device is removed by a revocation of its key, signed
-by a record under the same root, which names the records the key
-vouched for that stay; a revoked key vouches for nothing after, and two
-revocations of one key that keep different records keep only what both
-name, so a thief who holds a stolen key and argues with the person
-leaves neither side the disputed devices. The apps keep every
-revocation that counted and apply it whatever the service lists later,
-so the service can withhold a revocation from a device that never saw
-it, not undo one. The service proposes the removal of a revoked device
+device is lost. A new device takes the record of the device approving it
+over the pairing, never from the service's listing, since that record
+decides the root it stands under. A device is removed by a revocation
+of its key, signed by a record under the same root, which names the
+records the key vouched for that stay; a revoked key vouches for
+nothing after, and two revocations of one key that keep different
+records keep only what both name, so a thief who holds a stolen key and
+argues with the person leaves neither side the disputed devices. A kept
+record stands only while every link above it does too, so a device
+kept under a revoked one carries nothing past the revocation above it.
+The service takes no new record a revoked key vouches for, since a
+revocation can name a key before any record holds it. The apps keep
+every revocation that changed what they knew and apply it whatever the
+service lists later, so the service can withhold a revocation from a
+device that never saw it, not undo one. The service proposes the removal of a revoked device
 and nothing else, so it cannot take a person out of a conversation or
 its ownership on its own. Both bounds on what a directory holds fail
 closed, so where the service lists a record or a revocation changes

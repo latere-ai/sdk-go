@@ -108,6 +108,10 @@
 //     into it.
 //   - A revocation the service withholds from a device that never saw
 //     it, a new contact's, does not apply there until it is listed.
+//   - The revocations an app keeps grow with what it was shown: one for
+//     each key revoked and one for each key a later revocation stops
+//     keeping, past MaxRevocations when a service shows a device more
+//     records over time than it lists at once.
 //   - A chunk opened alone is checked against the file's key, not its
 //     digest, so a sender can seal for a seeking reader other bytes than
 //     the whole file opens to; OpenAttachment checks the digest.

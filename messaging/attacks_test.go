@@ -532,3 +532,164 @@ func TestMembersPartUnreadable(t *testing.T) {
 	_, err = w.policy().CheckCommit(bob.group, m.Commit.Changes())
 	refused(t, err, "members")
 }
+
+// alice revoked her stolen phone keeping only her laptop. The thief holds
+// x under the phone and y under x, and revokes x keeping y, signed with
+// the phone or with y. y hangs from x, which the revocation of the phone
+// does not keep, so y stands nowhere and joins none of alice's
+// conversations.
+func TestKeptUnderARevokedDevice(t *testing.T) {
+	for _, signer := range []string{"phone", "y"} {
+		t.Run("signed by "+signer, func(t *testing.T) {
+			w, phone, laptop, bob, carol := phoneRevoked(t)
+			x := w.deviceUnder("alice", "x", &phone.record)
+			y := w.deviceUnder("alice", "y", &x.record)
+			before := dirOf(t, w, "alice")
+			key := phone.key
+			if signer == "y" {
+				key = y.key
+			}
+			v := revocation(t, "alice", x.record.SignatureKey, signer, key, y.record.SignatureKey)
+			if changes, err := before.CheckRevocation(v); err != nil || !changes {
+				t.Fatalf("CheckRevocation: %v, %v", changes, err)
+			}
+			w.revocations["alice"] = append(w.revocations["alice"], v)
+			d := dirOf(t, w, "alice")
+			if !d.Revoked(phone.record.SignatureKey) {
+				t.Fatal("the phone is no longer revoked")
+			}
+			if _, ok := d.Device("y"); ok {
+				t.Error("a device the thief made under the revoked phone stands")
+			}
+			if _, ok := d.Device("laptop"); !ok {
+				t.Error("the laptop the revocation keeps is gone")
+			}
+			refused(t, w.externalJoin(t, bob, []*device{bob, laptop, carol}, y))
+		})
+	}
+}
+
+// A thief with a key under alice's root, and a service listing a fresh
+// batch of revocations each time, add nothing past the first changes to
+// what bob's app keeps: a revocation that keeps no less than those
+// before it changes nothing.
+func TestKnownRevocationsStay(t *testing.T) {
+	w, phone, laptop, _, _ := phoneRevoked(t)
+	w.known["alice"] = dirOf(t, w, "alice").Revocations() // bob's app saw alice revoke the phone
+	var sizes []int
+	for range 3 {
+		var batch []Revocation
+		for range MaxRevocations - 2 {
+			junk := newKeys(t).sig.Public().(ed25519.PublicKey)
+			batch = append(batch, revocation(t, "alice", laptop.record.SignatureKey, "phone", phone.key, junk))
+		}
+		w.revocations["alice"] = batch
+		w.known["alice"] = dirOf(t, w, "alice").Revocations()
+		sizes = append(sizes, len(w.known["alice"]))
+	}
+	// alice's revocation of the phone, the first of the laptop, and the
+	// second, which keeps none of what the first kept.
+	if !slices.Equal(sizes, []int{3, 3, 3}) {
+		t.Errorf("bob's app keeps %v revocations of alice over three listings", sizes)
+	}
+	d := dirOf(t, w, "alice")
+	if !d.Revoked(phone.record.SignatureKey) || !d.Revoked(laptop.record.SignatureKey) {
+		t.Error("a revocation that counted no longer applies")
+	}
+}
+
+// The service lists a root of its own with a recovery record under it
+// whose id sorts first. Recovery returns that one; RecoveryFor returns
+// the record of alice's own recovery key, and nothing for a key no
+// record holds.
+func TestRecoveryFor(t *testing.T) {
+	w := newWorld(t)
+	phone := w.device("alice", "phone")
+	rk, err := NewRecoveryKey()
+	if err != nil {
+		t.Fatal(err)
+	}
+	own, err := NewRecoveryRecord("alice", "recovery", rk, phone.record)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := own.Sign(phone.key); err != nil {
+		t.Fatal(err)
+	}
+	svc, svcKey := forgedRoot(t, w, "alice", "svc")
+	other, err := NewRecoveryKey()
+	if err != nil {
+		t.Fatal(err)
+	}
+	fake, err := NewRecoveryRecord("alice", "a-recovery", other, svc)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := fake.Sign(svcKey); err != nil {
+		t.Fatal(err)
+	}
+	w.records["alice"] = append(w.records["alice"], own, fake)
+	d := dirOf(t, w, "alice")
+	if got, ok := d.Recovery(); !ok || got.ID != fake.ID {
+		t.Fatalf("Recovery() returned %q, %v; the test expects the service's record first", got.ID, ok)
+	}
+	if got, err := d.RecoveryFor(rk); err != nil || got.ID != own.ID {
+		t.Errorf("RecoveryFor returned %q, %v", got.ID, err)
+	}
+	none, err := NewRecoveryKey()
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err := d.RecoveryFor(none); err == nil {
+		t.Error("RecoveryFor found a record for a key no record holds")
+	}
+}
+
+// The thief, holding alice's stolen phone and x it made under it,
+// revokes the phone from x first, keeping her laptop and a key it holds
+// no record for yet. alice's revocation of the phone keeps the laptop
+// alone, which changes nothing that is listed, so the service need not
+// keep it. CheckRecord then refuses the record the thief makes for that
+// key under the phone, so nothing the thief named stands.
+func TestCheckRecord(t *testing.T) {
+	w := newWorld(t)
+	phone := w.device("alice", "phone")
+	laptop := w.device("alice", "laptop")
+	x := w.device("alice", "x")
+	later := newKeys(t)
+	w.revocations["alice"] = []Revocation{revocation(t, "alice", phone.record.SignatureKey, "x", x.key,
+		laptop.record.SignatureKey, later.sig.Public().(ed25519.PublicKey))}
+	d := dirOf(t, w, "alice")
+	own := revocation(t, "alice", phone.record.SignatureKey, "laptop", laptop.key, laptop.record.SignatureKey)
+	if changes, err := d.CheckRevocation(own); err != nil || changes {
+		t.Fatalf("alice's revocation: changes %v, %v; the test expects it to change nothing listed", changes, err)
+	}
+	minted := record(t, "alice", "later", later, &phone.record, phone.key)
+	if err := d.CheckRecord(minted); err == nil {
+		t.Error("the service took a record the revoked phone vouched for")
+	}
+	w.records["alice"] = append(w.records["alice"], minted)
+	if _, ok := dirOf(t, w, "alice").Device("later"); !ok {
+		t.Fatal("the record stands once listed, so CheckRecord is what keeps it out")
+	}
+
+	fresh := newKeys(t)
+	tablet := record(t, "alice", "tablet", fresh, &laptop.record, laptop.key)
+	if err := d.CheckRecord(tablet); err != nil {
+		t.Errorf("a record the laptop vouches for: %v", err)
+	}
+	for name, r := range map[string]DeviceRecord{
+		"another person's": record(t, "bob", "tablet", fresh, nil, nil),
+		"a revoked key":    phone.record,
+		"a bad vouch": func() DeviceRecord {
+			r := tablet
+			r.Vouch = slices.Clone(r.Vouch)
+			r.Vouch[0] ^= 1
+			return r
+		}(),
+	} {
+		if err := d.CheckRecord(r); err == nil {
+			t.Errorf("%s: taken", name)
+		}
+	}
+}

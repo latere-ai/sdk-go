@@ -264,6 +264,35 @@ func TestDirectoryRevocation(t *testing.T) {
 	}
 }
 
+// A record kept under a revoked voucher stands only when the voucher is
+// kept the same way, every link up to the root.
+func TestDirectoryKeptChain(t *testing.T) {
+	phone, laptop, xk, yk := newKeys(t), newKeys(t), newKeys(t), newKeys(t)
+	root := record(t, "aiko", "phone", phone, nil, nil)
+	lap := record(t, "aiko", "laptop", laptop, &root, phone.sig)
+	x := record(t, "aiko", "x", xk, &root, phone.sig)
+	y := record(t, "aiko", "y", yk, &x, xk.sig)
+	recs := []DeviceRecord{y, x, lap, root}
+	keepY := revocation(t, "aiko", x.SignatureKey, "laptop", laptop.sig, y.SignatureKey)
+	for name, c := range map[string]struct {
+		phoneKeeps [][]byte
+		stand      []string
+	}{
+		"x kept":     {[][]byte{lap.SignatureKey, x.SignatureKey}, []string{"laptop", "y"}},
+		"x not kept": {[][]byte{lap.SignatureKey}, []string{"laptop"}},
+	} {
+		lost := revocation(t, "aiko", root.SignatureKey, "laptop", laptop.sig, c.phoneKeeps...)
+		d, _ := NewDirectory("aiko", recs, []Revocation{lost, keepY}, nil)
+		var ids []string
+		for _, r := range d.Devices() {
+			ids = append(ids, r.ID)
+		}
+		if !slices.Equal(ids, c.stand) {
+			t.Errorf("%s: %v stand, want %v", name, ids, c.stand)
+		}
+	}
+}
+
 // The service keeps a revocation that counts and changes something, so
 // what it keeps for a person stays within MaxRevocations.
 func TestCheckRevocation(t *testing.T) {

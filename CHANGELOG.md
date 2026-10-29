@@ -53,9 +53,12 @@ minor version may break code, and every such change is marked **Breaking**.
   moves it under another root, with a device removed by a signed
   `Revocation` from a record under the same root, which the service can
   neither make nor undo and the apps keep as known
-  (`Directory.Revocations`, `Directory.CheckRevocation`), a group a
-  device joins checked leaf by leaf against the directory
-  (`Policy.CheckJoin`, `Policy.JoinGroup`, `Policy.JoinExternal`), a
+  (`Directory.Revocations`, `Directory.CheckRevocation`), with the checks
+  the service runs before it keeps a record (`Directory.CheckRecord`)
+  and the recovery record of a given recovery key
+  (`Directory.RecoveryFor`), a group a device joins checked leaf by leaf
+  against the directory (`Policy.CheckJoin`, `Policy.JoinGroup`,
+  `Policy.JoinExternal`), a
   message padded to a
   fixed set of sizes (`Payload`), a message that verifies outside its
   group (`Entry`), history sealed for someone let in and announced in

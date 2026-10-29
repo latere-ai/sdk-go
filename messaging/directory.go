@@ -27,13 +27,19 @@ import (
 // names its voucher's id and key under its own key's signature as well
 // as the voucher's, so where a record hangs is its own word and the
 // voucher's together, and no one who holds neither key moves it under
-// another root.
+// another root. A new device takes the record of the device approving it
+// from that device, over the pairing, and never from the service's
+// listing, since the voucher it names is the root it will stand under
+// and the device whose backup key it takes.
 //
 // A key the person no longer holds is revoked by a Revocation, signed
 // by a record under the same root as the key, which the service stores
 // and lists but cannot make or undo. A revoked key is no record's key
 // and vouches for nothing, and a record it vouched for stays only when
-// every revocation of the key names it in Keep: a device of the person's
+// every revocation of the key names it in Keep and the revoked record
+// itself still reaches its root the same way, so a key kept under a
+// revoked one carries nothing it vouched for past the revocation above
+// it: a device of the person's
 // that revokes a stolen device names the devices that stay, and a
 // revocation the thief signs that names others makes both lose them, so
 // a dispute fails closed. A revocation counts whether or not its signer
@@ -46,12 +52,17 @@ import (
 
 // MaxRecords bounds the records NewDirectory takes for one person; past
 // it nothing stands, so no record is dropped for where the service lists
-// it.
+// it. A directory past it revokes nothing either, so a service keeps no
+// record of a person's past it, and may drop a revoked record, with the
+// records that stand only through it, to make room.
 const MaxRecords = 256
 
 // MaxRevocations bounds the revocations that count for one person: one
 // for each key and one for each record a later revocation stops keeping.
-// Past it nothing stands.
+// Past it nothing stands. They are counted before their signatures are
+// checked, so that checking costs no more than the bound; a service that
+// lists forged ones past it blanks the directory, as it could by listing
+// nothing.
 const MaxRevocations = 2 * MaxRecords
 
 // RecordKind is what a directory record holds.
@@ -210,7 +221,10 @@ func (r *DeviceRecord) Sign(key ed25519.PrivateKey) error {
 // and encryption key, naming the record that vouches for it, with the
 // device's proof that it holds the key. The voucher then signs it with
 // Sign. A nil voucher makes a root, the person's first device, which
-// vouches for itself here.
+// vouches for itself here. The new device takes the voucher's record
+// from the approving device over the pairing, not from the service's
+// listing: the voucher decides the root the device stands under and the
+// one device whose backup key it takes.
 func NewDeviceRecord(person, device string, key ed25519.PrivateKey, encryptionKey *ecdh.PublicKey, voucher *DeviceRecord) (DeviceRecord, error) {
 	return newRecord(DeviceRecord{Person: person, ID: device, Kind: RecordDevice, EncryptionKey: encryptionKey.Bytes()}, key, voucher)
 }
@@ -342,8 +356,10 @@ type Directory struct {
 // when they verify. A record that fails, names another person or is
 // revoked is left out and counted in dropped, so a record the service
 // made up costs nothing but itself. Two records under one id, or with
-// one key, are both left out. Past MaxRecords records, or MaxRevocations
-// revocations that may count, nothing stands.
+// one key, are both left out. A record stands when every link from it up
+// to its root is to a voucher not revoked, or to one each revocation of
+// which keeps it, and its own key is not revoked. Past MaxRecords
+// records, or MaxRevocations revocations that may count, nothing stands.
 func NewDirectory(person string, records []DeviceRecord, revocations, known []Revocation) (d *Directory, dropped int) {
 	d = &Directory{person: person, records: make(map[string]DeviceRecord), verified: make(map[string]DeviceRecord),
 		roots: make(map[string]string), byKey: make(map[string]string),
@@ -409,6 +425,7 @@ func NewDirectory(person string, records []DeviceRecord, revocations, known []Re
 			d.byKey[string(r.SignatureKey)] = r.ID
 		}
 	}
+	d.applyAll(facts)
 
 	// The revocations that may count: of a key a verified record holds,
 	// by a verified record under the same root, each once.
@@ -428,34 +445,38 @@ func NewDirectory(person string, records []DeviceRecord, revocations, known []Re
 		clear(d.verified)
 		clear(d.roots)
 		clear(d.byKey)
-		d.applyAll(facts)
 		return d, len(records)
 	}
+	// One that verifies counts; it joins the facts the app keeps only
+	// when it revokes a key or keeps less than the facts and those before
+	// it, so a service listing a fresh batch each time adds nothing to
+	// what the app keeps.
 	for _, v := range counting {
-		if ed25519.Verify(d.verified[v.By].SignatureKey, v.message(), v.Signature) {
-			d.apply(v)
+		if ed25519.Verify(d.verified[v.By].SignatureKey, v.message(), v.Signature) && d.apply(v) {
 			d.revocations = append(d.revocations, cloneRevocation(v))
 		}
 	}
-	d.applyAll(facts)
 
-	// The records that stand: not revoked, through vouchers that stand,
-	// or through a revoked voucher whose revocations all keep them.
-	stands := walk(n, func(i int) (bool, bool) {
+	// A record reaches its root through links that are not revoked, or
+	// whose revoked voucher every revocation keeps it under; each link
+	// up to the root counts, so a voucher kept under a revoked one of
+	// its own does not carry what it vouched for. A record stands when
+	// it reaches its root and its own key is not revoked.
+	reach := walk(n, func(i int) (bool, bool) {
 		r := recs[i]
 		switch {
-		case root[i] < 0 || d.revoked[string(r.SignatureKey)]:
+		case root[i] < 0:
 			return false, true
 		case r.Root():
 			return true, true
 		}
-		if d.revoked[string(r.VoucherKey)] {
-			return d.keep[string(r.VoucherKey)][string(r.SignatureKey)], true
+		if d.revoked[string(r.VoucherKey)] && !d.keep[string(r.VoucherKey)][string(r.SignatureKey)] {
+			return false, true
 		}
 		return false, false
 	}, parent, false)
 	for i, r := range recs {
-		if stands[i] {
+		if reach[i] && !d.revoked[string(r.SignatureKey)] {
 			d.records[r.ID] = r
 		}
 	}
@@ -463,8 +484,10 @@ func NewDirectory(person string, records []DeviceRecord, revocations, known []Re
 }
 
 // apply records a revocation that counts: its key is revoked, and keeps
-// only what this revocation and every earlier one of it name.
-func (d *Directory) apply(v Revocation) {
+// only what this revocation and every earlier one of it name. It
+// reports whether that changed anything: a key not revoked before, or a
+// key, held by a record or not, that is no longer kept.
+func (d *Directory) apply(v Revocation) (changed bool) {
 	names := make(map[string]bool, len(v.Keep))
 	if d.byKey[string(v.Key)] != v.By { // a record that revokes its own key keeps nothing
 		for _, k := range v.Keep {
@@ -475,12 +498,15 @@ func (d *Directory) apply(v Revocation) {
 		for k := range prev {
 			if !names[k] {
 				delete(prev, k)
+				changed = true
 			}
 		}
 	} else {
 		d.keep[string(v.Key)] = names
+		changed = true
 	}
 	d.revoked[string(v.Key)] = true
+	return changed
 }
 
 func (d *Directory) applyAll(vs []Revocation) {
@@ -522,6 +548,29 @@ func (d *Directory) CheckRevocation(v Revocation) (changes bool, err error) {
 		}
 	}
 	return false, nil
+}
+
+// CheckRecord checks a record before the service keeps it, new or
+// vouched for again: it is the person's and verifies, and neither its
+// key nor its voucher's key is revoked. A revocation may keep a key no
+// record holds yet, and CheckRevocation weighs only the records listed,
+// so a record a revoked key vouches for is kept from before the
+// revocation or not at all. Whether the record stands with the others
+// once listed is NewDirectory's to say.
+func (d *Directory) CheckRecord(r DeviceRecord) error {
+	if r.Person != d.person {
+		return fmt.Errorf("messaging: a record of %s is not one of %s", r.Person, d.person)
+	}
+	if !r.verify() {
+		return errors.New("messaging: the record does not verify")
+	}
+	if d.revoked[string(r.SignatureKey)] {
+		return errors.New("messaging: the record's key is revoked")
+	}
+	if d.revoked[string(r.VoucherKey)] {
+		return errors.New("messaging: the record's voucher's key is revoked")
+	}
+	return nil
 }
 
 // walk decides a value for each of n records that hang from one another
@@ -612,7 +661,9 @@ func (d *Directory) Roots() []DeviceRecord {
 }
 
 // Recovery returns the person's recovery record that stands, if there is
-// one.
+// one, the first by id when there are more. The service may list one of
+// its own under a root of its own, so an app about to vouch with the
+// person's recovery key takes the record from RecoveryFor.
 func (d *Directory) Recovery() (DeviceRecord, bool) {
 	for _, id := range sortedIDs(d.records) {
 		if r := d.records[id]; r.Kind == RecordRecovery {
@@ -620,6 +671,22 @@ func (d *Directory) Recovery() (DeviceRecord, bool) {
 		}
 	}
 	return DeviceRecord{}, false
+}
+
+// RecoveryFor returns the person's recovery record of the recovery key,
+// when it stands.
+func (d *Directory) RecoveryFor(k *RecoveryKey) (DeviceRecord, error) {
+	key, err := k.SigningKey()
+	if err != nil {
+		return DeviceRecord{}, err
+	}
+	pub := key.Public().(ed25519.PublicKey)
+	for _, r := range d.records {
+		if r.Kind == RecordRecovery && bytes.Equal(r.SignatureKey, pub) {
+			return r, nil
+		}
+	}
+	return DeviceRecord{}, fmt.Errorf("messaging: no recovery record of the key stands for %s", d.person)
 }
 
 // Device returns the device with the id, if it stands.
@@ -634,8 +701,12 @@ func (d *Directory) Device(id string) (DeviceRecord, bool) {
 // Revoked reports whether a revocation that counts revokes the key.
 func (d *Directory) Revoked(signatureKey []byte) bool { return d.revoked[string(signatureKey)] }
 
-// Revocations returns the revocations that counted, those known among
-// them, for the app to keep and pass to NewDirectory again as known.
+// Revocations returns the revocations for the app to keep and pass to
+// NewDirectory again as known: the known ones, then each of the
+// service's that counted and changed what those before it say. It grows
+// by one for each key revoked and one for each key a later revocation
+// of it stops keeping, since what the app saw stays; the bound on what
+// the service lists, MaxRevocations, does not cap it.
 func (d *Directory) Revocations() []Revocation { return cloneRevocations(d.revocations) }
 
 // CheckMember checks that a leaf is a device of the person: its

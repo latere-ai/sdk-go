@@ -2099,6 +2099,10 @@
       },
       "MemorySettings": {
         "properties": {
+          "chats": {
+            "description": "Search past chats: whether a conversation can search and read the person's other conversations, in a project only that project's. On by default.",
+            "type": "boolean"
+          },
           "remember": {
             "description": "Remember new things: whether conversations save memories. On by default.",
             "type": "boolean"
@@ -2110,12 +2114,16 @@
         },
         "required": [
           "remember",
-          "sensitive"
+          "sensitive",
+          "chats"
         ],
         "type": "object"
       },
       "MemorySettingsChange": {
         "properties": {
+          "chats": {
+            "type": "boolean"
+          },
           "remember": {
             "type": "boolean"
           },
@@ -2127,6 +2135,9 @@
       },
       "MemorySettingsChanged": {
         "properties": {
+          "chats": {
+            "type": "boolean"
+          },
           "deleted_sensitive": {
             "description": "How many memories marked sensitive this change deleted.",
             "type": "integer"
@@ -2141,6 +2152,7 @@
         "required": [
           "remember",
           "sensitive",
+          "chats",
           "deleted_sensitive"
         ],
         "type": "object"
@@ -4295,6 +4307,7 @@
                     }
                   ],
                   "settings": {
+                    "chats": true,
                     "remember": true,
                     "sensitive": false
                   }
@@ -4809,7 +4822,7 @@
     },
     "/v1/account/memory/settings": {
       "patch": {
-        "description": "Turns Remember new things and Include sensitive topics on or off; a member left out stays as it is. With Remember new things off, conversations still use what is remembered and save nothing new, from their next save on. Sensitive topics are health conditions, religious beliefs, political opinions, sexual orientation, racial or ethnic origin, and union membership. Turning them off deletes, for good, every memory marked sensitive, and the answer says how many; a client asks the person to confirm first.",
+        "description": "Turns Remember new things, Include sensitive topics and Search past chats on or off; a member left out stays as it is. With Remember new things off, conversations still use what is remembered and save nothing new, from their next save on. Sensitive topics are health conditions, religious beliefs, political opinions, sexual orientation, racial or ethnic origin, and union membership. Turning them off deletes, for good, every memory marked sensitive, and the answer says how many; a client asks the person to confirm first. With Search past chats on, a conversation can search and read the person's other conversations: in a project, only that project's, and outside one, only those in no project. Turning it off stops a conversation that is running from reading any more of them within a second.",
         "operationId": "updateMemorySettings",
         "requestBody": {
           "content": {
@@ -4829,6 +4842,7 @@
             "content": {
               "application/json": {
                 "example": {
+                  "chats": true,
                   "deleted_sensitive": 0,
                   "remember": false,
                   "sensitive": false

@@ -20,6 +20,10 @@ minor version may break code, and every such change is marked **Breaking**.
 - Package `agents`: a todo call's result records the agent's to-do list,
   typed: `ToolMeta.Todos`, each `Todo` with its ID, its content and its
   `TodoStatus` (`TodoPending`, `TodoInProgress`, `TodoCompleted`).
+- Package `memory`: the third setting, Search past chats.
+  `Settings.Chats` and `SettingsChanged.Chats` say whether conversations
+  search and read the person's past conversations, in a project only that
+  project's, and `UpdateSettingsParams.Chats` turns it on or off.
 
 ## [0.15.0] - 2026-10-30
 

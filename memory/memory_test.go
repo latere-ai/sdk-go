@@ -28,7 +28,7 @@ const (
 	// inProject is a project's memory as a list answers it.
 	inProject = `{"scope":"project","project":"` + projectID + `","id":"tide-sources","name":"Tide sources","description":"Uses the harbor's own tables.",
 "type":"topic","source":"you","checksum":"41aa","size":120,"updated":"2026-10-29T10:41:07Z"}`
-	list = `{"settings":{"remember":true,"sensitive":false},"memories":[` + one + `,` + inProject + `],
+	list = `{"settings":{"remember":true,"chats":true,"sensitive":false},"memories":[` + one + `,` + inProject + `],
 "projects":[{"id":"` + projectID + `","name":"Tide tables"}],"more":true,
 "limits":{"max_name":100,"max_description":300,"max_bytes":8192,"max_import_lines":200,"types":["preference","profile","topic","area","person"]},
 "import_prompt":"List everything you remember about me.","added_later":true}`
@@ -108,7 +108,7 @@ func TestListMemories(t *testing.T) {
 	if got := calls(); len(got) != 1 || got[0].method != http.MethodGet || got[0].path != "/v1/account/memory" {
 		t.Errorf("sent %+v", got)
 	}
-	if !l.Settings.Remember || l.Settings.Sensitive || !l.More || len(l.Memories) != 2 || len(l.Projects) != 1 ||
+	if !l.Settings.Remember || !l.Settings.Chats || l.Settings.Sensitive || !l.More || len(l.Memories) != 2 || len(l.Projects) != 1 ||
 		l.Projects[0].ID != projectID || l.Projects[0].Name != "Tide tables" || l.ImportPrompt == "" {
 		t.Errorf("list %+v", l)
 	}
@@ -398,6 +398,27 @@ func TestUpdateSettings(t *testing.T) {
 	}
 	if b := calls()[2].body; b == nil || len(b) != 0 {
 		t.Errorf("a nil change sent %v", b)
+	}
+}
+
+// TestSearchPastChats: a change of Search past chats sends that switch
+// alone and reads it back from the answer.
+func TestSearchPastChats(t *testing.T) {
+	c, calls := fakeAPI(t, 0, func(w http.ResponseWriter, _ *http.Request, _ int) {
+		answer(w, http.StatusOK, `{"remember":true,"chats":false,"sensitive":false,"deleted_sensitive":0}`)
+	})
+	off := false
+	s, err := c.UpdateSettings(t.Context(), &memory.UpdateSettingsParams{Chats: &off})
+	if err != nil {
+		t.Fatal(err)
+	}
+	got := calls()
+	if len(got) != 1 || got[0].method != http.MethodPatch || got[0].path != "/v1/account/memory/settings" ||
+		len(got[0].body) != 1 || got[0].body["chats"] != false {
+		t.Errorf("sent %+v", got)
+	}
+	if !s.Remember || s.Chats || s.Sensitive || s.DeletedSensitive != 0 {
+		t.Errorf("settings %+v", s)
 	}
 }
 

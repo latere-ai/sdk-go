@@ -594,9 +594,9 @@ between You and a project. The package also covers:
 - `DeleteMemory` deletes one memory for good, and `ForgetEverything`
   every memory of the person and their projects; a program asks the
   person to confirm first.
-- `UpdateSettings` turns Remember new things and Include sensitive topics
-  on or off. Turning sensitive topics off deletes every memory marked
-  sensitive, and says how many.
+- `UpdateSettings` turns Remember new things, Search past chats and
+  Include sensitive topics on or off. Turning sensitive topics off deletes
+  every memory marked sensitive, and says how many.
 - `ListForgotten` lists what conversations forgot in the last 30 days, and
   `RestoreMemory` brings one back. It is sent once.
 - `ExportMemory` streams a zip of every memory as Markdown files; a zip

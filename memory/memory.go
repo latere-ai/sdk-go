@@ -12,8 +12,8 @@
 // projects, which only that project's conversations read. Conversations
 // save and forget memories as they go; this package is how a program shows
 // a person what is remembered and lets them add, change, move, delete,
-// restore, export and import memories, and turn Remember new things and
-// Include sensitive topics on or off.
+// restore, export and import memories, and turn Remember new things,
+// Search past chats and Include sensitive topics on or off.
 //
 //	cfg, err := latere.NewConfig() // the key in LATERE_KEY
 //	if err != nil {
@@ -259,6 +259,11 @@ type Settings struct {
 	// memories. On by default. With it off, conversations still read what
 	// is remembered.
 	Remember bool `json:"remember"`
+	// Chats is Search past chats: whether conversations search and read
+	// the person's past conversations when one is mentioned or an answer
+	// depends on something said before; in a project, only that project's
+	// conversations. On by default.
+	Chats bool `json:"chats"`
 	// Sensitive is Include sensitive topics: whether memories about health
 	// conditions, religious beliefs, political opinions, sexual
 	// orientation, racial or ethnic origin, and union membership are kept.
@@ -474,6 +479,10 @@ type UpdateSettingsParams struct {
 	// conversations still read what is remembered and save nothing new,
 	// from their next save on.
 	Remember *bool `json:"remember,omitempty"`
+	// Chats turns Search past chats on or off. With it off, conversations
+	// read none of the person's past conversations, from their next read
+	// on, running ones included.
+	Chats *bool `json:"chats,omitempty"`
 	// Sensitive turns Include sensitive topics on or off. Turning it off
 	// deletes, for good, every memory marked Sensitive; a program asks the
 	// person to confirm first.
@@ -484,6 +493,8 @@ type UpdateSettingsParams struct {
 type SettingsChanged struct {
 	// Remember is Remember new things, as Settings.Remember.
 	Remember bool `json:"remember"`
+	// Chats is Search past chats, as Settings.Chats.
+	Chats bool `json:"chats"`
 	// Sensitive is Include sensitive topics, as Settings.Sensitive.
 	Sensitive bool `json:"sensitive"`
 	// DeletedSensitive is how many memories marked sensitive the change
@@ -508,9 +519,10 @@ func (s *SettingsChanged) UnmarshalJSON(b []byte) error {
 	return nil
 }
 
-// UpdateSettings turns Remember new things, Include sensitive topics or
-// both on or off, and returns the settings as they are now. A nil params,
-// or one that sets neither, changes nothing and returns them.
+// UpdateSettings turns any of Remember new things, Search past chats and
+// Include sensitive topics on or off, and returns the settings as they
+// are now. A nil params, or one that sets none, changes nothing and
+// returns them.
 //
 // A change only sets values, so it is retried after a failure. A retry
 // after a lost answer that turned Include sensitive topics off finds

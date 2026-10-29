@@ -66,6 +66,18 @@ minor version may break code, and every such change is marked **Breaking**.
   with `errors.Is`, such as `ErrPersonalOnly` for an organization's token
   and `ErrAgentToken` for a conversation's agent's. `AddMemory`,
   `ImportMemory`, `RestoreMemory` and a move are sent once.
+- Package `attachment`: the file a message carries, the one type a
+  session's messages and a conversation between people share, with its
+  name, media type, size, digest, where it is kept, and a preview
+  (`Preview`: a thumbnail, poster frame, first page or waveform).
+
+### Changed
+
+- **Breaking:** Package `agents`: `Attachment` is built on
+  `attachment.Attachment`, which holds its `Name`, `MediaType`, `Size`,
+  `Blob` and `Ref`, and adds `Preview`. Reading those fields is
+  unchanged, and so is the JSON; a composite literal names them inside
+  `Attachment: attachment.Attachment{...}`.
 
 ## [0.14.0] - 2026-10-29
 

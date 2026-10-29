@@ -34,7 +34,7 @@ test:
 
 ## wasm: the packages a browser runs build for WebAssembly
 wasm:
-	GOOS=js GOARCH=wasm go vet ./mls ./messaging
+	GOOS=js GOARCH=wasm go vet ./mls ./messaging ./attachment
 
 ## cover: the tests with a coverage report in coverage.html
 cover:

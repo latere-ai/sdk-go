@@ -9,6 +9,8 @@ import (
 	"fmt"
 	"strings"
 	"time"
+
+	"latere.ai/x/sdk-go/attachment"
 )
 
 // EventType names the kind of an event in a session's log.
@@ -471,24 +473,16 @@ type WakeFiring struct {
 }
 
 // An Attachment is a file a message carries, as the session keeps it:
-// the agent finds it in the session's working directory at Path.
+// the file every kind of message carries (package attachment), and where
+// the agent finds it in the session's working directory. Of the shared
+// fields, Blob is the digest the session keeps the bytes by, and Ref is
+// where the file is in the session's folder of files, its path inside
+// the Session's Folder, for a session that keeps one; empty otherwise.
 type Attachment struct {
-	// Name is the file's name, as the message sent it.
-	Name string `json:"name"`
-	// MediaType is the file's media type.
-	MediaType string `json:"media_type"`
-	// Size is the file's length in bytes.
-	Size int64 `json:"size"`
-	// Blob is the digest the session keeps the bytes by, "sha256:" and
-	// the hex of their hash.
-	Blob string `json:"blob"`
+	attachment.Attachment
 	// Path is where the agent finds the file, relative to the session's
 	// working directory.
 	Path string `json:"path"`
-	// Ref is where the file is in the session's folder of files, its path
-	// inside the Session's Folder, for a session that keeps one; empty
-	// otherwise.
-	Ref string `json:"ref,omitempty"`
 	// Source is the file of the sender's Storage the bytes were read
 	// from, for a file the message named by its source; nil otherwise.
 	Source *AttachmentSource `json:"source,omitempty"`

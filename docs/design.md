@@ -45,6 +45,8 @@ flowchart TD
     app -. a person's sign-in .-> signin
     gateway[the Lux gateway's codec] --> wire
     server[a server that applies routines] --> routine
+    app --> mls
+    ds[a delivery service] --> mls
 ```
 
 `latere` is the core: configuration, credentials, the error type, the
@@ -752,6 +754,40 @@ account is an empty value rather than an absent one.
 Both flows need a client that Latere registers, with the API among its
 audiences, until registration is self-service; the package documentation
 says how to ask for one and what to register.
+
+## Messaging Layer Security
+
+`mls` implements RFC 9420 here rather than wrapping a library, because the
+module depends on the standard library alone and every Go implementation
+of MLS needs `golang.org/x/crypto` or Cloudflare's CIRCL for its curves
+and AEADs. Go 1.26 put HPKE (RFC 9180) in the standard library, which
+leaves nothing else missing for four of the seven suites RFC 9420 lists:
+X25519 with Ed25519, and P-256, P-384 and P-521 with ECDSA, all with
+AES-GCM. The ChaCha20-Poly1305 suite needs a ChaCha20-Poly1305 the
+standard library does not export, and the X448 suites need X448 and
+Ed448.
+
+The package calls no API and imports nothing else of the SDK: it is the
+protocol, which the platform's messaging client, the Mac and iPhone apps
+through the shared core, and a browser compiled to WebAssembly all run,
+and which the server that delivers messages runs as `PublicGroup` to
+check what members send without reading it.
+
+Correctness rests on the IETF MLS working group's test vectors, every
+file of them, which `mls/testdata` holds for the four suites; a passive
+member follows each scenario's group through its Welcome and commits to
+the same epoch authenticators as the implementations that wrote them.
+Fuzz targets cover every decoder and a live group fed mutated messages.
+
+The API is small on purpose. A commit is staged and changes nothing until
+`Merge`, because the delivery service decides which commit wins an
+epoch and the application decides whether a commit is allowed: who may
+add whom is not RFC 9420's to say. Received ratchet keys move only after
+a message authenticates, so a forged message cannot skip a sender's
+generations. What the package leaves out, sending Update proposals,
+reinitializing or branching, resync joins and X.509 validation, is
+listed in its documentation; each is code a group can work without, and
+each would widen what has to be right.
 
 ## What came from other SDKs
 

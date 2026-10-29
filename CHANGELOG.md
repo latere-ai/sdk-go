@@ -7,6 +7,25 @@ minor version may break code, and every such change is marked **Breaking**.
 
 ## [Unreleased]
 
+### Added
+
+- Package `mls`: Messaging Layer Security, RFC 9420, in pure Go on the
+  standard library, for the suites
+  `MLS_128_DHKEMX25519_AES128GCM_SHA256_Ed25519`,
+  `MLS_128_DHKEMP256_AES128GCM_SHA256_P256`,
+  `MLS_256_DHKEMP384_AES256GCM_SHA384_P384` and
+  `MLS_256_DHKEMP521_AES256GCM_SHA512_P521`. It passes the IETF MLS
+  working group's interoperability test vectors for them. A member
+  creates a group (`CreateGroup`), joins with a Welcome (`JoinGroup`) or
+  on its own from a group info (`JoinExternal`), stages commits that add
+  and remove members (`Commit`, `Process`) and applies them with `Merge`,
+  encrypts and opens messages (`Encrypt`, `Process`), and keeps its state
+  between runs (`MarshalBinary`, `UnmarshalGroup`). `PublicGroup`
+  follows a group for the server that delivers it, holding no key.
+  `VerifySignedContent` checks a message's original signature after it
+  is shared with a member who joined later. The package builds for
+  WebAssembly.
+
 ## [0.14.0] - 2026-10-29
 
 ### Changed

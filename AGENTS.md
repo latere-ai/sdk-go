@@ -18,6 +18,11 @@ too.
   `llm` names every type and constant of it, and a test holds the two to
   the same set.
 - `signin/`: signing a person in. The core must not import it.
+- `mls/`: Messaging Layer Security, RFC 9420, on the standard library
+  alone. It calls no API and imports nothing of the SDK. It is security
+  code: a change comes with a test against the working group's vectors
+  in `mls/testdata` or a test that fails without it, and it builds for
+  WebAssembly (`make wasm`).
 - `internal/sse/`: the server-sent events reader.
 - `openapi/`: the API's documents the spec tests read. Refresh them with
   `make openapi`; never edit them by hand.

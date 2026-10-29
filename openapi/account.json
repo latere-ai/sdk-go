@@ -30,6 +30,34 @@
           "type": "string"
         }
       },
+      "if_match": {
+        "description": "The checksum the memory had when you read it, quoted or bare. The change is refused `412` `memory_changed` when it has another.",
+        "in": "header",
+        "name": "If-Match",
+        "required": false,
+        "schema": {
+          "type": "string"
+        }
+      },
+      "memory_id": {
+        "description": "A memory's id in its scope, its file name without `.md`: lower-case letters, digits and `-`, at most 64 characters, as the list answers it.",
+        "in": "path",
+        "name": "id",
+        "required": true,
+        "schema": {
+          "pattern": "^[a-z0-9][a-z0-9-]{0,63}$",
+          "type": "string"
+        }
+      },
+      "memory_project": {
+        "description": "The id of the project whose memory it is, `prj_` and 26 characters.",
+        "in": "path",
+        "name": "project",
+        "required": true,
+        "schema": {
+          "type": "string"
+        }
+      },
       "project_id": {
         "description": "A project's id, `prj_` and 26 characters, as the create and the list answer it.",
         "in": "path",
@@ -265,6 +293,121 @@
           }
         },
         "description": "managed_by_organization: in an organization's context only its owners and admins change which sites sessions reach. forbidden: the token is narrowed by grants and none covers starting a session or sending into one."
+      },
+      "memory_changed": {
+        "content": {
+          "application/json": {
+            "example": {
+              "error": {
+                "code": "memory_changed",
+                "message": "This memory changed since you opened it. Open it again to see the latest."
+              }
+            },
+            "schema": {
+              "$ref": "#/components/schemas/Error"
+            }
+          }
+        },
+        "description": "memory_changed: the memory's checksum is not the one `If-Match` named; read it again."
+      },
+      "memory_conflict": {
+        "content": {
+          "application/json": {
+            "example": {
+              "error": {
+                "code": "memory_taken",
+                "message": "A memory with this name is there again. Rename or delete it, then restore this one."
+              }
+            },
+            "schema": {
+              "$ref": "#/components/schemas/Error"
+            }
+          }
+        },
+        "description": "memory_taken: a memory of the same id was saved since the one restored was forgotten. memory_name_taken: too many memories in the scope share the name the id is made from."
+      },
+      "memory_forbidden": {
+        "content": {
+          "application/json": {
+            "example": {
+              "error": {
+                "code": "memory_personal_only",
+                "message": "Memory is kept for your personal account and is not available in an organization yet."
+              }
+            },
+            "schema": {
+              "$ref": "#/components/schemas/Error"
+            }
+          }
+        },
+        "description": "memory_personal_only: memory is kept for a person in their personal context, and the token names an organization's or is a service account's. memory_agent_token: the token is a conversation's agent's, which changes memory with its file tools."
+      },
+      "memory_invalid": {
+        "content": {
+          "application/json": {
+            "example": {
+              "error": {
+                "code": "invalid_field",
+                "details": {
+                  "field": "description"
+                },
+                "message": "A memory is one line of at most 300 characters."
+              }
+            },
+            "schema": {
+              "$ref": "#/components/schemas/Error"
+            }
+          }
+        },
+        "description": "invalid_field: a member breaks its rule, named in `details.field`: `name` is one line of 1 to 100 characters, `description` one line of 1 to 300, `type` one of the groups, `scope` `you` or `project`, and an import's `text` not empty. bad_request: the body is not the JSON object the route takes."
+      },
+      "memory_not_found": {
+        "content": {
+          "application/json": {
+            "example": {
+              "error": {
+                "code": "memory_not_found",
+                "message": "This memory no longer exists."
+              }
+            },
+            "schema": {
+              "$ref": "#/components/schemas/Error"
+            }
+          }
+        },
+        "description": "memory_not_found: no memory of that id in that scope, or nothing forgotten of that id to restore. not_found: the scope names a project the person does not hold."
+      },
+      "memory_too_large": {
+        "content": {
+          "application/json": {
+            "example": {
+              "error": {
+                "code": "memory_too_large",
+                "message": "A memory holds at most 8 KB of text."
+              }
+            },
+            "schema": {
+              "$ref": "#/components/schemas/Error"
+            }
+          }
+        },
+        "description": "memory_too_large: the memory's file would pass `limits.max_bytes`, 8192 bytes."
+      },
+      "memory_unavailable": {
+        "content": {
+          "application/json": {
+            "example": {
+              "error": {
+                "code": "storage_unavailable",
+                "message": "Memory could not be reached. Try again in a moment."
+              }
+            },
+            "schema": {
+              "$ref": "#/components/schemas/Error"
+            }
+          }
+        },
+        "description": "storage_unavailable: Storage, where memory is kept, could not be reached; retry shortly. memory_unavailable: the deployment keeps no memory."
       },
       "pins_unavailable": {
         "content": {
@@ -1612,6 +1755,396 @@
         ],
         "type": "object"
       },
+      "Memory": {
+        "properties": {
+          "body": {
+            "description": "More detail, on a read of one memory. A memory names another as `[[id]]`.",
+            "type": "string"
+          },
+          "checksum": {
+            "description": "What `If-Match` names to change it only as it was read.",
+            "type": "string"
+          },
+          "description": {
+            "description": "The memory itself, in one line.",
+            "type": "string"
+          },
+          "id": {
+            "description": "Its id in its scope.",
+            "type": "string"
+          },
+          "name": {
+            "description": "A title of a few words.",
+            "type": "string"
+          },
+          "project": {
+            "description": "The project's id, on a project's memory.",
+            "type": "string"
+          },
+          "scope": {
+            "description": "Whose memory it is: the person's own, which every conversation in their personal context reads, or a project's, which only that project's conversations read.",
+            "enum": [
+              "you",
+              "project"
+            ],
+            "type": "string"
+          },
+          "sensitive": {
+            "description": "Whether it is about a sensitive topic.",
+            "type": "boolean"
+          },
+          "size": {
+            "description": "The bytes of its file.",
+            "type": "integer"
+          },
+          "source": {
+            "description": "Where it came from: a conversation's id, `you` for what the person added, or `import`.",
+            "type": "string"
+          },
+          "type": {
+            "description": "Its group.",
+            "enum": [
+              "preference",
+              "profile",
+              "topic",
+              "area",
+              "person"
+            ],
+            "type": "string"
+          },
+          "updated": {
+            "description": "When it was last saved, on a list.",
+            "format": "date-time",
+            "type": "string"
+          }
+        },
+        "required": [
+          "scope",
+          "id",
+          "name",
+          "description",
+          "type",
+          "checksum",
+          "size"
+        ],
+        "type": "object"
+      },
+      "MemoryAdd": {
+        "properties": {
+          "body": {
+            "type": "string"
+          },
+          "description": {
+            "type": "string"
+          },
+          "name": {
+            "type": "string"
+          },
+          "project": {
+            "description": "The project's id, with `scope` `project`.",
+            "type": "string"
+          },
+          "scope": {
+            "enum": [
+              "you",
+              "project"
+            ],
+            "type": "string"
+          },
+          "type": {
+            "enum": [
+              "preference",
+              "profile",
+              "topic",
+              "area",
+              "person"
+            ],
+            "type": "string"
+          }
+        },
+        "required": [
+          "description"
+        ],
+        "type": "object"
+      },
+      "MemoryChange": {
+        "properties": {
+          "body": {
+            "type": "string"
+          },
+          "description": {
+            "type": "string"
+          },
+          "name": {
+            "type": "string"
+          },
+          "project": {
+            "description": "The project to move it to, with `scope` `project`.",
+            "type": "string"
+          },
+          "scope": {
+            "description": "Where to move the memory.",
+            "enum": [
+              "you",
+              "project"
+            ],
+            "type": "string"
+          },
+          "type": {
+            "enum": [
+              "preference",
+              "profile",
+              "topic",
+              "area",
+              "person"
+            ],
+            "type": "string"
+          }
+        },
+        "type": "object"
+      },
+      "MemoryForgottenList": {
+        "properties": {
+          "forgotten": {
+            "items": {
+              "properties": {
+                "forgotten_at": {
+                  "format": "date-time",
+                  "type": "string"
+                },
+                "id": {
+                  "type": "string"
+                },
+                "project": {
+                  "type": "string"
+                },
+                "purges_at": {
+                  "description": "When it is gone for good.",
+                  "format": "date-time",
+                  "type": "string"
+                },
+                "scope": {
+                  "enum": [
+                    "you",
+                    "project"
+                  ],
+                  "type": "string"
+                },
+                "size": {
+                  "type": "integer"
+                }
+              },
+              "required": [
+                "scope",
+                "id",
+                "size",
+                "forgotten_at",
+                "purges_at"
+              ],
+              "type": "object"
+            },
+            "type": "array"
+          }
+        },
+        "required": [
+          "forgotten"
+        ],
+        "type": "object"
+      },
+      "MemoryImport": {
+        "properties": {
+          "project": {
+            "type": "string"
+          },
+          "scope": {
+            "enum": [
+              "you",
+              "project"
+            ],
+            "type": "string"
+          },
+          "text": {
+            "description": "The other assistant's answer.",
+            "type": "string"
+          }
+        },
+        "required": [
+          "text"
+        ],
+        "type": "object"
+      },
+      "MemoryImported": {
+        "properties": {
+          "added": {
+            "items": {
+              "$ref": "#/components/schemas/Memory"
+            },
+            "type": "array"
+          },
+          "skipped": {
+            "description": "How many lines the scope already held.",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "added",
+          "skipped"
+        ],
+        "type": "object"
+      },
+      "MemoryList": {
+        "properties": {
+          "import_prompt": {
+            "description": "What a person asks another assistant before an import.",
+            "type": "string"
+          },
+          "limits": {
+            "properties": {
+              "max_bytes": {
+                "description": "The most bytes of a memory's file.",
+                "type": "integer"
+              },
+              "max_description": {
+                "description": "The most characters of a memory's description.",
+                "type": "integer"
+              },
+              "max_import_lines": {
+                "description": "The most lines one import saves.",
+                "type": "integer"
+              },
+              "max_name": {
+                "description": "The most characters of a memory's name.",
+                "type": "integer"
+              },
+              "types": {
+                "description": "The groups, in the order a client shows them.",
+                "items": {
+                  "type": "string"
+                },
+                "type": "array"
+              }
+            },
+            "required": [
+              "max_name",
+              "max_description",
+              "max_bytes",
+              "max_import_lines",
+              "types"
+            ],
+            "type": "object"
+          },
+          "memories": {
+            "items": {
+              "$ref": "#/components/schemas/Memory"
+            },
+            "type": "array"
+          },
+          "more": {
+            "description": "Whether the folder holds more files than one list reads.",
+            "type": "boolean"
+          },
+          "projects": {
+            "description": "The person's projects, by id and name.",
+            "items": {
+              "properties": {
+                "id": {
+                  "type": "string"
+                },
+                "name": {
+                  "type": "string"
+                }
+              },
+              "required": [
+                "id",
+                "name"
+              ],
+              "type": "object"
+            },
+            "type": "array"
+          },
+          "settings": {
+            "$ref": "#/components/schemas/MemorySettings"
+          }
+        },
+        "required": [
+          "settings",
+          "memories",
+          "projects",
+          "more",
+          "limits",
+          "import_prompt"
+        ],
+        "type": "object"
+      },
+      "MemoryRef": {
+        "properties": {
+          "id": {
+            "type": "string"
+          },
+          "project": {
+            "type": "string"
+          },
+          "scope": {
+            "enum": [
+              "you",
+              "project"
+            ],
+            "type": "string"
+          }
+        },
+        "required": [
+          "id"
+        ],
+        "type": "object"
+      },
+      "MemorySettings": {
+        "properties": {
+          "remember": {
+            "description": "Remember new things: whether conversations save memories. On by default.",
+            "type": "boolean"
+          },
+          "sensitive": {
+            "description": "Include sensitive topics: whether memories about health, beliefs and the like are kept. Off by default.",
+            "type": "boolean"
+          }
+        },
+        "required": [
+          "remember",
+          "sensitive"
+        ],
+        "type": "object"
+      },
+      "MemorySettingsChange": {
+        "properties": {
+          "remember": {
+            "type": "boolean"
+          },
+          "sensitive": {
+            "type": "boolean"
+          }
+        },
+        "type": "object"
+      },
+      "MemorySettingsChanged": {
+        "properties": {
+          "deleted_sensitive": {
+            "description": "How many memories marked sensitive this change deleted.",
+            "type": "integer"
+          },
+          "remember": {
+            "type": "boolean"
+          },
+          "sensitive": {
+            "type": "boolean"
+          }
+        },
+        "required": [
+          "remember",
+          "sensitive",
+          "deleted_sensitive"
+        ],
+        "type": "object"
+      },
       "ModelDataTerms": {
         "properties": {
           "models": {
@@ -2177,11 +2710,11 @@
       "ReservedFolder": {
         "properties": {
           "children": {
-            "description": "What a folder directly inside is named after.",
+            "description": "What a folder directly inside is named after: a conversation's id, a project's id, or, for memory, `you` and `projects`, which holds one folder per project.",
             "enum": [
               "session",
               "project",
-              "store"
+              "scope"
             ],
             "type": "string"
           },
@@ -3690,6 +4223,826 @@
         "summary": "Read workload labels",
         "tags": [
           "environments"
+        ]
+      }
+    },
+    "/v1/account/memory": {
+      "delete": {
+        "description": "Deletes every memory of the person and of their projects for good, with what the trash held of them. A client asks the person to confirm first. The settings stay as they are.",
+        "operationId": "forgetAllMemory",
+        "responses": {
+          "204": {
+            "description": "Everything is forgotten."
+          },
+          "401": {
+            "$ref": "#/components/responses/unauthorized"
+          },
+          "403": {
+            "$ref": "#/components/responses/memory_forbidden"
+          },
+          "429": {
+            "$ref": "#/components/responses/rate_limited"
+          },
+          "503": {
+            "$ref": "#/components/responses/memory_unavailable"
+          }
+        },
+        "summary": "Forget everything",
+        "tags": [
+          "memory"
+        ]
+      },
+      "get": {
+        "description": "What Latere remembers about the caller, and their memory settings. `memories` holds every memory of the person's own scope, `you`, and of each of their projects, `project` with the project's id, without bodies; group them by `type` in the order of `limits.types`: Preferences, Profile, Topics, Areas and People. `projects` names the person's projects, for the Projects group. `more` is true when the folder holds more than one list reads, 2000 files. `limits` are the bounds a memory is held to and `import_prompt` the words a person runs in another assistant before an import, so no client restates either. Memory is kept for a person in their personal context; an organization's context is refused `memory_personal_only`.",
+        "operationId": "listMemory",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "example": {
+                  "import_prompt": "List everything you remember about me from our conversations: …",
+                  "limits": {
+                    "max_bytes": 8192,
+                    "max_description": 300,
+                    "max_import_lines": 200,
+                    "max_name": 100,
+                    "types": [
+                      "preference",
+                      "profile",
+                      "topic",
+                      "area",
+                      "person"
+                    ]
+                  },
+                  "memories": [
+                    {
+                      "checksum": "9f2c4a1b7e3d5f60a8b9c0d1e2f30415263748596a7b8c9d0e1f2a3b4c5d6e7f",
+                      "description": "Keep lists under five things.",
+                      "id": "short-lists",
+                      "name": "Short lists",
+                      "scope": "you",
+                      "size": 141,
+                      "source": "ses_01JA3BQ7Z4M8N2P5R6S7T8V9WX",
+                      "type": "preference",
+                      "updated": "2026-10-29T10:41:07Z"
+                    }
+                  ],
+                  "more": false,
+                  "projects": [
+                    {
+                      "id": "prj_01JA4Q0Z8X3K5V7M9N1P2R4T6W",
+                      "name": "Tide tables"
+                    }
+                  ],
+                  "settings": {
+                    "remember": true,
+                    "sensitive": false
+                  }
+                },
+                "schema": {
+                  "$ref": "#/components/schemas/MemoryList"
+                }
+              }
+            },
+            "description": "The settings and every memory."
+          },
+          "401": {
+            "$ref": "#/components/responses/unauthorized"
+          },
+          "403": {
+            "$ref": "#/components/responses/memory_forbidden"
+          },
+          "429": {
+            "$ref": "#/components/responses/rate_limited"
+          },
+          "503": {
+            "$ref": "#/components/responses/memory_unavailable"
+          }
+        },
+        "summary": "List memory",
+        "tags": [
+          "memory"
+        ]
+      },
+      "post": {
+        "description": "Saves one memory as the person typed it, with `source` `you`, in their own scope or, with `scope` `project` and `project`, in one of their projects. `type` is preference when absent. `name` is made from the description's first words when absent, and `id` from the name, the first one free in the scope. The scope's list is rebuilt before the answer.",
+        "operationId": "addMemory",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "example": {
+                "description": "Keep lists under five things.",
+                "type": "preference"
+              },
+              "schema": {
+                "$ref": "#/components/schemas/MemoryAdd"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "201": {
+            "content": {
+              "application/json": {
+                "example": {
+                  "body": "",
+                  "checksum": "0b4f1c2d3e5a6b7c8d9e0f1a2b3c4d5e6f708192a3b4c5d6e7f8091a2b3c4d5e",
+                  "description": "Keep lists under five things.",
+                  "id": "keep-lists-under-five-things",
+                  "name": "Keep lists under five things",
+                  "scope": "you",
+                  "size": 132,
+                  "source": "you",
+                  "type": "preference",
+                  "updated": "2026-10-29T10:41:07Z"
+                },
+                "schema": {
+                  "$ref": "#/components/schemas/Memory"
+                }
+              }
+            },
+            "description": "The memory, with its body."
+          },
+          "400": {
+            "$ref": "#/components/responses/memory_invalid"
+          },
+          "401": {
+            "$ref": "#/components/responses/unauthorized"
+          },
+          "403": {
+            "$ref": "#/components/responses/memory_forbidden"
+          },
+          "404": {
+            "$ref": "#/components/responses/memory_not_found"
+          },
+          "409": {
+            "$ref": "#/components/responses/memory_conflict"
+          },
+          "413": {
+            "$ref": "#/components/responses/memory_too_large"
+          },
+          "429": {
+            "$ref": "#/components/responses/rate_limited"
+          },
+          "503": {
+            "$ref": "#/components/responses/memory_unavailable"
+          }
+        },
+        "summary": "Add a memory",
+        "tags": [
+          "memory"
+        ]
+      }
+    },
+    "/v1/account/memory/export": {
+      "get": {
+        "description": "A zip of every memory as Markdown files: `latere-memory/you/` and `latere-memory/projects/\u003cproject name\u003e-\u003cproject id\u003e/`, each with its `MEMORY.md` list and one file per memory, as Latere keeps them. A zip that stops before its end did not finish; ask again.",
+        "operationId": "exportMemory",
+        "responses": {
+          "200": {
+            "content": {
+              "application/zip": {
+                "schema": {
+                  "format": "binary",
+                  "type": "string"
+                }
+              }
+            },
+            "description": "The zip."
+          },
+          "401": {
+            "$ref": "#/components/responses/unauthorized"
+          },
+          "403": {
+            "$ref": "#/components/responses/memory_forbidden"
+          },
+          "429": {
+            "$ref": "#/components/responses/rate_limited"
+          },
+          "503": {
+            "$ref": "#/components/responses/memory_unavailable"
+          }
+        },
+        "summary": "Export memory",
+        "tags": [
+          "memory"
+        ]
+      }
+    },
+    "/v1/account/memory/forgotten": {
+      "get": {
+        "description": "What conversations forgot in the last 30 days, newest first, each until `purges_at`. A memory the person deleted is gone for good and is not listed.",
+        "operationId": "listForgottenMemory",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "example": {
+                  "forgotten": [
+                    {
+                      "forgotten_at": "2026-10-29T11:02:00Z",
+                      "id": "trains",
+                      "purges_at": "2026-11-28T11:02:00Z",
+                      "scope": "you",
+                      "size": 120
+                    }
+                  ]
+                },
+                "schema": {
+                  "$ref": "#/components/schemas/MemoryForgottenList"
+                }
+              }
+            },
+            "description": "What was forgotten."
+          },
+          "401": {
+            "$ref": "#/components/responses/unauthorized"
+          },
+          "403": {
+            "$ref": "#/components/responses/memory_forbidden"
+          },
+          "429": {
+            "$ref": "#/components/responses/rate_limited"
+          },
+          "503": {
+            "$ref": "#/components/responses/memory_unavailable"
+          }
+        },
+        "summary": "List recently forgotten",
+        "tags": [
+          "memory"
+        ]
+      }
+    },
+    "/v1/account/memory/forgotten/restore": {
+      "post": {
+        "description": "Brings a forgotten memory back where it was, and answers it. A memory of the same id saved since is `409` `memory_taken`: rename or delete it first.",
+        "operationId": "restoreMemory",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "example": {
+                "id": "trains",
+                "scope": "you"
+              },
+              "schema": {
+                "$ref": "#/components/schemas/MemoryRef"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "example": {
+                  "body": "",
+                  "checksum": "41aa09c3d2e8f7a6b5c4d3e2f1a0b9c8d7e6f5a4b3c2d1e0f9a8b7c6d5e4f3a2",
+                  "description": "Likes trains.",
+                  "id": "trains",
+                  "name": "Trains",
+                  "scope": "you",
+                  "size": 120,
+                  "source": "ses_01JA3BQ7Z4M8N2P5R6S7T8V9WX",
+                  "type": "topic"
+                },
+                "schema": {
+                  "$ref": "#/components/schemas/Memory"
+                }
+              }
+            },
+            "description": "The restored memory, with its body."
+          },
+          "400": {
+            "$ref": "#/components/responses/memory_invalid"
+          },
+          "401": {
+            "$ref": "#/components/responses/unauthorized"
+          },
+          "403": {
+            "$ref": "#/components/responses/memory_forbidden"
+          },
+          "404": {
+            "$ref": "#/components/responses/memory_not_found"
+          },
+          "409": {
+            "$ref": "#/components/responses/memory_conflict"
+          },
+          "429": {
+            "$ref": "#/components/responses/rate_limited"
+          },
+          "503": {
+            "$ref": "#/components/responses/memory_unavailable"
+          }
+        },
+        "summary": "Restore a forgotten memory",
+        "tags": [
+          "memory"
+        ]
+      }
+    },
+    "/v1/account/memory/import": {
+      "post": {
+        "description": "Saves what another assistant remembers, pasted as it answered `import_prompt`: one memory per line, `Group: what you remember`, where Group is Preference, Profile, Topic, Area, Person or Project. A line with no group is a topic, and a Project line a topic of the scope imported into. Each is saved with `source` `import`; a line the scope already holds is left out and counted in `skipped`. At most `limits.max_import_lines` lines are read.",
+        "operationId": "importMemory",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "example": {
+                "text": "Preference: Keep lists under five things.\nPerson: Mia is my sister."
+              },
+              "schema": {
+                "$ref": "#/components/schemas/MemoryImport"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "201": {
+            "content": {
+              "application/json": {
+                "example": {
+                  "added": [
+                    {
+                      "checksum": "5d6e7f8091a2b3c4d5e0b4f1c2d3e5a6b7c8d9e0f1a2b3c4d5e6f708192a3b4c",
+                      "description": "Mia is my sister.",
+                      "id": "mia-is-my-sister",
+                      "name": "Mia is my sister",
+                      "scope": "you",
+                      "size": 118,
+                      "source": "import",
+                      "type": "person"
+                    }
+                  ],
+                  "skipped": 1
+                },
+                "schema": {
+                  "$ref": "#/components/schemas/MemoryImported"
+                }
+              }
+            },
+            "description": "What was saved, and how many lines were left out."
+          },
+          "400": {
+            "$ref": "#/components/responses/memory_invalid"
+          },
+          "401": {
+            "$ref": "#/components/responses/unauthorized"
+          },
+          "403": {
+            "$ref": "#/components/responses/memory_forbidden"
+          },
+          "404": {
+            "$ref": "#/components/responses/memory_not_found"
+          },
+          "429": {
+            "$ref": "#/components/responses/rate_limited"
+          },
+          "503": {
+            "$ref": "#/components/responses/memory_unavailable"
+          }
+        },
+        "summary": "Import memory",
+        "tags": [
+          "memory"
+        ]
+      }
+    },
+    "/v1/account/memory/projects/{project}/{id}": {
+      "delete": {
+        "description": "Deletes the memory for good, under `If-Match` when it is sent. Deleting a project deletes all of its memory.",
+        "operationId": "deleteProjectMemory",
+        "parameters": [
+          {
+            "$ref": "#/components/parameters/memory_project"
+          },
+          {
+            "$ref": "#/components/parameters/memory_id"
+          },
+          {
+            "$ref": "#/components/parameters/if_match"
+          }
+        ],
+        "responses": {
+          "204": {
+            "description": "The memory is deleted."
+          },
+          "401": {
+            "$ref": "#/components/responses/unauthorized"
+          },
+          "403": {
+            "$ref": "#/components/responses/memory_forbidden"
+          },
+          "404": {
+            "$ref": "#/components/responses/memory_not_found"
+          },
+          "412": {
+            "$ref": "#/components/responses/memory_changed"
+          },
+          "429": {
+            "$ref": "#/components/responses/rate_limited"
+          },
+          "503": {
+            "$ref": "#/components/responses/memory_unavailable"
+          }
+        },
+        "summary": "Delete a project's memory",
+        "tags": [
+          "memory"
+        ]
+      },
+      "get": {
+        "description": "One memory of a project the person holds, with its body and its `checksum`, which `ETag` carries too. Only that project's conversations read it.",
+        "operationId": "readProjectMemory",
+        "parameters": [
+          {
+            "$ref": "#/components/parameters/memory_project"
+          },
+          {
+            "$ref": "#/components/parameters/memory_id"
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "example": {
+                  "body": "Applies to every list, not only to steps.",
+                  "checksum": "9f2c4a1b7e3d5f60a8b9c0d1e2f30415263748596a7b8c9d0e1f2a3b4c5d6e7f",
+                  "description": "Keep lists under five things.",
+                  "id": "short-lists",
+                  "name": "Short lists",
+                  "scope": "you",
+                  "size": 141,
+                  "source": "you",
+                  "type": "preference"
+                },
+                "schema": {
+                  "$ref": "#/components/schemas/Memory"
+                }
+              }
+            },
+            "description": "The memory, with its body.",
+            "headers": {
+              "ETag": {
+                "description": "The memory's checksum, quoted.",
+                "schema": {
+                  "type": "string"
+                }
+              }
+            }
+          },
+          "401": {
+            "$ref": "#/components/responses/unauthorized"
+          },
+          "403": {
+            "$ref": "#/components/responses/memory_forbidden"
+          },
+          "404": {
+            "$ref": "#/components/responses/memory_not_found"
+          },
+          "429": {
+            "$ref": "#/components/responses/rate_limited"
+          },
+          "503": {
+            "$ref": "#/components/responses/memory_unavailable"
+          }
+        },
+        "summary": "Read a project's memory",
+        "tags": [
+          "memory"
+        ]
+      },
+      "patch": {
+        "description": "As a change of a memory of the person's own scope; `scope` `you` moves it out of the project to the person, where every conversation reads it.",
+        "operationId": "updateProjectMemory",
+        "parameters": [
+          {
+            "$ref": "#/components/parameters/memory_project"
+          },
+          {
+            "$ref": "#/components/parameters/memory_id"
+          },
+          {
+            "$ref": "#/components/parameters/if_match"
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "example": {
+                "scope": "you"
+              },
+              "schema": {
+                "$ref": "#/components/schemas/MemoryChange"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "example": {
+                  "body": "Applies to every list, not only to steps.",
+                  "checksum": "9f2c4a1b7e3d5f60a8b9c0d1e2f30415263748596a7b8c9d0e1f2a3b4c5d6e7f",
+                  "description": "Keep lists under five things.",
+                  "id": "short-lists",
+                  "name": "Short lists",
+                  "scope": "you",
+                  "size": 141,
+                  "source": "you",
+                  "type": "preference"
+                },
+                "schema": {
+                  "$ref": "#/components/schemas/Memory"
+                }
+              }
+            },
+            "description": "The memory, with its body.",
+            "headers": {
+              "ETag": {
+                "description": "The memory's checksum, quoted.",
+                "schema": {
+                  "type": "string"
+                }
+              }
+            }
+          },
+          "400": {
+            "$ref": "#/components/responses/memory_invalid"
+          },
+          "401": {
+            "$ref": "#/components/responses/unauthorized"
+          },
+          "403": {
+            "$ref": "#/components/responses/memory_forbidden"
+          },
+          "404": {
+            "$ref": "#/components/responses/memory_not_found"
+          },
+          "409": {
+            "$ref": "#/components/responses/memory_conflict"
+          },
+          "412": {
+            "$ref": "#/components/responses/memory_changed"
+          },
+          "413": {
+            "$ref": "#/components/responses/memory_too_large"
+          },
+          "429": {
+            "$ref": "#/components/responses/rate_limited"
+          },
+          "503": {
+            "$ref": "#/components/responses/memory_unavailable"
+          }
+        },
+        "summary": "Change a project's memory",
+        "tags": [
+          "memory"
+        ]
+      }
+    },
+    "/v1/account/memory/settings": {
+      "patch": {
+        "description": "Turns Remember new things and Include sensitive topics on or off; a member left out stays as it is. With Remember new things off, conversations still use what is remembered and save nothing new, from their next save on. Sensitive topics are health conditions, religious beliefs, political opinions, sexual orientation, racial or ethnic origin, and union membership. Turning them off deletes, for good, every memory marked sensitive, and the answer says how many; a client asks the person to confirm first.",
+        "operationId": "updateMemorySettings",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "example": {
+                "remember": false
+              },
+              "schema": {
+                "$ref": "#/components/schemas/MemorySettingsChange"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "example": {
+                  "deleted_sensitive": 0,
+                  "remember": false,
+                  "sensitive": false
+                },
+                "schema": {
+                  "$ref": "#/components/schemas/MemorySettingsChanged"
+                }
+              }
+            },
+            "description": "The settings as they are now."
+          },
+          "401": {
+            "$ref": "#/components/responses/unauthorized"
+          },
+          "403": {
+            "$ref": "#/components/responses/memory_forbidden"
+          },
+          "429": {
+            "$ref": "#/components/responses/rate_limited"
+          },
+          "503": {
+            "$ref": "#/components/responses/memory_unavailable"
+          }
+        },
+        "summary": "Change memory settings",
+        "tags": [
+          "memory"
+        ]
+      }
+    },
+    "/v1/account/memory/you/{id}": {
+      "delete": {
+        "description": "Deletes the memory for good, under `If-Match` when it is sent.",
+        "operationId": "deleteMemory",
+        "parameters": [
+          {
+            "$ref": "#/components/parameters/memory_id"
+          },
+          {
+            "$ref": "#/components/parameters/if_match"
+          }
+        ],
+        "responses": {
+          "204": {
+            "description": "The memory is deleted."
+          },
+          "401": {
+            "$ref": "#/components/responses/unauthorized"
+          },
+          "403": {
+            "$ref": "#/components/responses/memory_forbidden"
+          },
+          "404": {
+            "$ref": "#/components/responses/memory_not_found"
+          },
+          "412": {
+            "$ref": "#/components/responses/memory_changed"
+          },
+          "429": {
+            "$ref": "#/components/responses/rate_limited"
+          },
+          "503": {
+            "$ref": "#/components/responses/memory_unavailable"
+          }
+        },
+        "summary": "Delete a memory",
+        "tags": [
+          "memory"
+        ]
+      },
+      "get": {
+        "description": "One memory of the person's own scope, with its body and its `checksum`, which `ETag` carries too.",
+        "operationId": "readMemory",
+        "parameters": [
+          {
+            "$ref": "#/components/parameters/memory_id"
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "example": {
+                  "body": "Applies to every list, not only to steps.",
+                  "checksum": "9f2c4a1b7e3d5f60a8b9c0d1e2f30415263748596a7b8c9d0e1f2a3b4c5d6e7f",
+                  "description": "Keep lists under five things.",
+                  "id": "short-lists",
+                  "name": "Short lists",
+                  "scope": "you",
+                  "size": 141,
+                  "source": "you",
+                  "type": "preference"
+                },
+                "schema": {
+                  "$ref": "#/components/schemas/Memory"
+                }
+              }
+            },
+            "description": "The memory, with its body.",
+            "headers": {
+              "ETag": {
+                "description": "The memory's checksum, quoted.",
+                "schema": {
+                  "type": "string"
+                }
+              }
+            }
+          },
+          "401": {
+            "$ref": "#/components/responses/unauthorized"
+          },
+          "403": {
+            "$ref": "#/components/responses/memory_forbidden"
+          },
+          "404": {
+            "$ref": "#/components/responses/memory_not_found"
+          },
+          "429": {
+            "$ref": "#/components/responses/rate_limited"
+          },
+          "503": {
+            "$ref": "#/components/responses/memory_unavailable"
+          }
+        },
+        "summary": "Read a memory",
+        "tags": [
+          "memory"
+        ]
+      },
+      "patch": {
+        "description": "Changes a memory's name, description, type or body, or moves it to a project with `scope` `project` and `project`; a member left out stays as it is. Send `If-Match` with the checksum you read to refuse the change, `412` `memory_changed`, when the memory changed since. A move gives the memory the first free id in its new scope and deletes it where it was.",
+        "operationId": "updateMemory",
+        "parameters": [
+          {
+            "$ref": "#/components/parameters/memory_id"
+          },
+          {
+            "$ref": "#/components/parameters/if_match"
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "example": {
+                "description": "Keep lists under four things."
+              },
+              "schema": {
+                "$ref": "#/components/schemas/MemoryChange"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "example": {
+                  "body": "Applies to every list, not only to steps.",
+                  "checksum": "9f2c4a1b7e3d5f60a8b9c0d1e2f30415263748596a7b8c9d0e1f2a3b4c5d6e7f",
+                  "description": "Keep lists under five things.",
+                  "id": "short-lists",
+                  "name": "Short lists",
+                  "scope": "you",
+                  "size": 141,
+                  "source": "you",
+                  "type": "preference"
+                },
+                "schema": {
+                  "$ref": "#/components/schemas/Memory"
+                }
+              }
+            },
+            "description": "The memory, with its body.",
+            "headers": {
+              "ETag": {
+                "description": "The memory's checksum, quoted.",
+                "schema": {
+                  "type": "string"
+                }
+              }
+            }
+          },
+          "400": {
+            "$ref": "#/components/responses/memory_invalid"
+          },
+          "401": {
+            "$ref": "#/components/responses/unauthorized"
+          },
+          "403": {
+            "$ref": "#/components/responses/memory_forbidden"
+          },
+          "404": {
+            "$ref": "#/components/responses/memory_not_found"
+          },
+          "409": {
+            "$ref": "#/components/responses/memory_conflict"
+          },
+          "412": {
+            "$ref": "#/components/responses/memory_changed"
+          },
+          "413": {
+            "$ref": "#/components/responses/memory_too_large"
+          },
+          "429": {
+            "$ref": "#/components/responses/rate_limited"
+          },
+          "503": {
+            "$ref": "#/components/responses/memory_unavailable"
+          }
+        },
+        "summary": "Change a memory",
+        "tags": [
+          "memory"
         ]
       }
     },
@@ -5581,7 +6934,7 @@
     },
     "/v1/account/storage/reserved": {
       "get": {
-        "description": "The folders the platform keeps at the top of every space of Storage, in the order a client shows them. Each is the folder `files/\u003cname\u003e` of a space, with `name` compared without regard to the case of its letters. Anyone who reads the space opens, downloads and shares what is inside one, and nobody renames, writes or deletes there: Storage refuses such a change with `403` and the reason `reserved_folder` in the detail of its answer. `children` says what a folder directly inside is named after, `session` for a conversation's id. `readers` says who reads inside one of those: `space` for everyone who reads the rest of the space, and `session` for the people who read that conversation, its starter and the owners and admins of the organization it runs in. A member of an organization who is neither is never listed a `session` folder by Storage, so a client shows them the conversations they read and opens each folder by its own path. `versions` and `trash` say whether a file inside keeps earlier versions and whether a delete inside can be undone. The answer names no space and no person and is the same for every caller. Any token for the audience reads it, a key narrowed to Storage included.",
+        "description": "The folders the platform keeps at the top of every space of Storage, in the order a client shows them. Each is the folder `files/\u003cname\u003e` of a space, with `name` compared without regard to the case of its letters. Anyone who reads the space opens, downloads and shares what is inside one, and nobody renames, writes or deletes there: Storage refuses such a change with `403` and the reason `reserved_folder` in the detail of its answer. `children` says what a folder directly inside is named after: `session` for a conversation's id, `project` for a project's, and `scope` for memory, whose folders are `you` and `projects`. `readers` says who reads inside one of those: `space` for everyone who reads the rest of the space, and `session` for the people who read that conversation, its starter and the owners and admins of the organization it runs in. A member of an organization who is neither is never listed a `session` folder by Storage, so a client shows them the conversations they read and opens each folder by its own path. `versions` and `trash` say whether a file inside keeps earlier versions and whether a delete inside can be undone. The answer names no space and no person and is the same for every caller. Any token for the audience reads it, a key narrowed to Storage included.",
         "operationId": "readReservedFolders",
         "responses": {
           "200": {
@@ -5606,11 +6959,11 @@
                       "versions": true
                     },
                     {
-                      "children": "store",
+                      "children": "scope",
                       "label": "Memory",
                       "name": "memory",
                       "readers": "space",
-                      "trash": false,
+                      "trash": true,
                       "versions": true
                     }
                   ]
@@ -6410,6 +7763,10 @@
     {
       "description": "What a person sets for themselves, and which sites a session's machine may reach.",
       "name": "preferences"
+    },
+    {
+      "description": "What Latere remembers about a person across conversations, and the person's control of it.",
+      "name": "memory"
     },
     {
       "description": "The folders the platform keeps in every space of Storage.",

@@ -18,6 +18,9 @@ func rawResources() map[string]interface{ RawJSON() json.RawMessage } {
 		"settings changed": &memory.SettingsChanged{},
 		"forgotten list":   &memory.ForgottenList{},
 		"imported":         &memory.Imported{},
+		"run list":         &memory.RunList{},
+		"run":              &memory.Run{},
+		"undone":           &memory.Undone{},
 	}
 }
 

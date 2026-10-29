@@ -214,14 +214,25 @@ session or send a message twice. The calls a key cannot make safe carry
   `storage.MoveFile`'s is; `ListMemories` tells where it is. A change in
   place only sets values and carries `RetryAlways`, as any such `PATCH`
   does, so the one method takes its rule from what the change does.
+- `memory.ApplyRun` and `memory.DeclineRun`: the account part reads no key
+  on either, and a decision is saved before its answer reads each changed
+  memory from Storage, so even a server error can follow a decision that
+  landed. A repeat would then find nothing of what it named waiting and be
+  refused with 409 `run_not_waiting`, though the first succeeded; `GetRun`
+  tells. `RetryAnswers` does not fit for that reason: its premise is that
+  an answer of a server error says the request failed, as Storage's
+  completion of an upload is built to.
 
 A few `POST`s take no key and are still safe to repeat, so they carry
 `RetryAlways`: `account.IssueTriggerHook` and
 `account.IssueTriggerAddress` give a trigger a link or an address that
 replaces the one it had, so a repeat after a lost answer leaves the
-trigger with one that works, the one the caller is answered; and
+trigger with one that works, the one the caller is answered;
 `apps.CreateFramePass` hands out a pass that lapses within a minute
-unused.
+unused; and `memory.UndoRun` passes over every change that is not
+applied and refuses nothing for it, so a repeat undoes nothing more and
+answers the run as the first left it, with the same changes left because
+their memory changed since.
 
 `storage.CompleteUpload` carries `RetryAnswers`, a rule between the two:
 the storage part keeps an upload until it completes, so a completion it
@@ -628,7 +639,8 @@ and its bookmarks, a share link, a checkout, the
 data places and terms, a project, a trigger's link or address, a device,
 an app, a deploy, an app's sessions and visits, a listing, a frame pass,
 a connection, an Evals definition, experiment, cell or comparison, a
-file, a moved folder, a grant, an upload or a finished sign-in, keeps the
+file, a moved folder, a grant, an upload, a finished sign-in, a memory and
+its lists, or a run of Tidy memory, its list and an undo of it, keeps the
 bytes it was decoded from, returned by
 `RawJSON`, as Stainless-generated SDKs and stripe-go do. A program that
 shows or stores the API's answer, a command line's `--json` output or a

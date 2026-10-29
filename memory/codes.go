@@ -64,6 +64,28 @@ var (
 	// reached. The SDK has already retried the calls that are safe to
 	// repeat; try again shortly.
 	ErrStorageUnavailable = errors.New("memory: Storage, where memory is kept, could not be reached")
+	// ErrRunNotFound matches a 404 with the code "run_not_found": no run
+	// of that id is the person's.
+	ErrRunNotFound = errors.New("memory: no run of that id is the person's")
+	// ErrRunRunning matches a 409 with the code "run_running": the run has
+	// not ended, so its changes are not ready to decide.
+	// latere.ErrConflict matches it too.
+	ErrRunRunning = errors.New("memory: the run has not ended")
+	// ErrRunNotWaiting matches a 409 with the code "run_not_waiting": none
+	// of the changes an apply or a decline named waits for the person.
+	// GetRun tells what each is now. latere.ErrConflict matches it too.
+	ErrRunNotWaiting = errors.New("memory: none of the changes named waits")
+	// ErrRunBusy matches a 409 with the code "run_busy": another request
+	// is deciding the run. Try again shortly. latere.ErrConflict matches
+	// it too.
+	ErrRunBusy = errors.New("memory: another request is deciding the run")
+	// ErrRunChangeUnknown matches a 400 with the code
+	// "run_change_unknown": RunDecisionParams names a change the run did
+	// not make.
+	ErrRunChangeUnknown = errors.New("memory: the run made no such change")
+	// ErrRunsUnavailable matches a 503 with the code "runs_unavailable":
+	// the installation keeps no record of runs, which no retry changes.
+	ErrRunsUnavailable = errors.New("memory: this installation keeps no record of runs")
 )
 
 // codes are the API's codes of the memory calls' refusals that have a
@@ -79,6 +101,12 @@ var codes = map[string]error{
 	"memory_agent_token":   ErrAgentToken,
 	"memory_unavailable":   ErrUnavailable,
 	"storage_unavailable":  ErrStorageUnavailable,
+	"run_not_found":        ErrRunNotFound,
+	"run_running":          ErrRunRunning,
+	"run_not_waiting":      ErrRunNotWaiting,
+	"run_busy":             ErrRunBusy,
+	"run_change_unknown":   ErrRunChangeUnknown,
+	"runs_unavailable":     ErrRunsUnavailable,
 }
 
 // codeError is an *latere.Error that also matches the sentinel of its

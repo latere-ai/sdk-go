@@ -184,3 +184,91 @@ func ExampleClient_ImportMemory() {
 	}
 	fmt.Println("saved", len(im.Added), "memories;", im.Skipped, "were remembered already")
 }
+
+// Holding what Tidy memory changes at night for the person's OK, from its
+// next run on.
+func ExampleClient_UpdateSettings_askFirst() {
+	s, err := client().UpdateSettings(context.Background(), &memory.UpdateSettingsParams{Review: memory.ReviewAsk})
+	if err != nil {
+		log.Fatal(err)
+	}
+	fmt.Println("review:", s.Review)
+}
+
+// Showing what Tidy memory did each night, and what waits for the person.
+func ExampleClient_ListRuns() {
+	runs, err := client().ListRuns(context.Background())
+	if err != nil {
+		log.Fatal(err)
+	}
+	for _, r := range runs.Runs {
+		if r.State == memory.RunRunning {
+			continue
+		}
+		fmt.Printf("%s: %d added, %d updated, %d removed", r.CreatedAt.Format("Jan 2"), r.Counts.Added, r.Counts.Updated, r.Counts.Removed)
+		if r.Counts.Waiting > 0 {
+			fmt.Printf(", %d waiting until %s", r.Counts.Waiting, r.ExpiresAt.Format("Jan 2"))
+		}
+		fmt.Println()
+	}
+}
+
+// Showing each change of a run, with the memory before and after it.
+func ExampleClient_GetRun() {
+	r, err := client().GetRun(context.Background(), "ses_01JA5C2M8Q4R6T8V0W2X4Y6Z8A")
+	if err != nil {
+		log.Fatal(err)
+	}
+	for _, ch := range r.Changes {
+		fmt.Printf("%s %s (%s)\n", ch.Kind, ch.Name, ch.State)
+		if ch.Held == memory.HeldYours {
+			fmt.Println("  You wrote this memory, so it waits for your OK.")
+		}
+		fmt.Printf("  before:\n%s  after:\n%s", ch.Before, ch.After)
+	}
+}
+
+// Applying one waiting change of a run. A failure may follow an apply
+// that landed, so a program reads the run again rather than apply twice.
+func ExampleClient_ApplyRun() {
+	ctx := context.Background()
+	mem := client()
+	const run = "ses_01JA5C2M8Q4R6T8V0W2X4Y6Z8A"
+	r, err := mem.ApplyRun(ctx, run, &memory.RunDecisionParams{Changes: []string{"trains"}})
+	switch {
+	case errors.Is(err, memory.ErrRunBusy):
+		fmt.Println("This run is being updated; try again in a moment.")
+		return
+	case err != nil:
+		if r, err = mem.GetRun(ctx, run); err != nil {
+			log.Fatal(err)
+		}
+	}
+	fmt.Println("the run is", r.State)
+}
+
+// Declining everything of a run that still waits.
+func ExampleClient_DeclineRun() {
+	r, err := client().DeclineRun(context.Background(), "ses_01JA5C2M8Q4R6T8V0W2X4Y6Z8A", nil)
+	if errors.Is(err, memory.ErrRunNotWaiting) {
+		fmt.Println("Nothing of this run waits for you.")
+		return
+	}
+	if err != nil {
+		log.Fatal(err)
+	}
+	fmt.Println("the run is", r.State)
+}
+
+// Undoing what a run applied, and saying what was left because the person
+// changed it since.
+func ExampleClient_UndoRun() {
+	u, err := client().UndoRun(context.Background(), "ses_01JA5C2M8Q4R6T8V0W2X4Y6Z8A", nil)
+	if err != nil {
+		log.Fatal(err)
+	}
+	fmt.Println("the run is", u.State)
+	for _, id := range u.MovedOn {
+		fmt.Println(id, "changed since, so it was left as it is")
+	}
+}

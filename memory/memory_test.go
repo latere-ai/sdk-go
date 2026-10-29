@@ -537,6 +537,11 @@ func TestTheTokensMemoryRefuses(t *testing.T) {
 			"RestoreMemory":    func() error { _, err := c.RestoreMemory(ctx, ref); return err },
 			"ExportMemory":     func() error { _, err := c.ExportMemory(ctx); return err },
 			"ImportMemory":     func() error { _, err := c.ImportMemory(ctx, &memory.ImportMemoryParams{Text: text}); return err },
+			"ListRuns":         func() error { _, err := c.ListRuns(ctx); return err },
+			"GetRun":           func() error { _, err := c.GetRun(ctx, runID); return err },
+			"ApplyRun":         func() error { _, err := c.ApplyRun(ctx, runID, nil); return err },
+			"DeclineRun":       func() error { _, err := c.DeclineRun(ctx, runID, nil); return err },
+			"UndoRun":          func() error { _, err := c.UndoRun(ctx, runID, nil); return err },
 		} {
 			err := call()
 			if !errors.Is(err, sentinel) || !errors.Is(err, latere.ErrForbidden) {

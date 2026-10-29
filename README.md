@@ -609,6 +609,27 @@ between You and a project. The package also covers:
   list's `ImportPrompt`, and leaves out what the scope holds already. It
   is sent once; after a failure, the same text again saves the rest.
 
+Tidy memory, an Always on item, tidies a person's memory at night: it
+combines memories that say the same thing, settles ones that contradict
+each other, and removes ones that only recorded a finished task. Each
+night's run on a scope is a `memory.Run`:
+
+```go
+runs, err := mem.ListRuns(ctx) // the newest first, with their counts
+run, err := mem.GetRun(ctx, runs.Runs[0].ID) // each change, the memory before and after
+_, err = mem.ApplyRun(ctx, run.ID, &memory.RunDecisionParams{Changes: []string{"trains"}})
+```
+
+`ApplyRun` and `DeclineRun` decide the changes that wait for the person,
+those of a run under `ReviewAsk` and, under either mode, a change to a
+memory the person wrote (`HeldYours`). What still waits at the run's
+`ExpiresAt`, seven days after it ended, is declined. `UndoRun` takes back
+what a run applied, and names in `MovedOn` each change it left because
+the person changed that memory since. Nil params decide every change.
+`ApplyRun` and `DeclineRun` are sent once, since their answer can fail
+after the decision is saved and a repeat would be refused with
+`memory.ErrRunNotWaiting`; `GetRun` tells. `UndoRun` is retried.
+
 The bounds a memory is held to, and the import prompt, come with the list
 in `Limits` and `ImportPrompt`, so a program never writes its own. Memory
 is kept for a person in their personal context: an organization's token
@@ -617,7 +638,9 @@ with `memory.ErrAgentToken`, since an agent changes memory with its file
 tools. Each refusal code a program branches on has its own error to test
 with `errors.Is`: `ErrNotFound`, `ErrTaken`, `ErrNameTaken`,
 `ErrTooLarge`, `ErrInvalidField`, `ErrUnavailable` and
-`ErrStorageUnavailable` beside the ones above.
+`ErrStorageUnavailable` beside the ones above, and for the runs
+`ErrRunNotFound`, `ErrRunRunning`, `ErrRunNotWaiting`, `ErrRunBusy`,
+`ErrRunChangeUnknown` and `ErrRunsUnavailable`.
 
 ## Apps
 
@@ -988,9 +1011,10 @@ alone. The methods that create or send something send a key, generated
 when you give none, so a retried `CreateSession` makes one session, not
 two. A few `POST`s whose repeat leaves what one would are retried without
 a key: `account.IssueTriggerHook` and `IssueTriggerAddress`, whose repeat
-replaces the link a lost answer issued, and `apps.CreateFramePass`, whose
-unused pass lapses within a minute. These calls are sent once instead,
-never again after a failure:
+replaces the link a lost answer issued, `apps.CreateFramePass`, whose
+unused pass lapses within a minute, and `memory.UndoRun`, whose repeat
+finds nothing more to undo. These calls are sent once instead, never
+again after a failure:
 
 | Call | Why |
 |---|---|
@@ -1009,6 +1033,7 @@ never again after a failure:
 | `memory.ImportMemory` | the account API takes no key on it; calling it again with the same text saves what a failed import left out |
 | `memory.RestoreMemory` | a repeat finds nothing left to restore |
 | `memory.UpdateMemory`, when it moves a memory | a repeat finds nothing left to move; a change in place is retried |
+| `memory.ApplyRun`, `memory.DeclineRun` | the answer can fail after the decision is saved, and a repeat finds nothing left waiting |
 
 A repeat that reaches the API while the first request is still being
 answered gets 409 (`latere.ErrConflict`) even though the first succeeds;

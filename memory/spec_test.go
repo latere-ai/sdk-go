@@ -33,6 +33,31 @@ type schema struct {
 	Items      *schema            `json:"items"`
 	Ref        string             `json:"$ref"`
 	Enum       []string           `json:"enum"`
+	AllOf      []*schema          `json:"allOf"`
+}
+
+// merged returns the schema the parts of sch's allOf make together, each
+// part named by its $ref resolved in schemas, or sch itself when it has
+// no allOf.
+func merged(t *testing.T, schemas map[string]*schema, sch *schema) *schema {
+	t.Helper()
+	if sch == nil || len(sch.AllOf) == 0 {
+		return sch
+	}
+	out := &schema{Properties: map[string]*schema{}}
+	for _, part := range sch.AllOf {
+		if name, ok := strings.CutPrefix(part.Ref, "#/components/schemas/"); ok {
+			part = schemas[name]
+		}
+		if part == nil {
+			t.Fatalf("an allOf names a schema the document does not have")
+		}
+		for name, prop := range part.Properties {
+			out.Properties[name] = prop
+		}
+		out.Required = append(out.Required, part.Required...)
+	}
+	return out
 }
 
 // operation is the part of an operation these tests read.
@@ -93,13 +118,22 @@ func readOperation(t *testing.T, d *document, method, path string) *operation {
 var timeType = reflect.TypeFor[time.Time]()
 
 // jsonFields returns the JSON names of a struct type's fields, by the
-// type of each.
+// type of each, those of an embedded struct among them, as encoding/json
+// reads them.
 func jsonFields(t reflect.Type) map[string]reflect.Type {
 	out := map[string]reflect.Type{}
 	for i := range t.NumField() {
-		name, _, _ := strings.Cut(t.Field(i).Tag.Get("json"), ",")
+		f := t.Field(i)
+		tag := f.Tag.Get("json")
+		if f.Anonymous && tag == "" && f.Type.Kind() == reflect.Struct {
+			for name, typ := range jsonFields(f.Type) {
+				out[name] = typ
+			}
+			continue
+		}
+		name, _, _ := strings.Cut(tag, ",")
 		if name != "" && name != "-" {
-			out[name] = t.Field(i).Type
+			out[name] = f.Type
 		}
 	}
 	return out
@@ -139,9 +173,9 @@ func holdToSchema(t *testing.T, name string, model any, sch *schema) {
 
 func TestModelsMatchTheSchemas(t *testing.T) {
 	s := loadDocument(t).Components.Schemas
-	list, forgotten := s["MemoryList"], s["MemoryForgottenList"]
-	if list == nil || forgotten == nil {
-		t.Fatal("the document has no MemoryList or MemoryForgottenList")
+	list, forgotten, run := s["MemoryList"], s["MemoryForgottenList"], s["Run"]
+	if list == nil || forgotten == nil || run == nil {
+		t.Fatal("the document has no MemoryList, MemoryForgottenList or Run")
 	}
 	for name, c := range map[string]struct {
 		model  any
@@ -161,18 +195,30 @@ func TestModelsMatchTheSchemas(t *testing.T) {
 		"Forgotten":            {memory.Forgotten{}, forgotten.Properties["forgotten"].Items},
 		"ImportMemoryParams":   {memory.ImportMemoryParams{}, s["MemoryImport"]},
 		"Imported":             {memory.Imported{}, s["MemoryImported"]},
+		"RunList":              {memory.RunList{}, s["RunList"]},
+		"Run":                  {memory.Run{}, run},
+		"RunCounts":            {memory.RunCounts{}, run.Properties["counts"]},
+		"RunChange":            {memory.RunChange{}, s["RunChange"]},
+		"RunDecisionParams":    {memory.RunDecisionParams{}, s["RunDecision"]},
+		"Undone":               {memory.Undone{}, merged(t, s, s["RunUndone"])},
 	} {
 		holdToSchema(t, name, c.model, c.schema)
 	}
 }
 
-// The scopes, the types and the review modes the package names are the
-// ones the document lists, wherever it lists them.
+// The scopes, the types, the review modes and the kinds and states of a
+// run and its changes the package names are the ones the document lists,
+// wherever it lists them.
 func TestTheValuesAreTheDocuments(t *testing.T) {
 	s := loadDocument(t).Components.Schemas
 	scopes := []string{string(memory.ScopeYou), string(memory.ScopeProject)}
 	types := []string{string(memory.TypePreference), string(memory.TypeProfile), string(memory.TypeTopic), string(memory.TypeArea), string(memory.TypePerson)}
 	reviews := []string{string(memory.ReviewApply), string(memory.ReviewAsk)}
+	runStates := []string{string(memory.RunRunning), string(memory.RunApplied), string(memory.RunWaiting),
+		string(memory.RunPartlyApplied), string(memory.RunDeclined), string(memory.RunUndone)}
+	changeStates := []string{string(memory.ChangeApplied), string(memory.ChangeWaiting), string(memory.ChangeDeclined),
+		string(memory.ChangeChangedSince), string(memory.ChangeUndone)}
+	changeKinds := []string{string(memory.ChangeCreated), string(memory.ChangeChanged), string(memory.ChangeRemoved)}
 	for _, c := range []struct {
 		name     string
 		declared []string
@@ -190,6 +236,13 @@ func TestTheValuesAreTheDocuments(t *testing.T) {
 		{"MemorySettings.review", reviews, s["MemorySettings"].Properties["review"]},
 		{"MemorySettingsChange.review", reviews, s["MemorySettingsChange"].Properties["review"]},
 		{"MemorySettingsChanged.review", reviews, s["MemorySettingsChanged"].Properties["review"]},
+		{"Run.review", reviews, s["Run"].Properties["review"]},
+		{"Run.scope", scopes, s["Run"].Properties["scope"]},
+		{"Run.kind", []string{string(memory.RunMemory)}, s["Run"].Properties["kind"]},
+		{"Run.state", runStates, s["Run"].Properties["state"]},
+		{"RunChange.kind", changeKinds, s["RunChange"].Properties["kind"]},
+		{"RunChange.state", changeStates, s["RunChange"].Properties["state"]},
+		{"RunChange.held", []string{string(memory.HeldYours)}, s["RunChange"].Properties["held"]},
 	} {
 		if c.listed == nil || !slices.Equal(slices.Sorted(slices.Values(c.declared)), slices.Sorted(slices.Values(c.listed.Enum))) {
 			t.Errorf("%s: the package declares %v; the document lists %+v", c.name, c.declared, c.listed)
@@ -220,6 +273,11 @@ func TestEndpointsAreInTheDocument(t *testing.T) {
 		{"get", project, "200", "Memory"},
 		{"patch", project, "200", "Memory"},
 		{"delete", project, "204", ""},
+		{"get", "/v1/account/runs", "200", "RunList"},
+		{"get", "/v1/account/runs/{run}", "200", "Run"},
+		{"post", "/v1/account/runs/{run}/apply", "200", "Run"},
+		{"post", "/v1/account/runs/{run}/decline", "200", "Run"},
+		{"post", "/v1/account/runs/{run}/undo", "200", "RunUndone"},
 	} {
 		op := readOperation(t, d, e.method, e.path)
 		answer, ok := op.Responses[e.status]
@@ -270,6 +328,13 @@ func TestTheCodesAreTheDocuments(t *testing.T) {
 		{"memory_agent_token", http.StatusForbidden, "memory_forbidden", memory.ErrAgentToken, latere.ErrForbidden},
 		{"memory_unavailable", http.StatusServiceUnavailable, "memory_unavailable", memory.ErrUnavailable, nil},
 		{"storage_unavailable", http.StatusServiceUnavailable, "memory_unavailable", memory.ErrStorageUnavailable, nil},
+		{"storage_unavailable", http.StatusServiceUnavailable, "runs_unavailable", memory.ErrStorageUnavailable, nil},
+		{"run_not_found", http.StatusNotFound, "run_not_found", memory.ErrRunNotFound, latere.ErrNotFound},
+		{"run_running", http.StatusConflict, "run_conflict", memory.ErrRunRunning, latere.ErrConflict},
+		{"run_not_waiting", http.StatusConflict, "run_conflict", memory.ErrRunNotWaiting, latere.ErrConflict},
+		{"run_busy", http.StatusConflict, "run_conflict", memory.ErrRunBusy, latere.ErrConflict},
+		{"run_change_unknown", http.StatusBadRequest, "run_invalid", memory.ErrRunChangeUnknown, nil},
+		{"runs_unavailable", http.StatusServiceUnavailable, "runs_unavailable", memory.ErrRunsUnavailable, nil},
 	} {
 		if !strings.Contains(responses[c.response].Description, c.code+":") {
 			t.Errorf("the document's %s response does not describe %s: %q", c.response, c.code, responses[c.response].Description)

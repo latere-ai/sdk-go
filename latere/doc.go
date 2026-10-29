@@ -84,7 +84,8 @@
 // llm.CountTokens, which changes nothing, and the POSTs whose repeat
 // leaves what one would: account.IssueTriggerHook and
 // account.IssueTriggerAddress, whose repeat replaces the link a lost
-// answer issued, and apps.CreateFramePass, whose unused pass lapses.
+// answer issued, apps.CreateFramePass, whose unused pass lapses, and
+// memory.UndoRun, whose repeat finds nothing more to undo.
 // These calls are sent once instead, never again after a failure:
 //
 //	account.CreateShare               the account API takes no key on it
@@ -102,6 +103,7 @@
 //	memory.ImportMemory               the account API takes no key on it
 //	memory.RestoreMemory              a repeat finds nothing left to restore
 //	memory.UpdateMemory, a move       a repeat finds nothing left to move
+//	memory.ApplyRun, DeclineRun       a repeat finds nothing left waiting
 //
 // storage.CompleteUpload is sent again after an answer of a server error,
 // which leaves the upload open, but never after a failure on the network,

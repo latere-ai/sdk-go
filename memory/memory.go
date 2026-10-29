@@ -15,6 +15,15 @@
 // restore, export and import memories, and turn Remember new things,
 // Search past chats and Include sensitive topics on or off.
 //
+// Tidy memory, an Always on item, tidies a person's memory at night: it
+// combines memories that say the same thing, settles ones that contradict
+// each other, and removes ones that only recorded a finished task. Each
+// night's run on a scope is a Run, which ListRuns and GetRun read with
+// what it changed. Under the review mode ReviewApply its changes are
+// applied at once, and UndoRun takes them back; under ReviewAsk they wait
+// until ApplyRun or DeclineRun. A change to a memory the person wrote
+// waits under either mode.
+//
 //	cfg, err := latere.NewConfig() // the key in LATERE_KEY
 //	if err != nil {
 //		return err

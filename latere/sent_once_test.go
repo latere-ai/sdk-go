@@ -129,6 +129,9 @@ func TestTheCallsSentOnceAndThePatchesRetried(t *testing.T) {
 			_, err := me.ImportMemory(ctx, &memory.ImportMemoryParams{Text: title})
 			return err
 		}, 1},
+		"ApplyRun":   {func(ctx context.Context) error { _, err := me.ApplyRun(ctx, "ses_1", nil); return err }, 1},
+		"DeclineRun": {func(ctx context.Context) error { _, err := me.DeclineRun(ctx, "ses_1", nil); return err }, 1},
+		"UndoRun":    {func(ctx context.Context) error { _, err := me.UndoRun(ctx, "ses_1", nil); return err }, 1 + latere.DefaultMaxRetries},
 	}
 	for name, tc := range calls {
 		sends.Store(0)

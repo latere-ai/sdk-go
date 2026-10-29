@@ -29,6 +29,17 @@ minor version may break code, and every such change is marked **Breaking**.
   `SettingsChanged.Review` read it and `UpdateSettingsParams.Review` sets
   it: `ReviewApply`, the default, applies a run's changes and shows the
   person, and `ReviewAsk` holds them for the person's OK.
+- Package `memory`: the runs of Tidy memory and the person's decisions
+  on them. `ListRuns` lists the runs, the newest first, each a `Run` with
+  its `RunState`, `Review` and `RunCounts`; `GetRun` reads one with each
+  `RunChange`, its `ChangeKind`, `ChangeState`, `Held` and the memory's
+  file before and after. `ApplyRun` and `DeclineRun` decide the changes
+  that wait and are sent once, since their answer can fail after the
+  decision is saved; `UndoRun` takes back what a run applied, names what
+  it left in `Undone.MovedOn`, and is retried. `RunDecisionParams` names
+  the changes, every one when nil. The refusals match `ErrRunNotFound`,
+  `ErrRunRunning`, `ErrRunNotWaiting`, `ErrRunBusy`,
+  `ErrRunChangeUnknown` and `ErrRunsUnavailable`.
 
 ## [0.15.0] - 2026-10-30
 

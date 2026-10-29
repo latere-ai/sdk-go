@@ -31,7 +31,7 @@ func Config() mls.Config {
 			_, err := ParseCredential(c)
 			return err
 		},
-		AcceptProposal: checkProposal,
+		AcceptProposal: func(_ mls.GroupState, pr mls.Proposal) error { return checkProposal(pr) },
 		MaxLifetime:    MaxKeyPackageLifetime,
 	}
 }

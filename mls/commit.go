@@ -718,6 +718,11 @@ type CommitOptions struct {
 	IncludePending bool
 	// AuthenticatedData travels with the commit in the clear.
 	AuthenticatedData []byte
+	// WelcomeExtensions travel in the group info of the commit's
+	// Welcome, signed by this member and sealed to the members it adds,
+	// who read them with Group.WelcomeExtensions. A commit that adds no
+	// one has none.
+	WelcomeExtensions []Extension
 }
 
 // Commit makes a commit with a fresh update path, which also gives this
@@ -730,6 +735,9 @@ func (g *Group) Commit(opts CommitOptions) (*StagedCommit, error) {
 	}
 	if len(opts.AuthenticatedData) > MaxContentBytes {
 		return nil, errors.New("mls: authenticated data larger than MaxContentBytes")
+	}
+	if err := checkWelcomeExtensions(opts.WelcomeExtensions); err != nil {
+		return nil, err
 	}
 	committer := sender{typ: senderMember, index: g.priv.leaf}
 	var props []resolvedProposal
@@ -858,10 +866,12 @@ func (g *Group) Commit(opts CommitOptions) (*StagedCommit, error) {
 		return nil, err
 	}
 	if len(app.adds) > 0 {
-		sc.welcome, err = sc.next.welcome(welcomeSecret, joiner, app, ps)
+		sc.welcome, err = sc.next.welcome(welcomeSecret, joiner, app, ps, opts.WelcomeExtensions)
 		if err != nil {
 			return nil, err
 		}
+	} else if len(opts.WelcomeExtensions) > 0 {
+		return nil, errors.New("mls: a commit that adds no one has no Welcome to carry extensions")
 	}
 	return sc, nil
 }

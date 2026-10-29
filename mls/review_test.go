@@ -131,7 +131,10 @@ func TestProposalsFromOutside(t *testing.T) {
 
 	// The application may accept what it decides to.
 	var asked []Proposal
-	g.cfg.AcceptProposal = func(p Proposal) error {
+	g.cfg.AcceptProposal = func(st GroupState, p Proposal) error {
+		if !bytes.Equal(st.GroupID(), g.GroupID()) || st.Epoch() != g.Epoch() || len(st.Members()) != 1 || len(st.Extensions()) != 1 {
+			t.Errorf("the hook saw the group as %x at %d with %d members", st.GroupID(), st.Epoch(), len(st.Members()))
+		}
 		asked = append(asked, p)
 		return nil
 	}

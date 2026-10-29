@@ -322,3 +322,62 @@ func containsBytes(list [][]byte, b []byte) bool {
 	}
 	return false
 }
+
+// A committer's Welcome extensions reach the joiners under its
+// signature, and a group info's envelope says which extensions it has.
+func TestWelcomeExtensions(t *testing.T) {
+	cfg := Config{PublicHandshake: true}
+	alice, bob := newClient(t, testSuite, "alice"), newClient(t, testSuite, "bob")
+	var err error
+	alice.group, err = CreateGroup(randomID(t), alice.signer, alice.cred, CreateOptions{SupportedExtensions: []ExtensionType{0xff01}}, cfg)
+	if err != nil {
+		t.Fatal(err)
+	}
+	for name, exts := range map[string][]Extension{
+		"tree":         {{Type: ExtensionRatchetTree, Data: []byte{1}}},
+		"external key": {{Type: ExtensionExternalPub, Data: []byte{1}}},
+		"twice":        {{Type: 0xff01}, {Type: 0xff01}},
+	} {
+		if _, err := alice.group.Commit(CommitOptions{Add: []*KeyPackage{bob.kp}, WelcomeExtensions: exts}); err == nil {
+			t.Errorf("%s: a Welcome extension the group info sets itself or repeats was taken", name)
+		}
+	}
+	if _, err := alice.group.Commit(CommitOptions{WelcomeExtensions: []Extension{{Type: 0xff01}}}); err == nil {
+		t.Error("a commit that adds no one carried Welcome extensions")
+	}
+	want := Extension{Type: 0xff01, Data: []byte("notice digest")}
+	sc, err := alice.group.Commit(CommitOptions{Add: []*KeyPackage{bob.kp}, WelcomeExtensions: []Extension{want}})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := alice.group.Merge(sc); err != nil {
+		t.Fatal(err)
+	}
+	bob.group, err = JoinGroup(sc.Welcome(), bob.kp, bob.secrets, bob.signer, JoinOptions{}, cfg)
+	if err != nil {
+		t.Fatal(err)
+	}
+	got := bob.group.WelcomeExtensions()
+	if len(got) != 1 || got[0].Type != want.Type || !bytes.Equal(got[0].Data, want.Data) {
+		t.Fatalf("bob read %+v", got)
+	}
+	if alice.group.WelcomeExtensions() != nil {
+		t.Error("the creator has Welcome extensions")
+	}
+
+	info, err := PeekMessage(sc.GroupInfo())
+	if err != nil {
+		t.Fatal(err)
+	}
+	if info.WireFormat != WireFormatGroupInfo || !bytes.Equal(info.GroupID, alice.group.GroupID()) || info.Epoch != 1 ||
+		len(info.Extensions) != 2 || info.Extensions[0] != ExtensionRatchetTree || info.Extensions[1] != ExtensionExternalPub {
+		t.Fatalf("peeked %+v", info)
+	}
+	bare, err := alice.group.GroupInfo(GroupInfoOptions{})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if info, err := PeekMessage(bare); err != nil || len(info.Extensions) != 0 {
+		t.Fatalf("peeked %+v, %v", info, err)
+	}
+}

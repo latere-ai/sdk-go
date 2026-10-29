@@ -32,11 +32,12 @@ type Config struct {
 	// AcceptProposal decides whether a proposal that arrives in a message
 	// of its own may become pending, which lets a commit with
 	// IncludePending carry it. It runs after the proposal is checked on
-	// its own. Nil accepts a member's proposals and an external sender's
-	// removals, and refuses the rest, a client proposing its own add and
-	// an external sender's other proposals, which RFC 9420 leaves to the
-	// application (Section 12.1.8).
-	AcceptProposal func(Proposal) error
+	// its own, with the group as it is at the proposal's epoch. Nil
+	// accepts a member's proposals and an external sender's removals, and
+	// refuses the rest, a client proposing its own add and an external
+	// sender's other proposals, which RFC 9420 leaves to the application
+	// (Section 12.1.8).
+	AcceptProposal func(GroupState, Proposal) error
 	// CheckSuccessor decides whether a leaf's new credential, in an
 	// update or a committer's path, may replace the one it had, RFC
 	// 9420, Section 5.3.1. Nil accepts only the same credential.
@@ -60,9 +61,34 @@ type Config struct {
 	OmitRatchetTree bool
 }
 
-func (c *Config) acceptProposal(p Proposal) error {
+// GroupState is a group's public state at one epoch, as a hook of
+// Config sees it.
+type GroupState struct {
+	groupID    []byte
+	epoch      uint64
+	extensions []Extension
+	members    []Member
+}
+
+// GroupID returns the group's id.
+func (s GroupState) GroupID() []byte { return bytes.Clone(s.groupID) }
+
+// Epoch returns the epoch.
+func (s GroupState) Epoch() uint64 { return s.epoch }
+
+// Extensions returns the group context's extensions.
+func (s GroupState) Extensions() []Extension { return cloneExtensions(s.extensions) }
+
+// Members returns the members in leaf order.
+func (s GroupState) Members() []Member { return slices.Clone(s.members) }
+
+func (p *publicState) state() GroupState {
+	return GroupState{groupID: p.ctx.groupID, epoch: p.ctx.epoch, extensions: p.ctx.extensions, members: p.members()}
+}
+
+func (c *Config) acceptProposal(g GroupState, p Proposal) error {
 	if c.AcceptProposal != nil {
-		return c.AcceptProposal(p)
+		return c.AcceptProposal(g, p)
 	}
 	switch {
 	case p.Sender.Kind == SenderMember:
@@ -156,6 +182,9 @@ type Group struct {
 	pending    []pendingProposal
 	resumption []resumptionPSK
 	status     groupStatus
+	// welcomeExtensions are those of the Welcome this member joined
+	// with, kept until the group is saved.
+	welcomeExtensions []Extension
 }
 
 // CreateOptions sets what CreateGroup puts in a new group.
@@ -793,7 +822,7 @@ func (p *publicState) checkProposalMessage(cfg *Config, pending []pendingProposa
 		}
 	}
 	pp := pendingProposal{ref: ref, proposal: pr, sender: sd}
-	if err := cfg.acceptProposal(*p.describeProposal(pp)); err != nil {
+	if err := cfg.acceptProposal(p.state(), *p.describeProposal(pp)); err != nil {
 		return pendingProposal{}, err
 	}
 	return pp, nil

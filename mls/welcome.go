@@ -13,15 +13,16 @@ import (
 // MLSMessage, signed by this member, with the ratchet tree and the
 // external public key when asked.
 func (g *Group) signedGroupInfo(withTree, withExternalPub bool) ([]byte, error) {
-	gi, err := g.groupInfo(withTree, withExternalPub)
+	gi, err := g.groupInfo(withTree, withExternalPub, nil)
 	if err != nil {
 		return nil, err
 	}
 	return encode((&mlsMessage{wireFormat: WireFormatGroupInfo, groupInfo: gi}).marshal), nil
 }
 
-func (g *Group) groupInfo(withTree, withExternalPub bool) (*groupInfo, error) {
+func (g *Group) groupInfo(withTree, withExternalPub bool, extra []Extension) (*groupInfo, error) {
 	gi := &groupInfo{context: g.ctx, confirmationTag: g.confirmationTag, signer: g.priv.leaf}
+	gi.extensions = cloneExtensions(extra)
 	if withTree {
 		gi.extensions = append(gi.extensions, Extension{Type: ExtensionRatchetTree, Data: g.tree.bytes()})
 	}
@@ -58,11 +59,35 @@ func (g *Group) GroupInfo(opts GroupInfoOptions) ([]byte, error) {
 	return g.signedGroupInfo(opts.RatchetTree, opts.ExternalPub)
 }
 
+// checkWelcomeExtensions checks the extensions a committer puts in its
+// Welcome's group info: each of a type of its own, and none of a type
+// RFC 9420 gives the group info.
+func checkWelcomeExtensions(exts []Extension) error {
+	for _, e := range exts {
+		if e.Type == ExtensionRatchetTree || e.Type == ExtensionExternalPub {
+			return fmt.Errorf("mls: a Welcome extension of type %d, which the group info sets itself", e.Type)
+		}
+	}
+	return uniqueExtensions(exts)
+}
+
+// WelcomeExtensions returns the extensions the committer put in the
+// group info of the Welcome this member joined with, which its
+// signature covers and only the joiners read; nil for a member that
+// joined otherwise. They are not part of the saved state, so read them
+// before saving the group.
+func (g *Group) WelcomeExtensions() []Extension {
+	if len(g.welcomeExtensions) == 0 {
+		return nil
+	}
+	return cloneExtensions(g.welcomeExtensions)
+}
+
 // welcome encrypts the new epoch's group info and, for each added
 // member, the joiner secret and the path secret of the lowest node it
 // shares with the committer.
-func (g *Group) welcome(welcomeSecret, joiner []byte, app *applied, ps *pathSecrets) ([]byte, error) {
-	gi, err := g.groupInfo(!g.cfg.OmitRatchetTree, false)
+func (g *Group) welcome(welcomeSecret, joiner []byte, app *applied, ps *pathSecrets, extra []Extension) ([]byte, error) {
+	gi, err := g.groupInfo(!g.cfg.OmitRatchetTree, false, extra)
 	if err != nil {
 		return nil, err
 	}
@@ -180,6 +205,11 @@ func JoinGroup(welcomeMessage []byte, kp *KeyPackage, secrets *KeyPackageSecrets
 		return nil, errors.New("mls: group info is for another suite or version")
 	}
 	g.ctx = gi.context
+	for _, e := range gi.extensions {
+		if e.Type != ExtensionRatchetTree && e.Type != ExtensionExternalPub {
+			g.welcomeExtensions = append(g.welcomeExtensions, Extension{Type: e.Type, Data: bytes.Clone(e.Data)})
+		}
+	}
 	tree, err := g.joinTree(&cfg, &gi, opts.RatchetTree)
 	if err != nil {
 		return nil, err

@@ -11,17 +11,21 @@ import (
 // MessageInfo is what any party reads of a message without a key.
 type MessageInfo struct {
 	WireFormat WireFormat
-	// GroupID and Epoch are set for a public or private message.
+	// GroupID and Epoch are set for a public or private message and a
+	// group info.
 	GroupID []byte
 	Epoch   uint64
 	// Kind is set for a public or private message.
 	Kind MessageKind
+	// Extensions are the types of a group info's extensions, in order.
+	Extensions []ExtensionType
 }
 
 // PeekMessage decodes a message's envelope and returns its wire format
 // and, for a group's message, the group, the epoch and the kind of
-// content, all of which travel in the clear. It checks nothing a key
-// would check.
+// content, all of which travel in the clear; for a group info, the
+// group, the epoch and which extensions it carries. It checks nothing a
+// key would check.
 func PeekMessage(message []byte) (*MessageInfo, error) {
 	m, err := parseMessage(message)
 	if err != nil {
@@ -33,6 +37,11 @@ func PeekMessage(message []byte) (*MessageInfo, error) {
 		info.GroupID, info.Epoch, info.Kind = m.public.content.groupID, m.public.content.epoch, MessageKind(m.public.content.contentType)
 	case WireFormatPrivateMessage:
 		info.GroupID, info.Epoch, info.Kind = m.private.groupID, m.private.epoch, MessageKind(m.private.contentType)
+	case WireFormatGroupInfo:
+		info.GroupID, info.Epoch = bytes.Clone(m.groupInfo.context.groupID), m.groupInfo.context.epoch
+		for _, e := range m.groupInfo.extensions {
+			info.Extensions = append(info.Extensions, e.Type)
+		}
 	}
 	return info, nil
 }

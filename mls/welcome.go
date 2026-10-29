@@ -74,13 +74,31 @@ func checkWelcomeExtensions(exts []Extension) error {
 // WelcomeExtensions returns the extensions the committer put in the
 // group info of the Welcome this member joined with, which its
 // signature covers and only the joiners read; nil for a member that
-// joined otherwise. They are not part of the saved state, so read them
-// before saving the group.
+// joined otherwise. Neither a merged commit nor the saved state keeps
+// them, so read them right after the join.
 func (g *Group) WelcomeExtensions() []Extension {
 	if len(g.welcomeExtensions) == 0 {
 		return nil
 	}
 	return cloneExtensions(g.welcomeExtensions)
+}
+
+// GroupInfoSigner returns the member that signed the group info this
+// member joined with, by a Welcome or on its own, as that group info's
+// tree held it: for a Welcome, the committer that added this member.
+// It is false for the group's creator, and once the group merges a
+// commit or is read back from saved state, neither of which keeps it, so
+// read it right after the join.
+func (g *Group) GroupInfoSigner() (Member, bool) {
+	if g.joinedFrom == nil {
+		return Member{}, false
+	}
+	m := *g.joinedFrom
+	m.Credential = m.Credential.clone()
+	m.SignatureKey = bytes.Clone(m.SignatureKey)
+	m.Capabilities = m.Capabilities.clone()
+	m.Extensions = cloneExtensions(m.Extensions)
+	return m, true
 }
 
 // welcome encrypts the new epoch's group info and, for each added
@@ -215,6 +233,8 @@ func JoinGroup(welcomeMessage []byte, kp *KeyPackage, secrets *KeyPackageSecrets
 		return nil, err
 	}
 	g.tree = tree
+	signerOf := memberOf(gi.signer, tree.leaf(gi.signer)) // joinTree checked the leaf is there
+	g.joinedFrom = &signerOf
 
 	own := encode(kp.kp.leaf.marshal)
 	leaf := uint32(0)

@@ -183,8 +183,11 @@ type Group struct {
 	resumption []resumptionPSK
 	status     groupStatus
 	// welcomeExtensions are those of the Welcome this member joined
-	// with, kept until the group is saved.
+	// with, kept until the group merges a commit or is saved.
 	welcomeExtensions []Extension
+	// joinedFrom is the member that signed the group info this member
+	// joined with, kept until the group merges a commit or is saved.
+	joinedFrom *Member
 }
 
 // CreateOptions sets what CreateGroup puts in a new group.

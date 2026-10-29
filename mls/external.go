@@ -54,6 +54,8 @@ func JoinExternal(groupInfoMessage []byte, signer *SignatureKey, cred Credential
 		return nil, nil, err
 	}
 	g.tree = tree
+	signerOf := memberOf(gi.signer, tree.leaf(gi.signer)) // joinTree checked the leaf is there
+	g.joinedFrom = &signerOf
 	g.confirmationTag = gi.confirmationTag
 	g.interim = s.interimTranscriptHash(gi.context.confirmedTranscriptHash, gi.confirmationTag)
 	ext, ok := findExtension(gi.extensions, ExtensionExternalPub)
@@ -139,7 +141,9 @@ func JoinExternal(groupInfoMessage []byte, signer *SignatureKey, cred Credential
 	}
 	g.priv = priv
 	sp := &stagedPublic{app: app, next: next, interim: s.interimTranscriptHash(next.confirmedTranscriptHash, a.auth.confirmationTag)}
-	return g.nextEpoch(sp, priv, es, a.auth.confirmationTag), msg, nil
+	joined := g.nextEpoch(sp, priv, es, a.auth.confirmationTag)
+	joined.joinedFrom = g.joinedFrom
+	return joined, msg, nil
 }
 
 // ExternalSender is a party outside a group allowed to propose adds and

@@ -31,7 +31,9 @@ minor version may break code, and every such change is marked **Breaking**.
   replacing leaf is the same member (`Config.CheckSuccessor`). A
   committer's Welcome carries extensions of its own to the joiners under
   its signature (`CommitOptions.WelcomeExtensions`,
-  `Group.WelcomeExtensions`), and `PeekMessage` reads a group info's
+  `Group.WelcomeExtensions`), a member that joins names the member
+  whose group info it joined from (`Group.GroupInfoSigner`), and
+  `PeekMessage` reads a group info's
   group, epoch and extension types. A staged commit's `Changes`
   names who proposed each change (`Proposals`) and which leaves it
   replaced (`Replaced`). `KeyPackage.Seal` and `KeyPackageSecrets.Open`

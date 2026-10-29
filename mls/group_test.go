@@ -326,6 +326,67 @@ func containsBytes(list [][]byte, b []byte) bool {
 	return false
 }
 
+// A member that joins names the member whose group info it joined
+// from: the committer of its Welcome, or the member whose group info it
+// joined on its own from; the creator and a group read back from saved
+// state name no one.
+func TestGroupInfoSigner(t *testing.T) {
+	cfg := Config{PublicHandshake: true}
+	alice, bob, carol := newClient(t, testSuite, "alice"), newClient(t, testSuite, "bob"), newClient(t, testSuite, "carol")
+	var err error
+	alice.group, err = CreateGroup(randomID(t), alice.signer, alice.cred, CreateOptions{}, cfg)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, ok := alice.group.GroupInfoSigner(); ok {
+		t.Error("the creator names a signer")
+	}
+	sc, err := alice.group.Commit(CommitOptions{Add: []*KeyPackage{bob.kp}})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := alice.group.Merge(sc); err != nil {
+		t.Fatal(err)
+	}
+	bob.group, err = JoinGroup(sc.Welcome(), bob.kp, bob.secrets, bob.signer, JoinOptions{}, cfg)
+	if err != nil {
+		t.Fatal(err)
+	}
+	signer, ok := bob.group.GroupInfoSigner()
+	if !ok || signer.Leaf != alice.group.Leaf() || string(signer.Credential.Identity) != "alice" ||
+		!bytes.Equal(signer.SignatureKey, alice.signer.PublicKey()) {
+		t.Fatalf("bob's Welcome was signed by %+v, %v", signer, ok)
+	}
+	signer.SignatureKey[0] ^= 1
+	if again, _ := bob.group.GroupInfoSigner(); !bytes.Equal(again.SignatureKey, alice.signer.PublicKey()) {
+		t.Error("changing the member returned changed the group's")
+	}
+
+	gi, err := bob.group.GroupInfo(GroupInfoOptions{RatchetTree: true, ExternalPub: true})
+	if err != nil {
+		t.Fatal(err)
+	}
+	carol.group, _, err = JoinExternal(gi, carol.signer, carol.cred, ExternalJoinOptions{}, cfg)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if signer, ok := carol.group.GroupInfoSigner(); !ok || signer.Leaf != bob.group.Leaf() || string(signer.Credential.Identity) != "bob" {
+		t.Fatalf("carol joined from a group info signed by %+v, %v", signer, ok)
+	}
+
+	state, err := bob.group.MarshalBinary()
+	if err != nil {
+		t.Fatal(err)
+	}
+	saved, err := UnmarshalGroup(state, cfg)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, ok := saved.GroupInfoSigner(); ok {
+		t.Error("a group read back from saved state names a signer")
+	}
+}
+
 // A committer's Welcome extensions reach the joiners under its
 // signature, and a group info's envelope says which extensions it has.
 func TestWelcomeExtensions(t *testing.T) {

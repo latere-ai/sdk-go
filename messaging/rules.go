@@ -380,8 +380,88 @@ func (p *Policy) CheckCommit(g Group, c mls.Changes) (*Change, error) {
 				return nil, refuse("the history notice has no part for a leaf the commit adds")
 			}
 		}
+		if mg, ok := g.(*mls.Group); ok {
+			if _, err := n.Range(mg); err != nil {
+				return nil, refuse("the history notice's part for the members does not open: %v", err)
+			}
+		}
 	}
 	return ch, nil
+}
+
+// CheckJoin checks a group before a device takes it for the
+// conversation, once it joined by a Welcome or on its own, and before
+// the service takes the group a conversation starts with: every leaf is
+// a device of a person of the conversation that stands in their
+// directory, or Latere's member attested for the group; every person
+// has a device; the state holds; and Latere's member is in the group
+// exactly when the level is not Off. A group the service made up fails
+// it, since the leaves of a person's are theirs to sign.
+func (p *Policy) CheckJoin(g Group) error {
+	s, err := ParseState(g.Extensions())
+	if err != nil {
+		return refuse("the group's state: %v", err)
+	}
+	if err := s.Validate(); err != nil {
+		return refuse("the group's state: %v", err)
+	}
+	has := make(map[string]bool, len(s.People))
+	latere := 0
+	groupID := g.GroupID()
+	for _, m := range g.Members() {
+		id, err := ParseCredential(m.Credential)
+		if err != nil {
+			return refuse("a leaf's credential: %v", err)
+		}
+		if !id.Latere() && !s.Has(id.Person) {
+			return refuse("every leaf is a device of a person of the conversation")
+		}
+		if err := p.checkLeaf(groupID, id, m); err != nil {
+			return err
+		}
+		if id.Latere() {
+			latere++
+		} else {
+			has[id.Person] = true
+		}
+	}
+	if len(has) != len(s.People) {
+		return refuse("every person of the conversation has a device in the group")
+	}
+	if latere > 1 {
+		return refuse("a conversation has one Latere member")
+	}
+	if (latere == 1) != (s.Level != LevelOff) {
+		return refuse("Latere's member is in the group exactly when the level is not Off")
+	}
+	return nil
+}
+
+// JoinGroup joins a conversation's group by a Welcome with the policy's
+// configuration and takes the group only once CheckJoin passes.
+func (p *Policy) JoinGroup(welcome []byte, kp *mls.KeyPackage, secrets *mls.KeyPackageSecrets, signer *mls.SignatureKey, opts mls.JoinOptions) (*mls.Group, error) {
+	g, err := mls.JoinGroup(welcome, kp, secrets, signer, opts, p.Config())
+	if err != nil {
+		return nil, err
+	}
+	if err := p.CheckJoin(g); err != nil {
+		return nil, err
+	}
+	return g, nil
+}
+
+// JoinExternal joins a conversation's group on its own, from a group
+// info the service hands out, with the policy's configuration, and
+// returns the group and the commit to send only once CheckJoin passes.
+func (p *Policy) JoinExternal(groupInfo []byte, signer *mls.SignatureKey, id Identity) (*mls.Group, []byte, error) {
+	g, msg, err := mls.JoinExternal(groupInfo, signer, id.Credential(), mls.ExternalJoinOptions{SupportedExtensions: slices.Clone(extensionTypes)}, p.Config())
+	if err != nil {
+		return nil, nil, err
+	}
+	if err := p.CheckJoin(g); err != nil {
+		return nil, nil, err
+	}
+	return g, msg, nil
 }
 
 // checkExternalJoin checks a commit by a person's new device joining on

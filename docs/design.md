@@ -873,7 +873,10 @@ its ownership on its own. Both bounds on what a directory holds fail
 closed, so where the service lists a record or a revocation changes
 nothing. The backup key reaches a new device sealed to it and signed by
 the device that approved it, and by no other, so neither the service
-nor another device of the person's hands it a key of its own.
+nor another device of the person's hands it a key of its own. A device
+takes a group it joins only when every leaf is a device of the
+directory or Latere's member attested by the installation, so the
+service cannot make up a whole group around one person.
 
 History shared with someone let in leaves the group as entries, each
 the original signed message, which `mls.VerifySignedContent` checks

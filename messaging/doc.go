@@ -37,8 +37,11 @@
 // one; Policy.CheckProposal and CheckMessage check what arrives between
 // commits, and a group made with Policy.Config keeps no proposal pending
 // that the rules refuse. The service proposes nothing but the removal of
-// a device its person revoked. The application merges a commit only if
-// the check passes:
+// a device its person revoked. A device takes a group it joins, by a
+// Welcome or on its own, only once Policy.CheckJoin passes on it, which
+// Policy.JoinGroup and Policy.JoinExternal do, and the service checks a
+// new conversation's group the same way. The application merges a
+// commit only if the check passes:
 //
 //	msg, err := g.Process(b)
 //	if err != nil {

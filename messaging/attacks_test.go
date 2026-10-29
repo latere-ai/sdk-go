@@ -398,6 +398,10 @@ func TestForgedRootRevokesNothing(t *testing.T) {
 	}
 	refused(t, w.policy().CheckProposal(w.view, *m.Proposal))
 	for _, d := range []*device{bob, carol} {
+		if _, err := d.group.Process(msg); err == nil {
+			t.Fatalf("%s kept the removal pending", d.id)
+		}
+		d.group = loosen(t, d.group)
 		if _, err := d.group.Process(msg); err != nil {
 			t.Fatal(err)
 		}
@@ -406,4 +410,125 @@ func TestForgedRootRevokesNothing(t *testing.T) {
 	s.People, s.Owners = []string{"bob", "carol"}, []string{"bob"}
 	_, err = w.commit(bob, mls.CommitOptions{IncludePending: true, ReplaceExtensions: true, Extensions: withState(t, bob.group, s)}, []*device{carol})
 	refused(t, err)
+}
+
+// forgedGroup is a group the service makes up whose "alice/phone" leaf is
+// a key of its own, in a state that lists people.
+func forgedGroup(t *testing.T, w *world, people ...string) *mls.Group {
+	t.Helper()
+	fakeSigner, err := mls.GenerateSignatureKey(Suite)
+	if err != nil {
+		t.Fatal(err)
+	}
+	aliceID, err := DeviceIdentity("alice", "phone")
+	if err != nil {
+		t.Fatal(err)
+	}
+	opts, err := CreateOptions(State{Kind: KindGroup, People: people, Owners: []string{"alice"}}, w.externalSender())
+	if err != nil {
+		t.Fatal(err)
+	}
+	fake, err := mls.CreateGroup(GroupID(NewConversationID()), fakeSigner, aliceID.Credential(), opts, Config())
+	if err != nil {
+		t.Fatal(err)
+	}
+	return fake
+}
+
+// The service makes a group of its own whose "alice" is its key, signs
+// the group info with it and carries a notice digest that matches; bob
+// refuses to take it, by a Welcome or joining on his own, so nothing he
+// sends reaches the service.
+func TestServiceForgesAWholeGroup(t *testing.T) {
+	w := newWorld(t)
+	w.device("alice", "phone") // alice's real directory
+	bob := w.device("bob", "phone")
+	fake := forgedGroup(t, w, "alice")
+	s := state(t, fake)
+	s.People = append(s.People, "bob")
+	none := HistoryRange{Kind: RangeNone}
+	ad, err := NewCommitNotice(fake, none, []Joiner{{KeyPackage: bob.kp, Notice: JoinerNotice{Range: none}}})
+	if err != nil {
+		t.Fatal(err)
+	}
+	sc, err := fake.Commit(mls.CommitOptions{Add: []*mls.KeyPackage{bob.kp}, ReplaceExtensions: true, Extensions: withState(t, fake, s),
+		AuthenticatedData: ad, WelcomeExtensions: []mls.Extension{WelcomeExtension(ad)}})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := fake.Merge(sc); err != nil {
+		t.Fatal(err)
+	}
+	_, err = w.policy().JoinGroup(sc.Welcome(), bob.kp, bob.secrets, bob.signer, mls.JoinOptions{})
+	refused(t, err, "user:alice/device:phone")
+
+	tablet := w.device("bob", "tablet")
+	info, err := forgedGroup(t, w, "alice", "bob").GroupInfo(mls.GroupInfoOptions{RatchetTree: true, ExternalPub: true})
+	if err != nil {
+		t.Fatal(err)
+	}
+	_, _, err = w.policy().JoinExternal(info, tablet.signer, tablet.id)
+	refused(t, err, "user:alice/device:phone")
+}
+
+// A group whose state breaks a rule, or that lacks a person's device, is
+// refused as well.
+func TestCheckJoin(t *testing.T) {
+	w, alice, bob, carol := trio(t)
+	p := w.policy()
+	for _, d := range []*device{alice, bob, carol} {
+		if err := p.CheckJoin(d.group); err != nil {
+			t.Fatalf("%s: %v", d.id, err)
+		}
+	}
+	if err := p.CheckJoin(w.view); err != nil {
+		t.Fatalf("the service's view: %v", err)
+	}
+	// A person listed with no device: alice's group before bob and
+	// carol joined, with them listed.
+	lonely := forgedGroup(t, w, "alice", "dave")
+	refused(t, p.CheckJoin(lonely))
+	// A revoked device's leaf.
+	w.revoke(carol, carol)
+	refused(t, p.CheckJoin(alice.group), "carol")
+}
+
+// A committer that leaves the members' part of a notice unreadable has
+// its commit refused by every member, who would otherwise draw no line.
+func TestMembersPartUnreadable(t *testing.T) {
+	w, alice, bob, received := chat(t, 3, "before carol")
+	carol := w.device("carol", "phone")
+	var entries []Entry
+	for _, m := range received {
+		e, err := NewEntry(m)
+		if err != nil {
+			t.Fatal(err)
+		}
+		entries = append(entries, e)
+	}
+	sb, err := SealBundle(entries)
+	if err != nil {
+		t.Fatal(err)
+	}
+	salt := newSalt(t)
+	all := HistoryRange{Kind: RangeAll}
+	jn := JoinerNotice{Range: all, Owner: "alice", Ref: Folder + "/b1", Digest: sb.Digest, Size: int64(len(sb.Ciphertext)), Key: sb.Key}
+	sealed, err := carol.kp.Seal(HistoryLabel, joinerContext(alice.group.GroupID(), alice.group.Epoch()+1), joinerPlain(jn, salt))
+	if err != nil {
+		t.Fatal(err)
+	}
+	ad := noticeWith(commitment(all, salt), make([]byte, 64), map[string][]byte{string(carol.kp.SignatureKey()): sealed})
+	s := state(t, alice.group)
+	s.People = append(s.People, "carol")
+	sc, err := alice.group.Commit(mls.CommitOptions{Add: []*mls.KeyPackage{carol.kp}, ReplaceExtensions: true, Extensions: withState(t, alice.group, s),
+		AuthenticatedData: ad, WelcomeExtensions: []mls.Extension{WelcomeExtension(ad)}})
+	if err != nil {
+		t.Fatal(err)
+	}
+	m, err := bob.group.Process(sc.Message())
+	if err != nil {
+		t.Fatal(err)
+	}
+	_, err = w.policy().CheckCommit(bob.group, m.Commit.Changes())
+	refused(t, err, "members")
 }

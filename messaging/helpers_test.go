@@ -252,7 +252,7 @@ func (w *world) commit(by *device, opts mls.CommitOptions, others []*device, joi
 		w.t.Fatal(err)
 	}
 	for _, j := range joiners {
-		j.group, err = mls.JoinGroup(sc.Welcome(), j.kp, j.secrets, j.signer, mls.JoinOptions{}, Config())
+		j.group, err = p.JoinGroup(sc.Welcome(), j.kp, j.secrets, j.signer, mls.JoinOptions{})
 		if err != nil {
 			w.t.Fatal(err)
 		}

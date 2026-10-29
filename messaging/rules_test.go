@@ -215,6 +215,12 @@ func TestServiceRemovesNoOwner(t *testing.T) {
 		t.Fatal(err)
 	}
 	for _, d := range []*device{bob, carol} {
+		if _, err := d.group.Process(msg); err == nil {
+			t.Fatalf("%s kept the removal pending", d.id)
+		}
+		// A device whose app does not check proposals as they arrive
+		// keeps it, and the commit that carries it is refused.
+		d.group = loosen(t, d.group)
 		m, err := d.group.Process(msg)
 		if err != nil {
 			t.Fatal(err)
@@ -257,6 +263,21 @@ func TestLeftOrRemoved(t *testing.T) {
 	if len(ch.Left) != 0 || len(ch.Removed) != 1 || !ch.Removed[0].ByService || ch.Removed[0].Person != "bob" {
 		t.Fatalf("change %+v", ch)
 	}
+}
+
+// loosen is the group as a device holds it whose app does not check
+// proposals against the directory as they arrive.
+func loosen(t *testing.T, g *mls.Group) *mls.Group {
+	t.Helper()
+	b, err := g.MarshalBinary()
+	if err != nil {
+		t.Fatal(err)
+	}
+	l, err := mls.UnmarshalGroup(b, Config())
+	if err != nil {
+		t.Fatal(err)
+	}
+	return l
 }
 
 func mustMarshal(t *testing.T, v *mls.PublicGroup) []byte {

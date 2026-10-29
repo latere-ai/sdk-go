@@ -76,6 +76,15 @@
           "type": "string"
         }
       },
+      "run": {
+        "description": "A run's id, the id of the session it ran in, as the list answers it.",
+        "in": "path",
+        "name": "run",
+        "required": true,
+        "schema": {
+          "type": "string"
+        }
+      },
       "seq": {
         "description": "The sequence of a turn's first event in the session's log, a positive integer.",
         "in": "path",
@@ -555,6 +564,70 @@
             }
           }
         }
+      },
+      "run_conflict": {
+        "content": {
+          "application/json": {
+            "example": {
+              "error": {
+                "code": "run_not_waiting",
+                "message": "Nothing of this run is waiting for you."
+              }
+            },
+            "schema": {
+              "$ref": "#/components/schemas/Error"
+            }
+          }
+        },
+        "description": "run_running: the run has not ended, so its changes are not ready. run_not_waiting: none of the changes named waits for the person. run_busy: another request is deciding the run; retry shortly."
+      },
+      "run_invalid": {
+        "content": {
+          "application/json": {
+            "example": {
+              "error": {
+                "code": "run_change_unknown",
+                "message": "This run made no such change."
+              }
+            },
+            "schema": {
+              "$ref": "#/components/schemas/Error"
+            }
+          }
+        },
+        "description": "run_change_unknown: `changes` names a change the run did not make. bad_request: the body is not the JSON object the route takes."
+      },
+      "run_not_found": {
+        "content": {
+          "application/json": {
+            "example": {
+              "error": {
+                "code": "run_not_found",
+                "message": "This run is not in your list."
+              }
+            },
+            "schema": {
+              "$ref": "#/components/schemas/Error"
+            }
+          }
+        },
+        "description": "run_not_found: no run of that id is the caller's."
+      },
+      "runs_unavailable": {
+        "content": {
+          "application/json": {
+            "example": {
+              "error": {
+                "code": "storage_unavailable",
+                "message": "Memory could not be reached. Try again in a moment."
+              }
+            },
+            "schema": {
+              "$ref": "#/components/schemas/Error"
+            }
+          }
+        },
+        "description": "runs_unavailable: the deployment keeps no record of runs. storage_unavailable: Storage, where memory is kept, could not be reached; retry shortly."
       },
       "share_invalid": {
         "content": {
@@ -2107,6 +2180,14 @@
             "description": "Remember new things: whether conversations save memories. On by default.",
             "type": "boolean"
           },
+          "review": {
+            "description": "What happens to what tidying memory changed at night: `apply` applies it and shows the person what changed, `ask` holds it for their OK. `apply` by default.",
+            "enum": [
+              "apply",
+              "ask"
+            ],
+            "type": "string"
+          },
           "sensitive": {
             "description": "Include sensitive topics: whether memories about health, beliefs and the like are kept. Off by default.",
             "type": "boolean"
@@ -2115,7 +2196,8 @@
         "required": [
           "remember",
           "sensitive",
-          "chats"
+          "chats",
+          "review"
         ],
         "type": "object"
       },
@@ -2126,6 +2208,13 @@
           },
           "remember": {
             "type": "boolean"
+          },
+          "review": {
+            "enum": [
+              "apply",
+              "ask"
+            ],
+            "type": "string"
           },
           "sensitive": {
             "type": "boolean"
@@ -2145,6 +2234,13 @@
           "remember": {
             "type": "boolean"
           },
+          "review": {
+            "enum": [
+              "apply",
+              "ask"
+            ],
+            "type": "string"
+          },
           "sensitive": {
             "type": "boolean"
           }
@@ -2153,6 +2249,7 @@
           "remember",
           "sensitive",
           "chats",
+          "review",
           "deleted_sensitive"
         ],
         "type": "object"
@@ -2781,6 +2878,219 @@
         ],
         "type": "object"
       },
+      "Run": {
+        "properties": {
+          "changes": {
+            "description": "Each memory the run changed; in a single run's answer only.",
+            "items": {
+              "$ref": "#/components/schemas/RunChange"
+            },
+            "type": "array"
+          },
+          "counts": {
+            "description": "The memories the run added, updated and removed, applied or waiting, and how many wait for the person.",
+            "properties": {
+              "added": {
+                "type": "integer"
+              },
+              "removed": {
+                "type": "integer"
+              },
+              "updated": {
+                "type": "integer"
+              },
+              "waiting": {
+                "type": "integer"
+              }
+            },
+            "required": [
+              "added",
+              "updated",
+              "removed",
+              "waiting"
+            ],
+            "type": "object"
+          },
+          "created_at": {
+            "format": "date-time",
+            "type": "string"
+          },
+          "decided_at": {
+            "description": "When nothing of the run waited any more.",
+            "format": "date-time",
+            "type": "string"
+          },
+          "ended_at": {
+            "description": "When the run ended and its changes were ready.",
+            "format": "date-time",
+            "type": "string"
+          },
+          "expires_at": {
+            "description": "When what still waits is declined, while something does.",
+            "format": "date-time",
+            "type": "string"
+          },
+          "id": {
+            "description": "The run's id, the id of the session it ran in.",
+            "type": "string"
+          },
+          "kind": {
+            "description": "What the run changes.",
+            "enum": [
+              "memory"
+            ],
+            "type": "string"
+          },
+          "project": {
+            "description": "The project whose memory the run changed, when `scope` is `project`.",
+            "type": "string"
+          },
+          "review": {
+            "description": "The review mode the run's changes follow, the person's when it started.",
+            "enum": [
+              "apply",
+              "ask"
+            ],
+            "type": "string"
+          },
+          "scope": {
+            "enum": [
+              "you",
+              "project"
+            ],
+            "type": "string"
+          },
+          "state": {
+            "enum": [
+              "running",
+              "applied",
+              "waiting",
+              "partly_applied",
+              "declined",
+              "undone"
+            ],
+            "type": "string"
+          },
+          "trigger_id": {
+            "description": "The Always on item the run is one of.",
+            "type": "string"
+          }
+        },
+        "required": [
+          "id",
+          "trigger_id",
+          "kind",
+          "scope",
+          "state",
+          "review",
+          "counts",
+          "created_at"
+        ],
+        "type": "object"
+      },
+      "RunChange": {
+        "properties": {
+          "after": {
+            "description": "The memory's file after the change, absent for one removed.",
+            "type": "string"
+          },
+          "before": {
+            "description": "The memory's file before the change, absent for one added.",
+            "type": "string"
+          },
+          "description": {
+            "type": "string"
+          },
+          "held": {
+            "description": "Why the change waits whatever the review mode: `yours`, a memory the person wrote.",
+            "enum": [
+              "yours"
+            ],
+            "type": "string"
+          },
+          "id": {
+            "description": "The memory's id in the run's scope.",
+            "type": "string"
+          },
+          "kind": {
+            "enum": [
+              "created",
+              "changed",
+              "removed"
+            ],
+            "type": "string"
+          },
+          "name": {
+            "type": "string"
+          },
+          "state": {
+            "enum": [
+              "applied",
+              "waiting",
+              "declined",
+              "changed_since",
+              "undone"
+            ],
+            "type": "string"
+          }
+        },
+        "required": [
+          "id",
+          "kind",
+          "state",
+          "name",
+          "description"
+        ],
+        "type": "object"
+      },
+      "RunDecision": {
+        "properties": {
+          "changes": {
+            "description": "The ids of the changes the decision names, every one it applies to when absent or empty.",
+            "items": {
+              "type": "string"
+            },
+            "type": "array"
+          }
+        },
+        "type": "object"
+      },
+      "RunList": {
+        "properties": {
+          "runs": {
+            "items": {
+              "$ref": "#/components/schemas/Run"
+            },
+            "type": "array"
+          }
+        },
+        "required": [
+          "runs"
+        ],
+        "type": "object"
+      },
+      "RunUndone": {
+        "allOf": [
+          {
+            "$ref": "#/components/schemas/Run"
+          },
+          {
+            "properties": {
+              "moved_on": {
+                "description": "The changes not undone, because their memory changed after the run.",
+                "items": {
+                  "type": "string"
+                },
+                "type": "array"
+              }
+            },
+            "required": [
+              "moved_on"
+            ],
+            "type": "object"
+          }
+        ]
+      },
       "ServingProvider": {
         "properties": {
           "countries": {
@@ -3090,7 +3400,7 @@
   "paths": {
     "/v1/account/agents/{id}": {
       "put": {
-        "description": "Makes the caller's copy of the managed agent `id` exist in the context the token names and carry the live version, then answers it. The copy is an agent of the Agents API named `id`, which a product then starts sessions of with `POST /v1/agents/sessions` and `\"agent\": id`. A missing copy is created, and a copy the platform manages is brought to the live version; an agent of that name the caller made themselves is never changed. The platform applies the copy with the caller's own token, so the Agents API decides it as the caller. A session keeps the version it started with. The body is empty.",
+        "description": "Makes the caller's copy of the managed agent `id` exist in the context the token names and carry the live version, then answers it. The copy is an agent of the Agents API named `id`, which a product then starts sessions of with `POST /v1/agents/sessions` and `\"agent\": id`. A missing copy is created, and a copy the platform manages is brought to the live version; an agent of that name the caller made themselves is never changed. The platform applies the copy with the caller's own token, so the Agents API decides it as the caller. A session keeps the version it started with. In the caller's personal context the apply also gives the person, once, the Always on item Tidy memory, which tidies their memory at night in the time zone `Latere-Time-Zone` names; a person who deletes it is not given it again. The body is empty.",
         "operationId": "applyManagedAgent",
         "parameters": [
           {
@@ -3098,6 +3408,16 @@
             "in": "path",
             "name": "id",
             "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "description": "The person's time zone, an IANA name such as `Europe/Berlin`, which the Always on items Latere gives them run in. Absent, or a name that is not one, is UTC.",
+            "example": "Europe/Berlin",
+            "in": "header",
+            "name": "Latere-Time-Zone",
+            "required": false,
             "schema": {
               "type": "string"
             }
@@ -4309,6 +4629,7 @@
                   "settings": {
                     "chats": true,
                     "remember": true,
+                    "review": "apply",
                     "sensitive": false
                   }
                 },
@@ -4822,7 +5143,7 @@
     },
     "/v1/account/memory/settings": {
       "patch": {
-        "description": "Turns Remember new things, Include sensitive topics and Search past chats on or off; a member left out stays as it is. With Remember new things off, conversations still use what is remembered and save nothing new, from their next save on. Sensitive topics are health conditions, religious beliefs, political opinions, sexual orientation, racial or ethnic origin, and union membership. Turning them off deletes, for good, every memory marked sensitive, and the answer says how many; a client asks the person to confirm first. With Search past chats on, a conversation can search and read the person's other conversations: in a project, only that project's, and outside one, only those in no project. Turning it off stops a conversation that is running from reading any more of them within a second.",
+        "description": "Turns Remember new things, Include sensitive topics and Search past chats on or off, and sets what happens to what tidying memory changes at night, `review`: `apply` to apply it and show the person, `ask` to hold it for their OK. A member left out stays as it is. With Remember new things off, conversations still use what is remembered and save nothing new, from their next save on. Sensitive topics are health conditions, religious beliefs, political opinions, sexual orientation, racial or ethnic origin, and union membership. Turning them off deletes, for good, every memory marked sensitive, and the answer says how many; a client asks the person to confirm first. With Search past chats on, a conversation can search and read the person's other conversations: in a project, only that project's, and outside one, only those in no project. Turning it off stops a conversation that is running from reading any more of them within a second.",
         "operationId": "updateMemorySettings",
         "requestBody": {
           "content": {
@@ -4845,6 +5166,7 @@
                   "chats": true,
                   "deleted_sensitive": 0,
                   "remember": false,
+                  "review": "apply",
                   "sensitive": false
                 },
                 "schema": {
@@ -6600,6 +6922,413 @@
         "summary": "Add an app",
         "tags": [
           "projects"
+        ]
+      }
+    },
+    "/v1/account/runs": {
+      "get": {
+        "description": "The runs of the caller's Always on items that change their memory, newest first, at most 50. Tidy memory runs at night, once for the person's own memory and once for each project with something new, and changes each scope's memory: it combines memories that say the same thing, settles ones that contradict each other, and removes ones that only recorded a finished task. `counts` are the memories each run added, updated and removed, applied or waiting, and how many wait for the person. A run under Ask me first, `review` `ask`, waits until the person applies or declines it; a change to a memory the person wrote waits under either mode. What still waits at `expires_at`, 7 days after the run ended, is declined. `state` is `running` until the run ends, then `applied`, `waiting`, `partly_applied`, `declined` or `undone`.",
+        "operationId": "listRuns",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "example": {
+                  "runs": [
+                    {
+                      "counts": {
+                        "added": 1,
+                        "removed": 1,
+                        "updated": 1,
+                        "waiting": 1
+                      },
+                      "created_at": "2026-10-30T03:00:04Z",
+                      "ended_at": "2026-10-30T03:02:41Z",
+                      "expires_at": "2026-11-06T03:02:41Z",
+                      "id": "ses_01JA5C2M8Q4R6T8V0W2X4Y6Z8A",
+                      "kind": "memory",
+                      "review": "apply",
+                      "scope": "you",
+                      "state": "partly_applied",
+                      "trigger_id": "trg_01JA5B9K3M5P7R9T1V3W5X7Y9Z"
+                    }
+                  ]
+                },
+                "schema": {
+                  "$ref": "#/components/schemas/RunList"
+                }
+              }
+            },
+            "description": "The runs, without their texts."
+          },
+          "401": {
+            "$ref": "#/components/responses/unauthorized"
+          },
+          "403": {
+            "$ref": "#/components/responses/memory_forbidden"
+          },
+          "429": {
+            "$ref": "#/components/responses/rate_limited"
+          },
+          "503": {
+            "$ref": "#/components/responses/runs_unavailable"
+          }
+        },
+        "summary": "List tidying runs",
+        "tags": [
+          "memory"
+        ]
+      }
+    },
+    "/v1/account/runs/{run}": {
+      "get": {
+        "description": "One run with each memory it changed: `before` is the memory's file as it was and `after` as the run left it, each absent for a side there is none of, for a client to show the difference. `name` and `description` are the memory's after the change, or before it for one removed. `held` is `yours` for a change to a memory the person wrote, which waits for their OK whatever the review mode. A change's `state` is `applied`, `waiting`, `declined`, `changed_since` for one whose memory the person changed after the run read it, which was left as it is, or `undone`.",
+        "operationId": "getRun",
+        "parameters": [
+          {
+            "$ref": "#/components/parameters/run"
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "example": {
+                  "changes": [
+                    {
+                      "after": "---\nname: Short lists\ndescription: Keep lists under five things, and lead with the answer.\ntype: preference\nsource: dream:ses_01JA5C2M8Q4R6T8V0W2X4Y6Z8A\n---\n",
+                      "before": "---\nname: Short lists\ndescription: Keep lists under five things.\ntype: preference\nsource: ses_01JA3BQ7Z4M8N2P5R6S7T8V9WX\n---\n",
+                      "description": "Keep lists under five things, and lead with the answer.",
+                      "id": "short-lists",
+                      "kind": "changed",
+                      "name": "Short lists",
+                      "state": "applied"
+                    },
+                    {
+                      "before": "---\nname: Lead with the answer\ndescription: Lead with the answer.\ntype: preference\nsource: ses_01JA4D5F7H9K1M3N5P7R9T1V3W\n---\n",
+                      "description": "Lead with the answer.",
+                      "id": "lead-with-the-answer",
+                      "kind": "removed",
+                      "name": "Lead with the answer",
+                      "state": "applied"
+                    },
+                    {
+                      "before": "---\nname: Trains\ndescription: Likes trains.\ntype: topic\nsource: you\n---\n",
+                      "description": "Likes trains.",
+                      "held": "yours",
+                      "id": "trains",
+                      "kind": "removed",
+                      "name": "Trains",
+                      "state": "waiting"
+                    }
+                  ],
+                  "counts": {
+                    "added": 0,
+                    "removed": 1,
+                    "updated": 1,
+                    "waiting": 1
+                  },
+                  "created_at": "2026-10-30T03:00:04Z",
+                  "ended_at": "2026-10-30T03:02:41Z",
+                  "expires_at": "2026-11-06T03:02:41Z",
+                  "id": "ses_01JA5C2M8Q4R6T8V0W2X4Y6Z8A",
+                  "kind": "memory",
+                  "review": "apply",
+                  "scope": "you",
+                  "state": "partly_applied",
+                  "trigger_id": "trg_01JA5B9K3M5P7R9T1V3W5X7Y9Z"
+                },
+                "schema": {
+                  "$ref": "#/components/schemas/Run"
+                }
+              }
+            },
+            "description": "The run with its changes."
+          },
+          "401": {
+            "$ref": "#/components/responses/unauthorized"
+          },
+          "403": {
+            "$ref": "#/components/responses/memory_forbidden"
+          },
+          "404": {
+            "$ref": "#/components/responses/run_not_found"
+          },
+          "429": {
+            "$ref": "#/components/responses/rate_limited"
+          },
+          "503": {
+            "$ref": "#/components/responses/runs_unavailable"
+          }
+        },
+        "summary": "Read a tidying run",
+        "tags": [
+          "memory"
+        ]
+      }
+    },
+    "/v1/account/runs/{run}/apply": {
+      "post": {
+        "description": "The person's OK of the waiting changes `changes` names, every waiting one when it names none, a change to a memory they wrote included. A memory the person changed since the run read it is left as it is, its change `changed_since`. The scope's list is rebuilt before the answer.",
+        "operationId": "applyRun",
+        "parameters": [
+          {
+            "$ref": "#/components/parameters/run"
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "example": {
+                "changes": [
+                  "trains"
+                ]
+              },
+              "schema": {
+                "$ref": "#/components/schemas/RunDecision"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "example": {
+                  "changes": [
+                    {
+                      "before": "---\nname: Trains\ndescription: Likes trains.\ntype: topic\nsource: you\n---\n",
+                      "description": "Likes trains.",
+                      "id": "trains",
+                      "kind": "removed",
+                      "name": "Trains",
+                      "state": "applied"
+                    }
+                  ],
+                  "counts": {
+                    "added": 0,
+                    "removed": 1,
+                    "updated": 0,
+                    "waiting": 0
+                  },
+                  "created_at": "2026-10-30T03:00:04Z",
+                  "decided_at": "2026-10-30T08:15:00Z",
+                  "ended_at": "2026-10-30T03:02:41Z",
+                  "id": "ses_01JA5C2M8Q4R6T8V0W2X4Y6Z8A",
+                  "kind": "memory",
+                  "review": "apply",
+                  "scope": "you",
+                  "state": "applied",
+                  "trigger_id": "trg_01JA5B9K3M5P7R9T1V3W5X7Y9Z"
+                },
+                "schema": {
+                  "$ref": "#/components/schemas/Run"
+                }
+              }
+            },
+            "description": "The run as it is now, with its changes."
+          },
+          "400": {
+            "$ref": "#/components/responses/run_invalid"
+          },
+          "401": {
+            "$ref": "#/components/responses/unauthorized"
+          },
+          "403": {
+            "$ref": "#/components/responses/memory_forbidden"
+          },
+          "404": {
+            "$ref": "#/components/responses/run_not_found"
+          },
+          "409": {
+            "$ref": "#/components/responses/run_conflict"
+          },
+          "429": {
+            "$ref": "#/components/responses/rate_limited"
+          },
+          "503": {
+            "$ref": "#/components/responses/runs_unavailable"
+          }
+        },
+        "summary": "Apply a run's changes",
+        "tags": [
+          "memory"
+        ]
+      }
+    },
+    "/v1/account/runs/{run}/decline": {
+      "post": {
+        "description": "The person's no to the waiting changes `changes` names, every waiting one when it names none. Nothing of the memory changes.",
+        "operationId": "declineRun",
+        "parameters": [
+          {
+            "$ref": "#/components/parameters/run"
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "example": {},
+              "schema": {
+                "$ref": "#/components/schemas/RunDecision"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "example": {
+                  "changes": [
+                    {
+                      "after": "---\nname: Tea\ndescription: Drinks green tea.\ntype: topic\nsource: dream:ses_01JA5C2M8Q4R6T8V0W2X4Y6Z8A\n---\n",
+                      "description": "Drinks green tea.",
+                      "id": "tea",
+                      "kind": "created",
+                      "name": "Tea",
+                      "state": "declined"
+                    }
+                  ],
+                  "counts": {
+                    "added": 0,
+                    "removed": 0,
+                    "updated": 0,
+                    "waiting": 0
+                  },
+                  "created_at": "2026-10-30T03:00:04Z",
+                  "decided_at": "2026-10-30T08:15:00Z",
+                  "ended_at": "2026-10-30T03:02:41Z",
+                  "id": "ses_01JA5C2M8Q4R6T8V0W2X4Y6Z8A",
+                  "kind": "memory",
+                  "review": "ask",
+                  "scope": "you",
+                  "state": "declined",
+                  "trigger_id": "trg_01JA5B9K3M5P7R9T1V3W5X7Y9Z"
+                },
+                "schema": {
+                  "$ref": "#/components/schemas/Run"
+                }
+              }
+            },
+            "description": "The run as it is now, with its changes."
+          },
+          "400": {
+            "$ref": "#/components/responses/run_invalid"
+          },
+          "401": {
+            "$ref": "#/components/responses/unauthorized"
+          },
+          "403": {
+            "$ref": "#/components/responses/memory_forbidden"
+          },
+          "404": {
+            "$ref": "#/components/responses/run_not_found"
+          },
+          "409": {
+            "$ref": "#/components/responses/run_conflict"
+          },
+          "429": {
+            "$ref": "#/components/responses/rate_limited"
+          },
+          "503": {
+            "$ref": "#/components/responses/runs_unavailable"
+          }
+        },
+        "summary": "Decline a run's changes",
+        "tags": [
+          "memory"
+        ]
+      }
+    },
+    "/v1/account/runs/{run}/undo": {
+      "post": {
+        "description": "Takes back the applied changes `changes` names, every applied one when it names none, from Storage's versions and trash: an added memory is removed, an updated one gets its text before the run back, and a removed one is restored. A memory the person changed after the run is left as it is and named in `moved_on`. The scope's list is rebuilt before the answer.",
+        "operationId": "undoRun",
+        "parameters": [
+          {
+            "$ref": "#/components/parameters/run"
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "example": {
+                "changes": [
+                  "short-lists"
+                ]
+              },
+              "schema": {
+                "$ref": "#/components/schemas/RunDecision"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "example": {
+                  "changes": [
+                    {
+                      "after": "---\nname: Short lists\ndescription: Keep lists under five things, and lead with the answer.\ntype: preference\n---\n",
+                      "before": "---\nname: Short lists\ndescription: Keep lists under five things.\ntype: preference\n---\n",
+                      "description": "Keep lists under five things, and lead with the answer.",
+                      "id": "short-lists",
+                      "kind": "changed",
+                      "name": "Short lists",
+                      "state": "undone"
+                    }
+                  ],
+                  "counts": {
+                    "added": 0,
+                    "removed": 1,
+                    "updated": 0,
+                    "waiting": 0
+                  },
+                  "created_at": "2026-10-30T03:00:04Z",
+                  "decided_at": "2026-10-30T03:02:41Z",
+                  "ended_at": "2026-10-30T03:02:41Z",
+                  "id": "ses_01JA5C2M8Q4R6T8V0W2X4Y6Z8A",
+                  "kind": "memory",
+                  "moved_on": [],
+                  "review": "apply",
+                  "scope": "you",
+                  "state": "partly_applied",
+                  "trigger_id": "trg_01JA5B9K3M5P7R9T1V3W5X7Y9Z"
+                },
+                "schema": {
+                  "$ref": "#/components/schemas/RunUndone"
+                }
+              }
+            },
+            "description": "The run as it is now, with its changes, and what was not undone."
+          },
+          "400": {
+            "$ref": "#/components/responses/run_invalid"
+          },
+          "401": {
+            "$ref": "#/components/responses/unauthorized"
+          },
+          "403": {
+            "$ref": "#/components/responses/memory_forbidden"
+          },
+          "404": {
+            "$ref": "#/components/responses/run_not_found"
+          },
+          "409": {
+            "$ref": "#/components/responses/run_conflict"
+          },
+          "429": {
+            "$ref": "#/components/responses/rate_limited"
+          },
+          "503": {
+            "$ref": "#/components/responses/runs_unavailable"
+          }
+        },
+        "summary": "Undo a run's changes",
+        "tags": [
+          "memory"
         ]
       }
     },

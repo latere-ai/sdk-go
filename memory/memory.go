@@ -269,7 +269,26 @@ type Settings struct {
 	// orientation, racial or ethnic origin, and union membership are kept.
 	// Off by default.
 	Sensitive bool `json:"sensitive"`
+	// Review is what happens to what Tidy memory changes at night:
+	// ReviewApply, the default, or ReviewAsk.
+	Review Review `json:"review"`
 }
+
+// Review is what happens to what Tidy memory, the Always on item that
+// tidies a person's memory at night, changes.
+type Review string
+
+// The review modes.
+const (
+	// ReviewApply is Apply, and show me what changed: each run's changes
+	// are applied at once and shown to the person, who can undo them. A
+	// change to a memory the person wrote waits for their OK all the same.
+	// The default.
+	ReviewApply Review = "apply"
+	// ReviewAsk is Ask me first: each run's changes wait until the person
+	// applies or declines them.
+	ReviewAsk Review = "ask"
+)
 
 // A Project is one of the person's projects, as the list names it.
 type Project struct {
@@ -487,6 +506,10 @@ type UpdateSettingsParams struct {
 	// deletes, for good, every memory marked Sensitive; a program asks the
 	// person to confirm first.
 	Sensitive *bool `json:"sensitive,omitempty"`
+	// Review sets what happens to what Tidy memory changes from its next
+	// run on: ReviewApply or ReviewAsk. Empty keeps the mode the person
+	// has; a run that started keeps the mode it started with.
+	Review Review `json:"review,omitempty"`
 }
 
 // SettingsChanged are the person's memory settings after a change.
@@ -497,6 +520,9 @@ type SettingsChanged struct {
 	Chats bool `json:"chats"`
 	// Sensitive is Include sensitive topics, as Settings.Sensitive.
 	Sensitive bool `json:"sensitive"`
+	// Review is what happens to what Tidy memory changes, as
+	// Settings.Review.
+	Review Review `json:"review"`
 	// DeletedSensitive is how many memories marked sensitive the change
 	// deleted, when it turned Include sensitive topics off.
 	DeletedSensitive int `json:"deleted_sensitive"`
@@ -520,9 +546,9 @@ func (s *SettingsChanged) UnmarshalJSON(b []byte) error {
 }
 
 // UpdateSettings turns any of Remember new things, Search past chats and
-// Include sensitive topics on or off, and returns the settings as they
-// are now. A nil params, or one that sets none, changes nothing and
-// returns them.
+// Include sensitive topics on or off and sets the review mode of Tidy
+// memory, and returns the settings as they are now. A nil params, or one
+// that sets nothing, changes nothing and returns them.
 //
 // A change only sets values, so it is retried after a failure. A retry
 // after a lost answer that turned Include sensitive topics off finds

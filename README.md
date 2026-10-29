@@ -596,7 +596,10 @@ between You and a project. The package also covers:
   person to confirm first.
 - `UpdateSettings` turns Remember new things, Search past chats and
   Include sensitive topics on or off. Turning sensitive topics off deletes
-  every memory marked sensitive, and says how many.
+  every memory marked sensitive, and says how many. It also sets what
+  happens to what Tidy memory changes at night: `memory.ReviewApply`
+  applies it and shows the person, the default, and `memory.ReviewAsk`
+  holds it for their OK.
 - `ListForgotten` lists what conversations forgot in the last 30 days, and
   `RestoreMemory` brings one back. It is sent once.
 - `ExportMemory` streams a zip of every memory as Markdown files; a zip

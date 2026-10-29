@@ -24,6 +24,11 @@ minor version may break code, and every such change is marked **Breaking**.
   `Settings.Chats` and `SettingsChanged.Chats` say whether conversations
   search and read the person's past conversations, in a project only that
   project's, and `UpdateSettingsParams.Chats` turns it on or off.
+- Package `memory`: the review mode of Tidy memory, the Always on item
+  that tidies a person's memory at night. `Settings.Review` and
+  `SettingsChanged.Review` read it and `UpdateSettingsParams.Review` sets
+  it: `ReviewApply`, the default, applies a run's changes and shows the
+  person, and `ReviewAsk` holds them for the person's OK.
 
 ## [0.15.0] - 2026-10-30
 

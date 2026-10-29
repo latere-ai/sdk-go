@@ -166,12 +166,13 @@ func TestModelsMatchTheSchemas(t *testing.T) {
 	}
 }
 
-// The scopes and the types the package names are the ones the document
-// lists, wherever it lists them.
+// The scopes, the types and the review modes the package names are the
+// ones the document lists, wherever it lists them.
 func TestTheValuesAreTheDocuments(t *testing.T) {
 	s := loadDocument(t).Components.Schemas
 	scopes := []string{string(memory.ScopeYou), string(memory.ScopeProject)}
 	types := []string{string(memory.TypePreference), string(memory.TypeProfile), string(memory.TypeTopic), string(memory.TypeArea), string(memory.TypePerson)}
+	reviews := []string{string(memory.ReviewApply), string(memory.ReviewAsk)}
 	for _, c := range []struct {
 		name     string
 		declared []string
@@ -186,6 +187,9 @@ func TestTheValuesAreTheDocuments(t *testing.T) {
 		{"Memory.type", types, s["Memory"].Properties["type"]},
 		{"MemoryAdd.type", types, s["MemoryAdd"].Properties["type"]},
 		{"MemoryChange.type", types, s["MemoryChange"].Properties["type"]},
+		{"MemorySettings.review", reviews, s["MemorySettings"].Properties["review"]},
+		{"MemorySettingsChange.review", reviews, s["MemorySettingsChange"].Properties["review"]},
+		{"MemorySettingsChanged.review", reviews, s["MemorySettingsChanged"].Properties["review"]},
 	} {
 		if c.listed == nil || !slices.Equal(slices.Sorted(slices.Values(c.declared)), slices.Sorted(slices.Values(c.listed.Enum))) {
 			t.Errorf("%s: the package declares %v; the document lists %+v", c.name, c.declared, c.listed)

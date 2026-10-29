@@ -121,9 +121,12 @@
 //     Policy.JoinExternal takes the conversation and its epoch the
 //     approving device hands over the pairing, and refuses a group info
 //     of another conversation or an earlier epoch; with no epoch given,
-//     the conversation's group info of any epoch is taken. A Welcome of an
-//     old epoch reaches a device only through a key package it uses
-//     twice, its last resort.
+//     the conversation's group info of any epoch is taken. The floor is
+//     only as current as the approving device: one the service holds back
+//     at an earlier epoch hands that epoch over, and keeps sending in it
+//     itself, so a member removed since reads both. A Welcome of an old
+//     epoch reaches a device only through a key package it uses twice,
+//     its last resort.
 //   - The revocations an app keeps grow with what it was shown: one for
 //     each key revoked and one for each key a later revocation stops
 //     keeping, past MaxRevocations when a service shows a device more

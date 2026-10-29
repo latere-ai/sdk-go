@@ -108,10 +108,21 @@
 //     into it.
 //   - A revocation the service withholds from a device that never saw
 //     it, a new contact's, does not apply there until it is listed.
+//   - A group a person of the conversation makes under its id, with the
+//     service handing it out, is joined like the conversation's own:
+//     nothing in a group tells the two apart. Latere's member makes no
+//     group a device takes, since a device refuses a group info it
+//     signed; a device joining on its own after Latere's member updated
+//     its leaf waits for a person's commit, or is added by another of
+//     its person's devices.
 //   - The revocations an app keeps grow with what it was shown: one for
 //     each key revoked and one for each key a later revocation stops
 //     keeping, past MaxRevocations when a service shows a device more
 //     records over time than it lists at once.
+//   - The service passes on a commit whose membership tag does not
+//     verify, as only members can check the tag; the members refuse it,
+//     and the conversation waits at that epoch until another commit
+//     wins it.
 //   - A chunk opened alone is checked against the file's key, not its
 //     digest, so a sender can seal for a seeking reader other bytes than
 //     the whole file opens to; OpenAttachment checks the digest.

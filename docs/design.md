@@ -882,7 +882,14 @@ the device that approved it, and by no other, so neither the service
 nor another device of the person's hands it a key of its own. A device
 takes a group it joins only when every leaf is a device of the
 directory or Latere's member attested by the installation, so the
-service cannot make up a whole group around one person.
+service cannot make up a whole group around one person, and only when a
+person's device signed the group info it joins from. Latere's member
+adds no one, so a group info it signed is of a group it made, or of an
+epoch its own update began; a device that would join on its own then
+waits for a person's commit, or is added by another of its person's
+devices. Nothing in a group tells a device that joins it apart from
+another group under the same id that a person of the conversation made
+with the service's help; that rests on the service.
 
 History shared with someone let in leaves the group as entries, each
 the original signed message, which `mls.VerifySignedContent` checks

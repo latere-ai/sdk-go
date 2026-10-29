@@ -569,6 +569,102 @@ func TestKeptUnderARevokedDevice(t *testing.T) {
 	}
 }
 
+// latereFork lets Latere's member into alice's conversation, sets the
+// level back to Off without it, and has it make a group of its own under
+// the conversation's id at ReadsAlong, from alice's key package the
+// service holds.
+func latereFork(t *testing.T) (w *world, alice, bob, carol *device, fork *mls.Group) {
+	t.Helper()
+	w, alice, bob, carol = trio(t)
+	conv := string(alice.group.GroupID())
+	l := w.latere(conv)
+	s := state(t, alice.group)
+	s.Level = LevelReadsAlong
+	if _, err := w.commit(alice, letIn(t, alice, s, l), []*device{bob, carol}, l); err != nil {
+		t.Fatal(err)
+	}
+	s = state(t, alice.group)
+	s.Level = LevelOff
+	if _, err := w.commit(alice, mls.CommitOptions{Remove: []uint32{leafOf(t, alice.group, l)}, ReplaceExtensions: true,
+		Extensions: withState(t, alice.group, s)}, []*device{bob, carol}); err != nil {
+		t.Fatal(err)
+	}
+	opts, err := CreateOptions(State{Kind: KindGroup, People: []string{"alice", "bob"}, Owners: []string{"alice"}, Level: LevelReadsAlong}, w.externalSender())
+	if err != nil {
+		t.Fatal(err)
+	}
+	opts.LeafExtensions = l.kp.LeafExtensions()
+	if fork, err = mls.CreateGroup(GroupID(conv), l.signer, l.id.Credential(), opts, Config()); err != nil {
+		t.Fatal(err)
+	}
+	alice.fresh(t)
+	return w, alice, bob, carol, fork
+}
+
+// Latere's member, removed from a conversation, still holds its leaf key
+// and the installation's attestation for the conversation's id. A group
+// it makes under that id passes CheckJoin, every leaf a device or the
+// attested member at a level that matches; bob's new tablet refuses it
+// all the same, by a Welcome or on its own, since Latere's member signed
+// its group info.
+func TestLatereMakesNoGroup(t *testing.T) {
+	w, alice, _, _, fork := latereFork(t)
+	tablet := w.device("bob", "tablet")
+	sc, err := fork.Commit(mls.CommitOptions{Add: []*mls.KeyPackage{alice.kp, tablet.kp}})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := fork.Merge(sc); err != nil {
+		t.Fatal(err)
+	}
+	if err := w.policy().CheckJoin(fork); err != nil {
+		t.Fatalf("the fork fails CheckJoin, so this test does not reach the signer: %v", err)
+	}
+	_, err = w.policy().JoinGroup(sc.Welcome(), tablet.kp, tablet.secrets, tablet.signer, mls.JoinOptions{})
+	refused(t, err, "Latere's member signed the group info")
+
+	info, err := fork.GroupInfo(mls.GroupInfoOptions{RatchetTree: true, ExternalPub: true})
+	if err != nil {
+		t.Fatal(err)
+	}
+	other := w.device("bob", "laptop")
+	_, _, err = w.policy().JoinExternal(info, other.signer, other.id)
+	refused(t, err, "Latere's member signed the group info")
+}
+
+// After Latere's member commits an update of its own leaf, the group
+// info of the epoch is its; a new device does not join on its own from
+// it, and does once a person's device commits.
+func TestJoinAfterLatereUpdates(t *testing.T) {
+	w, alice, bob, carol := trio(t)
+	l := w.latere(string(alice.group.GroupID()))
+	s := state(t, alice.group)
+	s.Level = LevelReadsAlong
+	if _, err := w.commit(alice, letIn(t, alice, s, l), []*device{bob, carol}, l); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := w.commit(l, mls.CommitOptions{}, []*device{alice, bob, carol}); err != nil {
+		t.Fatal(err)
+	}
+	tablet := w.device("bob", "tablet")
+	info, err := l.group.GroupInfo(mls.GroupInfoOptions{RatchetTree: true, ExternalPub: true})
+	if err != nil {
+		t.Fatal(err)
+	}
+	_, _, err = w.policy().JoinExternal(info, tablet.signer, tablet.id)
+	refused(t, err, "Latere's member signed the group info")
+
+	if _, err := w.commit(alice, mls.CommitOptions{}, []*device{bob, carol, l}); err != nil {
+		t.Fatal(err)
+	}
+	if info, err = alice.group.GroupInfo(mls.GroupInfoOptions{RatchetTree: true, ExternalPub: true}); err != nil {
+		t.Fatal(err)
+	}
+	if _, _, err := w.policy().JoinExternal(info, tablet.signer, tablet.id); err != nil {
+		t.Errorf("a join from alice's group info: %v", err)
+	}
+}
+
 // A thief with a key under alice's root, and a service listing a fresh
 // batch of revocations each time, add nothing past the first changes to
 // what bob's app keeps: a revocation that keeps no less than those

@@ -57,9 +57,9 @@ minor version may break code, and every such change is marked **Breaking**.
   the service runs before it keeps a record (`Directory.CheckRecord`)
   and the recovery record of a given recovery key
   (`Directory.RecoveryFor`), a group a device joins checked leaf by leaf
-  against the directory (`Policy.CheckJoin`, `Policy.JoinGroup`,
-  `Policy.JoinExternal`), a
-  message padded to a
+  against the directory and refused when Latere's member signed its
+  group info (`Policy.CheckJoin`, `Policy.JoinGroup`,
+  `Policy.JoinExternal`), a message padded to a
   fixed set of sizes (`Payload`), a message that verifies outside its
   group (`Entry`), history sealed for someone let in and announced in
   the commit that lets them in (`SealBundle`, `NewCommitNotice`), and

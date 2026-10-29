@@ -438,13 +438,16 @@ func (p *Policy) CheckJoin(g Group) error {
 }
 
 // JoinGroup joins a conversation's group by a Welcome with the policy's
-// configuration and takes the group only once CheckJoin passes.
+// configuration and takes the group only once CheckJoin passes and a
+// person's device signed the Welcome's group info. Latere's member adds
+// no one, so a Welcome it signed is of a group it made, which it never
+// may, whatever the group's leaves and level say.
 func (p *Policy) JoinGroup(welcome []byte, kp *mls.KeyPackage, secrets *mls.KeyPackageSecrets, signer *mls.SignatureKey, opts mls.JoinOptions) (*mls.Group, error) {
 	g, err := mls.JoinGroup(welcome, kp, secrets, signer, opts, p.Config())
 	if err != nil {
 		return nil, err
 	}
-	if err := p.CheckJoin(g); err != nil {
+	if err := p.checkJoined(g); err != nil {
 		return nil, err
 	}
 	return g, nil
@@ -452,16 +455,38 @@ func (p *Policy) JoinGroup(welcome []byte, kp *mls.KeyPackage, secrets *mls.KeyP
 
 // JoinExternal joins a conversation's group on its own, from a group
 // info the service hands out, with the policy's configuration, and
-// returns the group and the commit to send only once CheckJoin passes.
+// returns the group and the commit to send only once CheckJoin passes and
+// a person's device signed the group info. A group info Latere's member
+// signed after an update of its own is refused with the rest, since a
+// group Latere's member made has no other kind; until a person commits,
+// the device joins by a Welcome from another of its person's devices.
 func (p *Policy) JoinExternal(groupInfo []byte, signer *mls.SignatureKey, id Identity) (*mls.Group, []byte, error) {
 	g, msg, err := mls.JoinExternal(groupInfo, signer, id.Credential(), mls.ExternalJoinOptions{SupportedExtensions: slices.Clone(extensionTypes)}, p.Config())
 	if err != nil {
 		return nil, nil, err
 	}
-	if err := p.CheckJoin(g); err != nil {
+	if err := p.checkJoined(g); err != nil {
 		return nil, nil, err
 	}
 	return g, msg, nil
+}
+
+// checkJoined checks a group a device just joined: CheckJoin, and that
+// the group info it joined from is a person's device's, not Latere's
+// member's.
+func (p *Policy) checkJoined(g *mls.Group) error {
+	m, ok := g.GroupInfoSigner()
+	if !ok {
+		return refuse("the group names no member that signed its group info")
+	}
+	id, err := ParseCredential(m.Credential)
+	if err != nil {
+		return refuse("the group info's signer: %v", err)
+	}
+	if id.Latere() {
+		return refuse("Latere's member signed the group info: a group it made, or one a person's device has not committed to since its update")
+	}
+	return p.CheckJoin(g)
 }
 
 // checkExternalJoin checks a commit by a person's new device joining on

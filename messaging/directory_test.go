@@ -8,6 +8,7 @@ import (
 	"crypto/ed25519"
 	"crypto/rand"
 	"fmt"
+	mathrand "math/rand/v2"
 	"regexp"
 	"slices"
 	"testing"
@@ -393,5 +394,129 @@ func TestSecurityCode(t *testing.T) {
 	dbNew, _ := NewDirectory("bob", []DeviceRecord{record(t, "bob", "phone", b2, nil, nil)}, nil, nil)
 	if SecurityCode(da, dbNew) == code {
 		t.Fatal("a new root keeps the code")
+	}
+}
+
+// The directory agrees with a plain recursive reading of its rule on
+// random directories with cycles, several roots, revoked roots and
+// revocations by random signers that keep at random.
+func TestDirectoryMatchesTheRule(t *testing.T) {
+	rng := mathrand.New(mathrand.NewPCG(1, 2))
+	for iter := range 1000 {
+		n := 2 + rng.IntN(9)
+		ks := make([]keys, n)
+		ids := make([]string, n)
+		for i := range n {
+			ks[i], ids[i] = newKeys(t), fmt.Sprintf("r%d", i)
+		}
+		voucher := make([]int, n)
+		for i := range n {
+			if i == 0 || rng.IntN(4) == 0 {
+				voucher[i] = i
+			} else {
+				voucher[i] = rng.IntN(n)
+				if voucher[i] == i {
+					voucher[i] = (i + 1) % n
+				}
+			}
+		}
+		recs := make([]DeviceRecord, n)
+		for i := range n {
+			if voucher[i] == i {
+				recs[i] = record(t, "p", ids[i], ks[i], nil, nil)
+			} else {
+				j := voucher[i]
+				recs[i] = record(t, "p", ids[i], ks[i], named("p", ids[j], ks[j]), ks[j].sig)
+			}
+		}
+		var revs []Revocation
+		for range rng.IntN(6) {
+			k, by := rng.IntN(n), rng.IntN(n)
+			var keep [][]byte
+			for c := range n {
+				if c != k && rng.IntN(2) == 0 {
+					keep = append(keep, recs[c].SignatureKey)
+				}
+			}
+			revs = append(revs, revocation(t, "p", recs[k].SignatureKey, ids[by], ks[by].sig, keep...))
+		}
+
+		// The rule, read plainly.
+		rootOf := make([]int, n)
+		for i := range n {
+			seen := map[int]bool{}
+			cur := i
+			for voucher[cur] != cur && !seen[cur] {
+				seen[cur] = true
+				cur = voucher[cur]
+			}
+			if voucher[cur] == cur {
+				rootOf[i] = cur
+			} else {
+				rootOf[i] = -1
+			}
+		}
+		idx := func(key []byte) int {
+			for i := range n {
+				if string(recs[i].SignatureKey) == string(key) {
+					return i
+				}
+			}
+			return -1
+		}
+		revoked := map[int]bool{}
+		keep := map[int]map[int]bool{}
+		for _, v := range revs {
+			k, by := idx(v.Key), -1
+			for i := range n {
+				if ids[i] == v.By {
+					by = i
+				}
+			}
+			if rootOf[k] < 0 || by < 0 || rootOf[by] < 0 || rootOf[k] != rootOf[by] {
+				continue
+			}
+			names := map[int]bool{}
+			if by != k {
+				for _, kk := range v.Keep {
+					names[idx(kk)] = true
+				}
+			}
+			if prev, ok := keep[k]; ok {
+				for c := range prev {
+					if !names[c] {
+						delete(prev, c)
+					}
+				}
+			} else {
+				keep[k] = names
+			}
+			revoked[k] = true
+		}
+		var reach func(i int) bool
+		reach = func(i int) bool {
+			if voucher[i] == i {
+				return true
+			}
+			p := voucher[i]
+			if revoked[p] && !keep[p][i] {
+				return false
+			}
+			return reach(p)
+		}
+		want := map[string]bool{}
+		for i := range n {
+			if rootOf[i] >= 0 && !revoked[i] && reach(i) {
+				want[ids[i]] = true
+			}
+		}
+		d, _ := NewDirectory("p", recs, revs, nil)
+		got := map[string]bool{}
+		for _, r := range d.Devices() {
+			got[r.ID] = true
+		}
+		if fmt.Sprint(got) != fmt.Sprint(want) {
+			t.Fatalf("iteration %d: vouchers %v, revocations %d: got %v, want %v", iter, voucher, len(revs), got, want)
+		}
 	}
 }

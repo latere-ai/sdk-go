@@ -789,3 +789,73 @@ func TestCheckRecord(t *testing.T) {
 		}
 	}
 }
+
+// A record under an id alice already holds, with another key, would
+// take her laptop out of her directory, since two records under one id
+// both stand nowhere, and with it every revocation the laptop signs.
+// CheckRecord refuses it, before the revocation and after, as it does a
+// record with a key another id holds.
+func TestDuplicateRecordRefused(t *testing.T) {
+	t.Run("after the revocation", func(t *testing.T) {
+		w, _, _, _, _ := phoneRevoked(t)
+		d := dirOf(t, w, "alice")
+		if err := d.CheckRecord(record(t, "alice", "laptop", newKeys(t), nil, nil)); err == nil {
+			t.Error("a root under the id of alice's laptop was taken")
+		}
+	})
+	t.Run("before the revocation", func(t *testing.T) {
+		w := newWorld(t)
+		phone := w.device("alice", "phone")
+		laptop := w.device("alice", "laptop")
+		d := dirOf(t, w, "alice")
+		if err := d.CheckRecord(record(t, "alice", "laptop", newKeys(t), &phone.record, phone.key)); err == nil {
+			t.Error("a record under the id of alice's laptop, vouched for by the phone, was taken")
+		}
+		twin := keys{sig: laptop.key, enc: laptop.enc}
+		if err := d.CheckRecord(record(t, "alice", "pad", twin, &phone.record, phone.key)); err == nil {
+			t.Error("a record with the laptop's key under another id was taken")
+		}
+		// The laptop vouched for again under the same id and key is a
+		// replacement the service may take.
+		again := record(t, "alice", "laptop", twin, &phone.record, phone.key)
+		if err := d.CheckRecord(again); err != nil {
+			t.Errorf("the laptop vouched for again: %v", err)
+		}
+	})
+	t.Run("an id listed twice", func(t *testing.T) {
+		w := newWorld(t)
+		phone := w.device("alice", "phone")
+		w.records["alice"] = append(w.records["alice"], record(t, "alice", "pad", newKeys(t), &phone.record, phone.key),
+			record(t, "alice", "pad", newKeys(t), &phone.record, phone.key))
+		if err := dirOf(t, w, "alice").CheckRecord(record(t, "alice", "pad", newKeys(t), &phone.record, phone.key)); err == nil {
+			t.Error("a third record under an id listed twice was taken")
+		}
+	})
+}
+
+// The service lists alice's phone key once under a record k2 the tablet
+// vouches for, with the thief's revocation of the phone signed by k2
+// ahead of alice's; later it lists the phone as itself with the thief's
+// x under it, and no revocations. The thief's revocation is signed with
+// the revoked key under either listing, so it keeps nothing in both, and
+// x stays out at bob's app, which saw alice revoke the phone.
+func TestKnownRevocationKeepsItsMeaning(t *testing.T) {
+	lapK, phoneK, tabletK, xK := newKeys(t), newKeys(t), newKeys(t), newKeys(t)
+	lap := record(t, "alice", "laptop", lapK, nil, nil)
+	phone := record(t, "alice", "phone", phoneK, &lap, lapK.sig)
+	tablet := record(t, "alice", "tablet", tabletK, &lap, lapK.sig)
+	x := record(t, "alice", "x", xK, &phone, phoneK.sig)
+	k2 := record(t, "alice", "k2", phoneK, &tablet, tabletK.sig)
+	thief := revocation(t, "alice", phone.SignatureKey, "k2", phoneK.sig, x.SignatureKey)
+	alice := revocation(t, "alice", phone.SignatureKey, "laptop", lapK.sig)
+	aliceTablet := revocation(t, "alice", tablet.SignatureKey, "laptop", lapK.sig)
+
+	first, _ := NewDirectory("alice", []DeviceRecord{lap, tablet, k2}, []Revocation{thief, alice, aliceTablet}, nil)
+	later, _ := NewDirectory("alice", []DeviceRecord{lap, phone, tablet, x}, nil, first.Revocations())
+	if !later.Revoked(phone.SignatureKey) {
+		t.Fatal("the phone is not revoked")
+	}
+	if _, ok := later.Device("x"); ok {
+		t.Error("the thief's device under the revoked phone stands at an app that saw alice revoke the phone")
+	}
+}

@@ -870,7 +870,12 @@ argues with the person leaves neither side the disputed devices. A kept
 record stands only while every link above it does too, so a device
 kept under a revoked one carries nothing past the revocation above it.
 The service takes no new record a revoked key vouches for, since a
-revocation can name a key before any record holds it. The apps keep
+revocation can name a key before any record holds it, and no record
+beside another under its id or with its key, since two such records
+both stand nowhere. A revocation the revoked key signs itself keeps
+nothing, decided by its signature and not by the listing, so a
+revocation an app keeps means the same whatever the service lists
+later. The apps keep
 every revocation that changed what they knew and apply it whatever the
 service lists later, so the service can withhold a revocation from a
 device that never saw it, not undo one. The service proposes the removal of a revoked device

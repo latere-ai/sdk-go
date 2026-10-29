@@ -275,7 +275,8 @@ type Revocation struct {
 	Key []byte `json:"key"`
 	// Keep are the signature keys of the records Key vouched for that
 	// stay the person's; what those vouched for stays with them. A
-	// record that revokes its own key keeps nothing.
+	// revocation the revoked key signs itself keeps nothing, whatever
+	// record the key is listed under.
 	Keep [][]byte `json:"keep,omitempty"`
 	// By is the id of the record whose key signed it, under the same
 	// root as Key.
@@ -319,6 +320,13 @@ func (v *Revocation) validate() error {
 	return nil
 }
 
+// self reports whether the revoked key signed the revocation itself,
+// whatever record a listing puts the key under, so whether a revocation
+// keeps anything is the same in every directory it applies to.
+func (v *Revocation) self() bool {
+	return len(v.Key) == ed25519.PublicKeySize && ed25519.Verify(ed25519.PublicKey(v.Key), v.message(), v.Signature)
+}
+
 // Sign signs the revocation with the private key of the record by,
 // setting By and Signature.
 func (v *Revocation) Sign(by string, key ed25519.PrivateKey) error {
@@ -342,6 +350,9 @@ type Directory struct {
 	verified map[string]DeviceRecord
 	roots    map[string]string
 	byKey    map[string]string
+	// listedIDs and listedKeys are every record listed, verified or not:
+	// each id's key and each key's id, empty for one listed twice.
+	listedIDs, listedKeys map[string]string
 	// revoked are the keys revoked, and keep what each keeps: what
 	// every revocation of it names.
 	revoked     map[string]bool
@@ -363,6 +374,7 @@ type Directory struct {
 func NewDirectory(person string, records []DeviceRecord, revocations, known []Revocation) (d *Directory, dropped int) {
 	d = &Directory{person: person, records: make(map[string]DeviceRecord), verified: make(map[string]DeviceRecord),
 		roots: make(map[string]string), byKey: make(map[string]string),
+		listedIDs: make(map[string]string), listedKeys: make(map[string]string),
 		revoked: make(map[string]bool), keep: make(map[string]map[string]bool)}
 	seen := make(map[string]bool)
 	var facts []Revocation
@@ -376,6 +388,8 @@ func NewDirectory(person string, records []DeviceRecord, revocations, known []Re
 	for _, r := range records {
 		if r.Person == person {
 			recs = append(recs, r)
+			list(d.listedIDs, r.ID, string(r.SignatureKey))
+			list(d.listedKeys, string(r.SignatureKey), r.ID)
 		}
 	}
 	d.revocations = cloneRevocations(facts)
@@ -483,13 +497,21 @@ func NewDirectory(person string, records []DeviceRecord, revocations, known []Re
 	return d, len(records) - len(d.records)
 }
 
+// list maps k to v in m, or to "" when k is mapped to another value.
+func list(m map[string]string, k, v string) {
+	if old, seen := m[k]; seen && old != v {
+		v = ""
+	}
+	m[k] = v
+}
+
 // apply records a revocation that counts: its key is revoked, and keeps
 // only what this revocation and every earlier one of it name. It
 // reports whether that changed anything: a key not revoked before, or a
 // key, held by a record or not, that is no longer kept.
 func (d *Directory) apply(v Revocation) (changed bool) {
 	names := make(map[string]bool, len(v.Keep))
-	if d.byKey[string(v.Key)] != v.By { // a record that revokes its own key keeps nothing
+	if !v.self() { // a key that revokes itself keeps nothing
 		for _, k := range v.Keep {
 			names[string(k)] = true
 		}
@@ -543,7 +565,7 @@ func (d *Directory) CheckRevocation(v Revocation) (changes bool, err error) {
 	}
 	for _, r := range d.verified {
 		if bytes.Equal(r.VoucherKey, v.Key) && r.ID != k && d.keep[string(v.Key)][string(r.SignatureKey)] &&
-			(k == v.By || !slices.ContainsFunc(v.Keep, func(key []byte) bool { return bytes.Equal(key, r.SignatureKey) })) {
+			(v.self() || !slices.ContainsFunc(v.Keep, func(key []byte) bool { return bytes.Equal(key, r.SignatureKey) })) {
 			return true, nil
 		}
 	}
@@ -551,18 +573,30 @@ func (d *Directory) CheckRevocation(v Revocation) (changes bool, err error) {
 }
 
 // CheckRecord checks a record before the service keeps it, new or
-// vouched for again: it is the person's and verifies, and neither its
-// key nor its voucher's key is revoked. A revocation may keep a key no
-// record holds yet, and CheckRevocation weighs only the records listed,
-// so a record a revoked key vouches for is kept from before the
-// revocation or not at all. Whether the record stands with the others
-// once listed is NewDirectory's to say.
+// vouched for again: it is the person's and verifies; no listed record
+// holds its id with another key, or its key under another id; and
+// neither its key nor its voucher's key is revoked. Two records under
+// one id, or with one key, both stand nowhere, so a record taken beside
+// another under its id would take the person's own out, and with it a
+// revocation that record signs. The service replaces a listed record
+// only with one of the same id and key, vouched for again, which only
+// the key's holder can sign. A revocation may keep a key no record
+// holds yet, and CheckRevocation weighs only the records listed, so a
+// record a revoked key vouches for is kept from before the revocation or
+// not at all. Whether the record stands with the others once listed is
+// NewDirectory's to say.
 func (d *Directory) CheckRecord(r DeviceRecord) error {
 	if r.Person != d.person {
 		return fmt.Errorf("messaging: a record of %s is not one of %s", r.Person, d.person)
 	}
 	if !r.verify() {
 		return errors.New("messaging: the record does not verify")
+	}
+	if key, listed := d.listedIDs[r.ID]; listed && key != string(r.SignatureKey) {
+		return fmt.Errorf("messaging: %s is the id of another record of %s", r.ID, d.person)
+	}
+	if id, listed := d.listedKeys[string(r.SignatureKey)]; listed && id != r.ID {
+		return errors.New("messaging: the record's key is another record's")
 	}
 	if d.revoked[string(r.SignatureKey)] {
 		return errors.New("messaging: the record's key is revoked")

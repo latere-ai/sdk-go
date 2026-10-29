@@ -58,6 +58,8 @@ jobs:
         run: make staticcheck
       - name: govulncheck
         run: make vulncheck
+      - name: WebAssembly
+        run: make wasm
       - name: The module has no dependencies
         run: |
           if grep -q '^require' go.mod; then

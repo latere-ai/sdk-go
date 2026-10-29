@@ -6,10 +6,10 @@
 STATICCHECK := honnef.co/go/tools/cmd/staticcheck@v0.8.2
 GOVULNCHECK := golang.org/x/vuln/cmd/govulncheck@v1.9.0
 
-.PHONY: check fmt fmt-check vet staticcheck vulncheck test cover openapi
+.PHONY: check fmt fmt-check vet staticcheck vulncheck test wasm cover openapi
 
 ## check: everything CI runs
-check: fmt-check vet staticcheck vulncheck test
+check: fmt-check vet staticcheck vulncheck test wasm
 
 ## fmt: format every Go file
 fmt:
@@ -31,6 +31,10 @@ vulncheck:
 ## test: every test, with the race detector
 test:
 	go test -race -count=1 ./...
+
+## wasm: the packages a browser runs build for WebAssembly
+wasm:
+	GOOS=js GOARCH=wasm go vet ./mls
 
 ## cover: the tests with a coverage report in coverage.html
 cover:

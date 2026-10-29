@@ -33,7 +33,7 @@ they share. Import the ones you use:
 | [`signin`](https://pkg.go.dev/latere.ai/x/sdk-go/signin) | Signing a person in, for apps Latere registers |
 | [`mls`](https://pkg.go.dev/latere.ai/x/sdk-go/mls) | Messaging Layer Security (RFC 9420): end-to-end encrypted groups whose members' devices hold the keys, and a view of a group for the server that delivers it |
 | [`attachment`](https://pkg.go.dev/latere.ai/x/sdk-go/attachment) | The file a message carries, the one type a session's messages and a conversation between people share: its name, media type, size, digest, where it is kept and its preview |
-| [`messaging`](https://pkg.go.dev/latere.ai/x/sdk-go/messaging) | Conversations between people over `mls`: the rules every device and the service check each change against, a person's devices and their vouches, history shared with someone let in, files encrypted on the device, the recovery key and the backup it unlocks |
+| [`messaging`](https://pkg.go.dev/latere.ai/x/sdk-go/messaging) | Conversations between people over `mls`: the rules every device and the service check each change against, a person's devices and their vouches, history shared with someone let in, files encrypted on the device, the recovery key and the backup it unlocks, and the client of the messaging service |
 
 Create a key under **Keys** in the
 [console](https://platform.latere.ai/console) and put it in the

@@ -295,12 +295,14 @@ func TestModelsMatchTheSchemas(t *testing.T) {
 var metaOutsideTheDocument = map[string]string{
 	"size":    "the size a write or an edit left, which the document names no meta schema for",
 	"publish": "a publish call's record, which the document names no meta schema for",
+	"todos":   "the to-do list a todo call left, which the core records and the document names no meta schema for yet",
 }
 
 // TestToolMetaFollowsTheDocument: the document leaves a tool result's
 // meta any JSON value and describes the meta of some tools in schemas of
-// their own. Every field ToolMeta reads is in one of them, with its type,
-// or is listed in metaOutsideTheDocument.
+// their own, each named for its tool and ResultMeta. Every field ToolMeta
+// reads is in one of them, with its type, or is listed in
+// metaOutsideTheDocument.
 func TestToolMetaFollowsTheDocument(t *testing.T) {
 	d, _ := loadDocument(t)
 	s := d.Components.Schemas
@@ -309,12 +311,18 @@ func TestToolMetaFollowsTheDocument(t *testing.T) {
 	}
 	union := &schema{Properties: map[string]*schema{}}
 	for _, name := range []string{"ReadResultMeta", "QuestionResultMeta", "WebSearchResultMeta"} {
-		m := d.resolve(s[name])
-		if m == nil {
+		if s[name] == nil {
 			t.Errorf("the document has no %s", name)
-			continue
 		}
-		maps.Copy(union.Properties, m.Properties)
+	}
+	// A tool's meta schema the document adds joins the union as it
+	// appears, so a field it names is taken off metaOutsideTheDocument.
+	for name, m := range s {
+		if strings.HasSuffix(name, "ResultMeta") {
+			if r := d.resolve(m); r != nil {
+				maps.Copy(union.Properties, r.Properties)
+			}
+		}
 	}
 	for field, reason := range metaOutsideTheDocument {
 		if _, ok := union.Properties[field]; ok {

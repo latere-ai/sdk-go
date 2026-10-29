@@ -408,3 +408,42 @@ func ExampleFolder() {
 		}
 	}
 }
+
+// Following what a session has cost and how far its to-do list is while
+// it works: the session's own spending as last read, each later event's
+// cost added as it streams in, and the agent's list as its latest todo
+// call left it.
+func ExampleEvent_CostMicroUSD() {
+	ctx := context.Background()
+	ag := client()
+	id := "ses_01M34G2JF01B91B8399CD1G6YP"
+	s, err := ag.GetSession(ctx, id)
+	if err != nil {
+		log.Fatal(err)
+	}
+	spent := s.Budget.OwnMicroUSD()
+	for item, err := range ag.StreamEvents(ctx, id, &agents.StreamEventsParams{FromSeq: s.LastSeq + 1}) {
+		if err != nil {
+			log.Fatal(err)
+		}
+		e := item.Event
+		spent += e.CostMicroUSD()
+		if e.Type != agents.EventToolResult || e.Subagent != "" {
+			continue
+		}
+		var r agents.ToolResult
+		if err := e.Decode(&r); err != nil {
+			log.Fatal(err)
+		}
+		if r.Meta == nil || r.Meta.Todos == nil {
+			continue
+		}
+		done := 0
+		for _, t := range r.Meta.Todos {
+			if t.Status == agents.TodoCompleted {
+				done++
+			}
+		}
+		fmt.Printf("%d of %d done, $%.2f so far\n", done, len(r.Meta.Todos), float64(spent)/1e6)
+	}
+}

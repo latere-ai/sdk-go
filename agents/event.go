@@ -235,17 +235,49 @@ type ToolResult struct {
 	// write left or what a publish put up; nil for a result that records
 	// nothing, such as every EventUserToolResult.
 	Meta *ToolMeta `json:"meta,omitempty"`
+	// CostMicroUSD is what a service the call reached charged for it, in
+	// millionths of a US dollar, such as a web search's or the parsing of
+	// a PDF a read took as text; the session's Budget counts it as it
+	// counts a model request's. Nil for a call that cost nothing.
+	CostMicroUSD *int64 `json:"cost_usd_micro,omitempty"`
 }
 
 // Text returns the result's text, its text blocks joined.
 func (r *ToolResult) Text() string { return textOf(r.Content) }
 
+// CostMicroUSD returns what the event added to its session's spending, in
+// millionths of a US dollar: the cost of an EventModelRequest, the
+// session's own or a subagent's, and of an EventToolResult a service
+// charged for, a redacted one included. It is 0 for an event of any other
+// type and for one the platform did not price.
+//
+// A Session's Budget.SpentMicroUSD is the sum of it over the session's
+// log through the session's LastSeq, so a program that read the session
+// keeps the spending current from the stream by adding it for each event
+// after LastSeq.
+func (e *Event) CostMicroUSD() int64 {
+	if e.Type != EventModelRequest && e.Type != EventToolResult {
+		return 0
+	}
+	// Both payloads carry the cost as cost_usd_micro, and a redacted tool
+	// result's tombstone keeps it. A payload that does not decode adds
+	// nothing, as the platform's own count of the spending reads it.
+	var p struct {
+		CostMicroUSD *int64 `json:"cost_usd_micro"`
+	}
+	if json.Unmarshal(e.Payload, &p) != nil || p.CostMicroUSD == nil {
+		return 0
+	}
+	return *p.CostMicroUSD
+}
+
 // ToolMeta is what a tool call recorded beside its result, the Meta of a
 // ToolResult. Its shape is the tool's own: a file tool's names the file,
-// and a publish's what it published. The fields are those a client reads
-// to show what a session made; RawJSON holds the whole record, with the
-// parts of other tools this package does not model, such as the todo list
-// a todo call leaves.
+// a publish's what it published, and a todo call's the agent's to-do
+// list. The fields are those a client reads to show what a session made
+// and how far its work is; RawJSON holds the whole record, with the parts
+// of other tools this package does not model, such as the directory a
+// command ended in.
 type ToolMeta struct {
 	// Path is the file a read, a write or an edit touched, as its path on
 	// the session's machine, such as "/workspace/report.md": a path the
@@ -263,9 +295,39 @@ type ToolMeta struct {
 	// Publish is what a publish call recorded; nil on the results of other
 	// tools.
 	Publish *PublishRecord `json:"publish,omitempty"`
+	// Todos is the to-do list a todo call left, its items in the agent's
+	// order. Each call replaces the whole list, so the latest Todos of a
+	// conversation, the session's own or a subagent's as the event's
+	// Subagent names it, is that conversation's list; a call that failed
+	// records none and left the list as it was. An emptied list is a
+	// Todos of no items, not nil; nil on the results of other tools.
+	Todos []Todo `json:"todos,omitzero"`
 
 	raw json.RawMessage
 }
+
+// A Todo is one item of an agent's to-do list, as a todo call left it.
+type Todo struct {
+	// ID names the item, unique in its list.
+	ID string `json:"id"`
+	// Content is the task, in one line.
+	Content string `json:"content"`
+	// Status is how far the item is.
+	Status TodoStatus `json:"status"`
+}
+
+// TodoStatus is how far an item of an agent's to-do list is.
+type TodoStatus string
+
+// The statuses of a Todo.
+const (
+	// TodoPending is an item not started.
+	TodoPending TodoStatus = "pending"
+	// TodoInProgress is the item the agent is working on.
+	TodoInProgress TodoStatus = "in_progress"
+	// TodoCompleted is an item done.
+	TodoCompleted TodoStatus = "completed"
+)
 
 // RawJSON returns the JSON the result recorded as its meta, with every
 // field, including those this package does not model; nil for a ToolMeta

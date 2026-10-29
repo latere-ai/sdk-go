@@ -7,6 +7,20 @@ minor version may break code, and every such change is marked **Breaking**.
 
 ## [Unreleased]
 
+### Added
+
+- Package `agents`: what a session has cost so far, kept current from its
+  stream. `ToolResult.CostMicroUSD` is what a service charged for a tool
+  call, such as a web search or a PDF parsed as text, and
+  `Event.CostMicroUSD` is what any event added to the session's spending,
+  so the session's `Budget.SpentMicroUSD`, plus each later event's cost,
+  is the spending now. `Budget.CarriedMicroUSD` is what a fork copied
+  from the session it was forked from, and `Budget.OwnMicroUSD` the
+  session's own spending without it.
+- Package `agents`: a todo call's result records the agent's to-do list,
+  typed: `ToolMeta.Todos`, each `Todo` with its ID, its content and its
+  `TodoStatus` (`TodoPending`, `TodoInProgress`, `TodoCompleted`).
+
 ## [0.15.0] - 2026-10-30
 
 Packages `mls` and `messaging` have had no external security audit yet.

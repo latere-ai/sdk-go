@@ -341,6 +341,23 @@ type Folder struct {
 // Budget is what a session has spent.
 type Budget struct {
 	// SpentMicroUSD is the session's spending so far, in millionths of a
-	// US dollar.
+	// US dollar: the cost of every event of its log through the session's
+	// LastSeq, each as Event.CostMicroUSD returns it. A fork's counts the
+	// events it copied from the session it was forked from.
 	SpentMicroUSD int64 `json:"spent_cost_usd_micro"`
+	// CarriedMicroUSD is the part of SpentMicroUSD a fork copied from the
+	// session it was forked from, fixed when it was forked; zero for a
+	// session no fork made.
+	CarriedMicroUSD int64 `json:"carried_cost_usd_micro,omitempty"`
+}
+
+// OwnMicroUSD returns what the session's own work has cost, in
+// millionths of a US dollar: SpentMicroUSD less CarriedMicroUSD, the
+// spending the session's cap holds. A nil Budget, a session that reports
+// none, has cost 0.
+func (b *Budget) OwnMicroUSD() int64 {
+	if b == nil {
+		return 0
+	}
+	return b.SpentMicroUSD - b.CarriedMicroUSD
 }

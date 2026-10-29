@@ -443,6 +443,39 @@ A session that keeps its files in Storage names the folder in
 `Folder.Path + "/" + Ref` in the `Folder.Owner` space, where package
 `storage` reads it with its own media type and size.
 
+### What a session has cost and how far it is
+
+A session's `Budget.SpentMicroUSD` is what its log cost through the
+session's `LastSeq`: every model request, the subagents' included, and
+every tool call a service charged for, such as a web search. Each event
+says what it added with `Event.CostMicroUSD`, so a program keeps the
+spending current while it follows the stream, without reading the session
+again. A fork's spending counts what it copied from the session it was
+forked from, `Budget.CarriedMicroUSD`; `Budget.OwnMicroUSD` is the rest:
+
+```go
+spent := s.Budget.OwnMicroUSD()
+for item, err := range ag.StreamEvents(ctx, s.ID, &agents.StreamEventsParams{FromSeq: s.LastSeq + 1}) {
+	if err != nil {
+		return err
+	}
+	spent += item.Event.CostMicroUSD()
+	if item.Event.Type == agents.EventToolResult && item.Event.Subagent == "" {
+		var r agents.ToolResult
+		if err := item.Event.Decode(&r); err != nil {
+			return err
+		}
+		if r.Meta != nil && r.Meta.Todos != nil {
+			todos = r.Meta.Todos // the agent's whole list, which each todo call replaces
+		}
+	}
+}
+```
+
+A todo call's `ToolMeta.Todos` is the agent's to-do list after the call,
+each `Todo` with its `TodoStatus`; an emptied list has no items and is not
+nil.
+
 ## Account
 
 ```go

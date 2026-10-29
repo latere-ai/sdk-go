@@ -55,6 +55,16 @@
 // folder there in Session.Folder, and a kept file's Ref is its place in
 // that folder.
 //
+// # Cost so far and progress
+//
+// A session's Budget.SpentMicroUSD is what its log cost through its
+// LastSeq, and Event.CostMicroUSD is what each event added, so a program
+// following the stream from LastSeq keeps the spending current without
+// reading the session again. Budget.OwnMicroUSD leaves out what a fork
+// copied from the session it was forked from. A todo call's ToolMeta.Todos
+// is the agent's whole to-do list after the call, each Todo with its
+// TodoStatus.
+//
 // # A page an agent made
 //
 // An HTML file of a session, such as one the agent wrote or one an answer

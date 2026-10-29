@@ -643,9 +643,9 @@ answer: preferences hold the network section and the bookmarks, and
 `AddSite` and `BookmarkTurn` answer each alone, so `account.Network` and
 `account.Bookmarks` keep theirs. The one other part that keeps its JSON
 is a tool result's `ToolMeta`: its shape is each tool's own, and the package models only
-what the file tools and publishing record, so the rest, such as a todo
-list, is read from its `RawJSON` without decoding the event's payload a
-second time. The document leaves that meta any JSON value and names the
+what the file tools, publishing and the todo list record, so the rest,
+such as the directory a command ended in, is read from its `RawJSON`
+without decoding the event's payload a second time. The document leaves that meta any JSON value and names the
 meta of a few tools in schemas of their own, so a test holds `ToolMeta`
 to those and lists, with its reason, each field it reads beyond them. The `llm` types are the exception: they are the Lux dialect's
 own definition, shared with the gateway's codec, so they never lag what

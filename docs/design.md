@@ -892,9 +892,12 @@ person's device signed the group info it joins from. Latere's member
 adds no one, so a group info it signed is of a group it made, or of an
 epoch its own update began; a device that would join on its own then
 waits for a person's commit, or is added by another of its person's
-devices. Nothing in a group tells a device that joins it apart from
-another group under the same id that a person of the conversation made
-with the service's help; that rests on the service.
+devices. A device that joins on its own also takes the conversation's
+epoch from the device that approved it and refuses a group info of an
+earlier epoch, whose secrets a member removed since may hold. Nothing
+in a group tells a device that joins it apart from another group under
+the same id that a person of the conversation made with the service's
+help; that rests on the service.
 
 History shared with someone let in leaves the group as entries, each
 the original signed message, which `mls.VerifySignedContent` checks

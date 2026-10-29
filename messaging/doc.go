@@ -115,14 +115,24 @@
 //     signed; a device joining on its own after Latere's member updated
 //     its leaf waits for a person's commit, or is added by another of
 //     its person's devices.
+//   - A member removed since an epoch, Latere's among them, may keep
+//     that epoch's secrets, and the service may keep its group info. A
+//     device that joins on its own from it is read by that member, so
+//     Policy.JoinExternal takes the conversation's epoch the approving
+//     device hands over the pairing and refuses an earlier one; with
+//     none given, the group info of any epoch is taken. A Welcome of an
+//     old epoch reaches a device only through a key package it uses
+//     twice, its last resort.
 //   - The revocations an app keeps grow with what it was shown: one for
 //     each key revoked and one for each key a later revocation stops
 //     keeping, past MaxRevocations when a service shows a device more
 //     records over time than it lists at once.
-//   - The service passes on a commit whose membership tag does not
-//     verify, as only members can check the tag; the members refuse it,
-//     and the conversation waits at that epoch until another commit
-//     wins it.
+//   - The service checks a commit's signature and rules, not its
+//     membership or confirmation tag, which only members can compute. A
+//     member that sends a commit with a wrong tag has it taken as the
+//     epoch's and refused by every other member, which stops the
+//     conversation; the commit names its sender, and the owners start a
+//     new conversation without them.
 //   - A chunk opened alone is checked against the file's key, not its
 //     digest, so a sender can seal for a seeking reader other bytes than
 //     the whole file opens to; OpenAttachment checks the digest.

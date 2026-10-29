@@ -467,7 +467,7 @@ func TestServiceForgesAWholeGroup(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	_, _, err = w.policy().JoinExternal(info, tablet.signer, tablet.id)
+	_, _, err = w.policy().JoinExternal(info, tablet.signer, tablet.id, 0)
 	refused(t, err, "user:alice/device:phone")
 }
 
@@ -628,7 +628,7 @@ func TestLatereMakesNoGroup(t *testing.T) {
 		t.Fatal(err)
 	}
 	other := w.device("bob", "laptop")
-	_, _, err = w.policy().JoinExternal(info, other.signer, other.id)
+	_, _, err = w.policy().JoinExternal(info, other.signer, other.id, 0)
 	refused(t, err, "Latere's member signed the group info")
 }
 
@@ -651,7 +651,7 @@ func TestJoinAfterLatereUpdates(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	_, _, err = w.policy().JoinExternal(info, tablet.signer, tablet.id)
+	_, _, err = w.policy().JoinExternal(info, tablet.signer, tablet.id, 0)
 	refused(t, err, "Latere's member signed the group info")
 
 	if _, err := w.commit(alice, mls.CommitOptions{}, []*device{bob, carol, l}); err != nil {
@@ -660,7 +660,7 @@ func TestJoinAfterLatereUpdates(t *testing.T) {
 	if info, err = alice.group.GroupInfo(mls.GroupInfoOptions{RatchetTree: true, ExternalPub: true}); err != nil {
 		t.Fatal(err)
 	}
-	if _, _, err := w.policy().JoinExternal(info, tablet.signer, tablet.id); err != nil {
+	if _, _, err := w.policy().JoinExternal(info, tablet.signer, tablet.id, 0); err != nil {
 		t.Errorf("a join from alice's group info: %v", err)
 	}
 }
@@ -857,5 +857,46 @@ func TestKnownRevocationKeepsItsMeaning(t *testing.T) {
 	}
 	if _, ok := later.Device("x"); ok {
 		t.Error("the thief's device under the revoked phone stands at an app that saw alice revoke the phone")
+	}
+}
+
+// Latere's member, removed and the level set back to Off, kept its state
+// of an epoch it was in, and the service kept alice's group info of that
+// epoch. bob's new tablet, given the conversation's epoch over the
+// pairing, refuses the stale group info; given none, it takes it, the
+// limit the package documents.
+func TestStaleGroupInfoRefused(t *testing.T) {
+	w, alice, bob, carol := trio(t)
+	l := w.latere(string(alice.group.GroupID()))
+	s := state(t, alice.group)
+	s.Level = LevelReadsAlong
+	if _, err := w.commit(alice, letIn(t, alice, s, l), []*device{bob, carol}, l); err != nil {
+		t.Fatal(err)
+	}
+	stale, err := alice.group.GroupInfo(mls.GroupInfoOptions{RatchetTree: true, ExternalPub: true})
+	if err != nil {
+		t.Fatal(err)
+	}
+	s = state(t, alice.group)
+	s.Level = LevelOff
+	if _, err := w.commit(alice, mls.CommitOptions{Remove: []uint32{leafOf(t, alice.group, l)}, ReplaceExtensions: true,
+		Extensions: withState(t, alice.group, s)}, []*device{bob, carol}); err != nil {
+		t.Fatal(err)
+	}
+	tablet := w.device("bob", "tablet")
+	_, _, err = w.policy().JoinExternal(stale, tablet.signer, tablet.id, bob.group.Epoch())
+	refused(t, err, "before the conversation's epoch")
+	if _, _, err := w.policy().JoinExternal(stale, tablet.signer, tablet.id, 0); err != nil {
+		t.Errorf("with no epoch given, the stale group info: %v", err)
+	}
+	fresh, err := alice.group.GroupInfo(mls.GroupInfoOptions{RatchetTree: true, ExternalPub: true})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, _, err := w.policy().JoinExternal(fresh, tablet.signer, tablet.id, bob.group.Epoch()); err != nil {
+		t.Errorf("the current group info: %v", err)
+	}
+	if _, _, err := w.policy().JoinExternal([]byte("not a group info"), tablet.signer, tablet.id, 0); err == nil {
+		t.Error("bytes that are no message were joined")
 	}
 }

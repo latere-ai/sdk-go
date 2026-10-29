@@ -460,7 +460,20 @@ func (p *Policy) JoinGroup(welcome []byte, kp *mls.KeyPackage, secrets *mls.KeyP
 // signed after an update of its own is refused with the rest, since a
 // group Latere's member made has no other kind; until a person commits,
 // the device joins by a Welcome from another of its person's devices.
-func (p *Policy) JoinExternal(groupInfo []byte, signer *mls.SignatureKey, id Identity) (*mls.Group, []byte, error) {
+//
+// minEpoch is the conversation's epoch as the device approving this one
+// knew it, handed over the pairing with the conversation: a group info
+// of an earlier epoch is refused, since a member removed since then,
+// Latere's among them, may still hold that epoch's secrets and read
+// what the device sends. Zero takes a group info of any epoch.
+func (p *Policy) JoinExternal(groupInfo []byte, signer *mls.SignatureKey, id Identity, minEpoch uint64) (*mls.Group, []byte, error) {
+	info, err := mls.PeekMessage(groupInfo)
+	if err != nil {
+		return nil, nil, err
+	}
+	if info.Epoch < minEpoch {
+		return nil, nil, refuse("the group info is of epoch %d, before the conversation's epoch %d the device was given", info.Epoch, minEpoch)
+	}
 	g, msg, err := mls.JoinExternal(groupInfo, signer, id.Credential(), mls.ExternalJoinOptions{SupportedExtensions: slices.Clone(extensionTypes)}, p.Config())
 	if err != nil {
 		return nil, nil, err

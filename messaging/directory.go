@@ -580,11 +580,17 @@ func (d *Directory) CheckRevocation(v Revocation) (changes bool, err error) {
 // another under its id would take the person's own out, and with it a
 // revocation that record signs. The service replaces a listed record
 // only with one of the same id and key, vouched for again, which only
-// the key's holder can sign. A revocation may keep a key no record
-// holds yet, and CheckRevocation weighs only the records listed, so a
-// record a revoked key vouches for is kept from before the revocation or
-// not at all. Whether the record stands with the others once listed is
-// NewDirectory's to say.
+// the key's holder can sign, and a record whose chain reaches a root
+// stays under that root: a root stays a root, and any other record is
+// vouched for again by a record of its root that is not under it. A
+// stolen key therefore cannot move its own record under a root of the
+// thief's, out of reach of the revocation the person signs under
+// theirs, nor hang it from a record below it, where it would reach no
+// root and a revocation of it would not count. A revocation may keep a
+// key no record holds yet, and CheckRevocation weighs only the records
+// listed, so a record a revoked key vouches for is kept from before the
+// revocation or not at all. Whether the record stands with the others
+// once listed is NewDirectory's to say.
 func (d *Directory) CheckRecord(r DeviceRecord) error {
 	if r.Person != d.person {
 		return fmt.Errorf("messaging: a record of %s is not one of %s", r.Person, d.person)
@@ -604,7 +610,38 @@ func (d *Directory) CheckRecord(r DeviceRecord) error {
 	if d.revoked[string(r.VoucherKey)] {
 		return errors.New("messaging: the record's voucher's key is revoked")
 	}
+	if old, listed := d.verified[r.ID]; listed && bytes.Equal(old.SignatureKey, r.SignatureKey) {
+		return d.checkVouchedAgain(r)
+	}
 	return nil
+}
+
+// checkVouchedAgain checks a record that replaces a verified one of the
+// same id and key: it keeps the root the listed one reaches.
+func (d *Directory) checkVouchedAgain(r DeviceRecord) error {
+	root := d.roots[r.ID]
+	if r.Root() {
+		if root != r.ID {
+			return errors.New("messaging: a record vouched for again stays under its root")
+		}
+		return nil
+	}
+	v, ok := d.verified[r.Voucher]
+	if !ok || !bytes.Equal(v.SignatureKey, r.VoucherKey) || d.roots[v.ID] != root {
+		return errors.New("messaging: a record vouched for again is vouched for by a record under its root")
+	}
+	// A verified record's chain reaches its root, so the walk ends within
+	// as many steps as there are verified records.
+	for range len(d.verified) {
+		if v.ID == r.ID {
+			return errors.New("messaging: a record vouched for again is not vouched for by a record under it")
+		}
+		if v.Root() {
+			return nil
+		}
+		v = d.verified[v.Voucher]
+	}
+	return errors.New("messaging: a record vouched for again is vouched for by a record under its root")
 }
 
 // walk decides a value for each of n records that hang from one another

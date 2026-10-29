@@ -54,9 +54,9 @@ minor version may break code, and every such change is marked **Breaking**.
   `Revocation` from a record under the same root, which the service can
   neither make nor undo and the apps keep as known
   (`Directory.Revocations`, `Directory.CheckRevocation`), with the checks
-  the service runs before it keeps a record (`Directory.CheckRecord`)
-  and the recovery record of a given recovery key
-  (`Directory.RecoveryFor`), a group a device joins checked leaf by leaf
+  the service runs before it keeps a record, a record vouched for again
+  staying under its root (`Directory.CheckRecord`), and the recovery
+  record of a given recovery key (`Directory.RecoveryFor`), a group a device joins checked leaf by leaf
   against the directory and refused when Latere's member signed its
   group info or, joining on its own, when it is of another conversation
   or of an epoch before the one the approving device handed over

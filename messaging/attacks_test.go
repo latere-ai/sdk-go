@@ -792,6 +792,62 @@ func TestCheckRecord(t *testing.T) {
 	}
 }
 
+// A thief holding alice's phone, which her laptop vouched for, lists a
+// root of its own and then the phone vouched for again under it, with
+// the same id and key. Under the thief's root, alice's revocation of the
+// phone, signed under hers, would count nowhere; CheckRecord refuses the
+// move, as it does the phone made a root of its own or hung from a
+// record below it, and takes the phone vouched for again by another of
+// alice's devices under her root.
+func TestVouchedAgainKeepsItsRoot(t *testing.T) {
+	w := newWorld(t)
+	laptop := w.device("alice", "laptop") // the root
+	phone := w.device("alice", "phone")   // vouched for by the laptop
+	tablet := w.device("alice", "tablet")
+	stolen := keys{sig: phone.key, enc: phone.enc}
+	tk := newKeys(t)
+	troot := record(t, "alice", "t", tk, nil, nil)
+	if err := dirOf(t, w, "alice").CheckRecord(troot); err != nil {
+		t.Fatalf("a new root: %v", err)
+	}
+	w.records["alice"] = append(w.records["alice"], troot)
+	bk := newKeys(t)
+	below := record(t, "alice", "below", bk, &phone.record, phone.key)
+	w.records["alice"] = append(w.records["alice"], below)
+	d := dirOf(t, w, "alice")
+
+	for name, c := range map[string]struct {
+		r      DeviceRecord
+		reason string
+	}{
+		"under another root":      {record(t, "alice", "phone", stolen, &troot, tk.sig), "under its root"},
+		"as a root of its own":    {record(t, "alice", "phone", stolen, nil, nil), "stays under its root"},
+		"under a record below it": {record(t, "alice", "phone", stolen, &below, bk.sig), "not vouched for by a record under it"},
+		"the root under another":  {record(t, "alice", "laptop", keys{sig: laptop.key, enc: laptop.enc}, &tablet.record, tablet.key), "not vouched for by a record under it"},
+	} {
+		err := d.CheckRecord(c.r)
+		if err == nil || !strings.Contains(err.Error(), c.reason) {
+			t.Errorf("the record vouched for again %s: got %v, want a refusal naming %q", name, err, c.reason)
+		}
+	}
+	if err := d.CheckRecord(record(t, "alice", "phone", stolen, &tablet.record, tablet.key)); err != nil {
+		t.Errorf("the phone vouched for again by alice's tablet: %v", err)
+	}
+	if err := d.CheckRecord(record(t, "alice", "laptop", keys{sig: laptop.key, enc: laptop.enc}, nil, nil)); err != nil {
+		t.Errorf("the root vouched for again by itself: %v", err)
+	}
+
+	// Had the service listed the move, alice's revocation of the phone
+	// would count nowhere and the phone would stand.
+	moved := record(t, "alice", "phone", stolen, &troot, tk.sig)
+	w.records["alice"] = slices.DeleteFunc(slices.Clone(w.records["alice"]), func(r DeviceRecord) bool { return r.ID == "phone" })
+	w.records["alice"] = append(w.records["alice"], moved)
+	v := revocation(t, "alice", phone.record.SignatureKey, "laptop", laptop.key)
+	if _, err := dirOf(t, w, "alice").CheckRevocation(v); err == nil {
+		t.Fatal("alice's revocation counts under the thief's root, so this test does not show what the check prevents")
+	}
+}
+
 // A record under an id alice already holds, with another key, would
 // take her laptop out of her directory, since two records under one id
 // both stand nowhere, and with it every revocation the laptop signs.

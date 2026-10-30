@@ -7,6 +7,8 @@ minor version may break code, and every such change is marked **Breaking**.
 
 ## [Unreleased]
 
+## [0.17.0] - 2026-10-30
+
 ### Added
 
 - Package `memory`: the source of a memory Tidy memory wrote.

@@ -295,7 +295,6 @@ func TestModelsMatchTheSchemas(t *testing.T) {
 var metaOutsideTheDocument = map[string]string{
 	"size":    "the size a write or an edit left, which the document names no meta schema for",
 	"publish": "a publish call's record, which the document names no meta schema for",
-	"todos":   "the to-do list a todo call left, which the core records and the document names no meta schema for yet",
 }
 
 // TestToolMetaFollowsTheDocument: the document leaves a tool result's

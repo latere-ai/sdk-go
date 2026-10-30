@@ -20,6 +20,12 @@ minor version may break code, and every such change is marked **Breaking**.
 - Package `agents`: a todo call's result records the agent's to-do list,
   typed: `ToolMeta.Todos`, each `Todo` with its ID, its content and its
   `TodoStatus` (`TodoPending`, `TodoInProgress`, `TodoCompleted`).
+- Package `agents`: a trigger's reach. `TriggerSpec.Reach`, a
+  `TriggerReach`, names what the trigger's runs may read and write, and
+  with `Split` set to `TriggerSplitScope` each firing starts one session
+  for each scope that is due. A firing with none due is
+  `FiringSkippedNothingNew`, counted in `FiringCounts.SkippedNothingNew`,
+  and costs nothing.
 - Package `memory`: the third setting, Search past chats.
   `Settings.Chats` and `SettingsChanged.Chats` say whether conversations
   search and read the person's past conversations, in a project only that

@@ -122,7 +122,26 @@ type TriggerSpec struct {
 	// Budget is the trigger's weekly allowance; nil for a trigger with
 	// none.
 	Budget *TriggerAllowance `json:"budget,omitempty"`
+	// Reach names what the trigger's runs may read and write, and whether
+	// a firing runs once per scope that is due; nil for a trigger that
+	// runs as its agent does.
+	Reach *TriggerReach `json:"reach,omitempty"`
 }
+
+// A TriggerReach is what a trigger's runs reach. The platform maps Kind to
+// what they may read and write. With Split set to TriggerSplitScope, each
+// firing asks which scopes are due and starts one session for each; a
+// firing with none due starts nothing and is FiringSkippedNothingNew.
+type TriggerReach struct {
+	// Kind names what the runs reach.
+	Kind string `json:"kind"`
+	// Split is TriggerSplitScope, or empty for one run per firing.
+	Split string `json:"split,omitempty"`
+}
+
+// TriggerSplitScope makes each firing of a trigger run once per scope that
+// is due.
+const TriggerSplitScope = "scope"
 
 // A TriggerAllowance is the most a trigger's looks may cost in a week. A
 // look is a turn a firing of the trigger began, in a session it started or
@@ -408,6 +427,9 @@ type FiringCounts struct {
 	// a wake among them, is tried again each minute until the spend
 	// allows it, and its count is taken back once it fires.
 	SkippedBudget int64 `json:"skippedBudget"`
+	// SkippedNothingNew firings of a trigger whose TriggerReach splits by
+	// scope found no scope due, and started nothing and cost nothing.
+	SkippedNothingNew int64 `json:"skippedNothingNew"`
 }
 
 // A Firing is one time a trigger fired, and what came of it.
@@ -511,6 +533,10 @@ const (
 	// nothing. A trigger that fires once is kept and tried again each
 	// minute until the spend allows it or MaxAge passes.
 	FiringSkippedBudget FiringOutcome = "skipped_budget"
+	// FiringSkippedNothingNew is a firing of a trigger whose TriggerReach
+	// splits by scope that found no scope due. It started nothing and
+	// cost nothing.
+	FiringSkippedNothingNew FiringOutcome = "skipped_nothing_new"
 )
 
 // ListTriggersParams narrows and pages a list of triggers. The zero value

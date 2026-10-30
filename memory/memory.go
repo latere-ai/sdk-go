@@ -22,7 +22,8 @@
 // what it changed. Under the review mode ReviewApply its changes are
 // applied at once, and UndoRun takes them back; under ReviewAsk they wait
 // until ApplyRun or DeclineRun. A change to a memory the person wrote
-// waits under either mode.
+// waits under either mode. A memory a run wrote names the run in its
+// Source, which TidyRunOf reads.
 //
 //	cfg, err := latere.NewConfig() // the key in LATERE_KEY
 //	if err != nil {
@@ -133,7 +134,29 @@ const (
 	SourceYou = "you"
 	// SourceImport is a memory ImportMemory saved.
 	SourceImport = "import"
+	// SourceTidyPrefix starts the source of a memory a run of Tidy memory
+	// wrote, followed by the run's id, as Run.ID names it. TidyRunOf reads
+	// the id back.
+	SourceTidyPrefix = "dream:"
 )
+
+// TidyRunOf returns the id of the run of Tidy memory that wrote a memory
+// with the source given, the id GetRun takes, and true; it returns "" and
+// false for any other source, and for one that starts with
+// SourceTidyPrefix but follows it with no id, or with anything but ASCII
+// letters, digits, "_" and "-", which no run's id holds.
+func TidyRunOf(source string) (string, bool) {
+	id, ok := strings.CutPrefix(source, SourceTidyPrefix)
+	if !ok || id == "" {
+		return "", false
+	}
+	for _, r := range id {
+		if (r < '0' || r > '9') && (r < 'a' || r > 'z') && (r < 'A' || r > 'Z') && r != '_' && r != '-' {
+			return "", false
+		}
+	}
+	return id, true
+}
 
 // A Ref addresses one memory: its scope, the project when the scope is a
 // project's, and its id in the scope. A Ref with no Scope is of You when
@@ -185,7 +208,8 @@ type Memory struct {
 	// Type is the group the memory is shown in.
 	Type Type `json:"type"`
 	// Source is where the memory came from: the id of the conversation
-	// that saved it, SourceYou or SourceImport.
+	// that saved it, SourceYou, SourceImport, or SourceTidyPrefix and the
+	// id of the run of Tidy memory that wrote it, which TidyRunOf reads.
 	Source string `json:"source,omitempty"`
 	// Sensitive reports that the memory is about a sensitive topic, such
 	// as health or beliefs, which is kept only while Include sensitive

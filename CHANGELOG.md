@@ -7,6 +7,14 @@ minor version may break code, and every such change is marked **Breaking**.
 
 ## [Unreleased]
 
+### Added
+
+- Package `memory`: the source of a memory Tidy memory wrote.
+  `SourceTidyPrefix` starts it, followed by the id of the run that wrote
+  the memory, and `TidyRunOf` returns that id, or reports that the source
+  names no run, so a program links the memory to its run without
+  restating the prefix.
+
 ## [0.16.0] - 2026-10-30
 
 ### Added

@@ -641,6 +641,10 @@ the person changed that memory since. Nil params decide every change.
 after the decision is saved and a repeat would be refused with
 `memory.ErrRunNotWaiting`; `GetRun` tells. `UndoRun` is retried.
 
+A memory a run wrote has `memory.SourceTidyPrefix` and the run's id as
+its `Source`, and `memory.TidyRunOf` returns that id, to link the memory
+to the run.
+
 The bounds a memory is held to, and the import prompt, come with the list
 in `Limits` and `ImportPrompt`, so a program never writes its own. Memory
 is kept for a person in their personal context: an organization's token

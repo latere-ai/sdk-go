@@ -272,3 +272,12 @@ func ExampleClient_UndoRun() {
 		fmt.Println(id, "changed since, so it was left as it is")
 	}
 }
+
+// Linking a memory a run of Tidy memory wrote to the run.
+func ExampleTidyRunOf() {
+	m := memory.Memory{Name: "Market stall", Source: "dream:ses_01JA5C2M8Q4R6T8V0W2X4Y6Z8A"}
+	if run, ok := memory.TidyRunOf(m.Source); ok {
+		fmt.Printf("%s: from Tidy memory, run %s\n", m.Name, run)
+	}
+	// Output: Market stall: from Tidy memory, run ses_01JA5C2M8Q4R6T8V0W2X4Y6Z8A
+}

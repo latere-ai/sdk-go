@@ -226,3 +226,19 @@ func TestTheRefusalsOfADecision(t *testing.T) {
 		}
 	}
 }
+
+// TidyRunOf reads the run's id from the source of a memory a run wrote,
+// and nothing from any other source or one whose id is not a run's.
+func TestTidyRunOf(t *testing.T) {
+	if id, ok := memory.TidyRunOf(memory.SourceTidyPrefix + runID); !ok || id != runID {
+		t.Fatalf("TidyRunOf of a run's source = %q, %v, want %q, true", id, ok, runID)
+	}
+	if id, ok := memory.TidyRunOf("dream:run_a-1"); !ok || id != "run_a-1" {
+		t.Fatalf(`TidyRunOf("dream:run_a-1") = %q, %v, want "run_a-1", true`, id, ok)
+	}
+	for _, source := range []string{"", memory.SourceYou, memory.SourceImport, "ses_01JA5C2M8Q4R6T8V0W2X4Y6Z8A", "dream:", "dream:../runs", "dream:a b", "dream:a/b", "dream:é", "Dream:ses_01", " dream:ses_01"} {
+		if id, ok := memory.TidyRunOf(source); ok || id != "" {
+			t.Errorf("TidyRunOf(%q) = %q, %v, want \"\", false", source, id, ok)
+		}
+	}
+}

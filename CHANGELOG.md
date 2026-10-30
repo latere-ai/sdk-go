@@ -7,6 +7,23 @@ minor version may break code, and every such change is marked **Breaking**.
 
 ## [Unreleased]
 
+### Added
+
+- Package `agents`: messages sent while a turn runs. A person's message
+  sent while the agent works waits, and the agent reads it at its next
+  step. `SendMessageParams.SendNow` asks the agent to read it before it
+  does anything else: a running command moves to the background, and a
+  turn that cannot go on stops with `StopInterrupted` and
+  `DetailSendNow`, the next turn reading the message at once.
+  `Client.Withdraw` takes back a waiting message before the agent reads
+  it. `WaitingMessages` lists a log's waiting messages with their state,
+  `MessageWaiting`, `MessageRead` or `MessageWithdrawn`, and, for a read
+  one, the `EventMessagesRead` that read it. `EventUserWithdraw` and
+  `EventMessagesRead` are new event types, with the payloads
+  `UserWithdraw` and `MessagesRead`; `UserMessage.SendNow` marks a message
+  sent now, and `ModelRequest` gains `FoldSeq`, `NamesReads` and
+  `Purpose`.
+
 ## [0.17.0] - 2026-10-30
 
 ### Added

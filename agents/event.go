@@ -23,6 +23,12 @@ const (
 	EventUserMessage EventType = "user.message"
 	// EventUserInterrupt stopped the running turn.
 	EventUserInterrupt EventType = "user.interrupt"
+	// EventUserWithdraw took back a message that waited, before the agent
+	// read it; its payload is a UserWithdraw.
+	EventUserWithdraw EventType = "user.withdraw"
+	// EventMessagesRead names the waiting messages the request after it
+	// is the first to read; its payload is a MessagesRead.
+	EventMessagesRead EventType = "messages.read"
 	// EventUserToolConfirmation approved or denied a tool call.
 	EventUserToolConfirmation EventType = "user.tool_confirmation"
 	// EventUserAnswer answered a question the agent asked.
@@ -519,6 +525,8 @@ type UserMessage struct {
 	// trigger's that started the session. Nil for a person's message, and
 	// for a wake's in a session a person started.
 	Spend *FiringSpend `json:"spend,omitempty"`
+	// SendNow is set on a message sent with SendMessageParams.SendNow.
+	SendNow bool `json:"send_now,omitempty"`
 }
 
 // A WakeFiring is the wake a message came from.
@@ -763,6 +771,16 @@ type ModelRequest struct {
 	// conversation, such as one for the session's title, and on a request
 	// recorded before the API wrote it.
 	Context *ContextReport `json:"context,omitempty"`
+	// FoldSeq is the log's last sequence when the request was built.
+	FoldSeq int64 `json:"fold_seq,omitempty"`
+	// NamesReads is set on a request whose reads of waiting messages an
+	// EventMessagesRead before it names. A request without it, recorded
+	// before the API wrote that event, read every waiting message up to
+	// its FoldSeq.
+	NamesReads bool `json:"names_reads,omitempty"`
+	// Purpose is what a request beside the conversation was for, such as
+	// "title"; empty for a step of a conversation and for a compaction.
+	Purpose string `json:"purpose,omitempty"`
 }
 
 // Usage is the tokens a model's response counted.

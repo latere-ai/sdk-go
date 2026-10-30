@@ -563,6 +563,14 @@ type SendMessageParams struct {
 	// carried, which this copy is sent in answer to, so it is not asked
 	// again: at most MaxAnswersBytes, with no space around it.
 	Answers string
+	// SendNow asks a running turn to read the message before it does
+	// anything else: a request to the model in flight is canceled, a
+	// running command moves to the background and keeps running, and the
+	// other calls have a second to return. When they return the turn goes
+	// on and reads the message; otherwise it stops with StopInterrupted and
+	// DetailSendNow, and the next turn starts at once with the message. On
+	// an idle session it changes nothing.
+	SendNow bool
 	// IdempotencyKey makes a repeated send deliver the message once; one is
 	// generated when it is empty.
 	IdempotencyKey string
@@ -625,8 +633,11 @@ const (
 	MaxSourcePath = 1024
 )
 
-// SendMessage sends a message to an idle session, which starts its next
-// turn, and returns the event the message became.
+// SendMessage sends a message to a session and returns the event the
+// message became. An idle session starts its next turn with it. While a
+// turn runs, the message waits: the agent reads a person's at its next
+// step, after the calls running when it arrived, or at once with SendNow,
+// and WaitingMessages says whether it was read yet.
 func (c *Client) SendMessage(ctx context.Context, id string, params *SendMessageParams) (*Event, error) {
 	if params == nil || len(params.Content) == 0 && len(params.Attachments) == 0 {
 		return nil, errors.New("agents: SendMessageParams holds no Content and no Attachments")
@@ -646,6 +657,9 @@ func (c *Client) SendMessage(ctx context.Context, id string, params *SendMessage
 	}
 	if params.Answers != "" {
 		payload["answers"] = params.Answers
+	}
+	if params.SendNow {
+		payload["send_now"] = true
 	}
 	return c.send(ctx, id, EventUserMessage, payload, params.IdempotencyKey)
 }
@@ -696,6 +710,21 @@ func checkAttachments(name string, attachments []NewAttachment) error {
 // also dismisses a question the session waits on.
 func (c *Client) Interrupt(ctx context.Context, id string) (*Event, error) {
 	return c.send(ctx, id, EventUserInterrupt, map[string]any{}, "")
+}
+
+// Withdraw takes back a waiting message the caller sent, the event
+// eventID, before the agent reads it, and returns the event the
+// withdrawal became. The agent never reads a withdrawn message, and it
+// starts no turn. The API refuses it with latere.ErrConflict once the
+// agent read the message, for a message sent while the session was idle,
+// and for one already withdrawn, and with latere.ErrForbidden for a
+// message someone else sent. To edit a waiting message, withdraw it and
+// send the new text.
+func (c *Client) Withdraw(ctx context.Context, id, eventID string) (*Event, error) {
+	if eventID == "" {
+		return nil, errors.New("agents: Withdraw names no event")
+	}
+	return c.send(ctx, id, EventUserWithdraw, map[string]any{"event_id": eventID}, "")
 }
 
 // AnswerQuestionParams answers the questions of one question call.

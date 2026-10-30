@@ -3413,7 +3413,7 @@
             }
           },
           {
-            "description": "The person's time zone, an IANA name such as `Europe/Berlin`, which the Always on items Latere gives them run in. Absent, or a name that is not one, is UTC.",
+            "description": "The person's time zone, an IANA name such as `Europe/Berlin`, which the Always on items Latere gives them run in. Absent, or a name that is not one, is UTC. An item given in UTC because the call that gave it named no zone moves to the zone a later call names, unless the person changed it.",
             "example": "Europe/Berlin",
             "in": "header",
             "name": "Latere-Time-Zone",
@@ -4879,7 +4879,7 @@
     },
     "/v1/account/memory/import": {
       "post": {
-        "description": "Saves what another assistant remembers, pasted as it answered `import_prompt`: one memory per line, `Group: what you remember`, where Group is Preference, Profile, Topic, Area, Person or Project. A line with no group is a topic, and a Project line a topic of the scope imported into. Each is saved with `source` `import`; a line the scope already holds is left out and counted in `skipped`. At most `limits.max_import_lines` lines are read.",
+        "description": "Saves what another assistant remembers, pasted as it answered `import_prompt`: one memory per line, `Group: what you remember`, where Group is Preference, Profile, Topic, Area, Person or Project; a group's label after the end of a sentence starts another memory, as a new line does, and a code block's fences are dropped. A line with no group is a topic, and a Project line a topic of the scope imported into. Each is saved with `source` `import`; a line the scope already holds is left out and counted in `skipped`. At most `limits.max_import_lines` lines are read.",
         "operationId": "importMemory",
         "requestBody": {
           "content": {

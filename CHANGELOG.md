@@ -7,6 +7,8 @@ minor version may break code, and every such change is marked **Breaking**.
 
 ## [Unreleased]
 
+## [0.18.0] - 2026-10-30
+
 ### Added
 
 - Package `agents`: messages sent while a turn runs. A person's message

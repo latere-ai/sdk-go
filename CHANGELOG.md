@@ -7,6 +7,8 @@ minor version may break code, and every such change is marked **Breaking**.
 
 ## [Unreleased]
 
+## [0.20.0] - 2026-10-31
+
 ### Added
 
 - Package `messaging`: `Client.FindPerson` finds the person who holds

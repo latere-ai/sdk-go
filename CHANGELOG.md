@@ -7,6 +7,14 @@ minor version may break code, and every such change is marked **Breaking**.
 
 ## [Unreleased]
 
+### Added
+
+- Package `messaging`: `Client.FindPerson` finds the person who holds
+  exactly a handle, compared without case, and answers their id, the
+  `person` the other calls take, with their handle and display name. A
+  handle no one holds is an error matching `ErrPersonNotFound`. The model
+  is held to the messaging document, which now has the route.
+
 ## [0.19.0] - 2026-10-31
 
 ### Added

@@ -109,6 +109,11 @@
 //	}
 //	after = page.Next
 //
+// The service knows a person only by their id. FindPerson finds the id
+// of the person who holds a handle exactly, the one they gave you, which
+// Directory and ClaimKeyPackages then take to add them to a conversation.
+// There is no search and no listing.
+//
 // # Limits
 //
 // What this package does not yet prove, so the apps say no more than it

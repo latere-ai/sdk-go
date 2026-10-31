@@ -7,6 +7,8 @@ minor version may break code, and every such change is marked **Breaking**.
 
 ## [Unreleased]
 
+## [0.19.0] - 2026-10-31
+
 ### Added
 
 - Package `messaging`: `Client`, the client of the messaging service at

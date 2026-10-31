@@ -430,6 +430,110 @@
           }
         },
         "description": "`missing_token`: the request carries no bearer token. `invalid_token`: the token was refused, for example because it expired, is addressed to another audience or is not from the configured issuer; `details.detail` names why. Sign in again."
+      },
+      "people_handle_required": {
+        "content": {
+          "application/json": {
+            "example": {
+              "error": {
+                "code": "handle_required",
+                "message": "Enter the handle of the person you are looking for."
+              }
+            },
+            "schema": {
+              "$ref": "#/components/schemas/PlatformError"
+            }
+          }
+        },
+        "description": "handle_required: the request names no handle, an empty one, or more than one."
+      },
+      "people_not_found": {
+        "content": {
+          "application/json": {
+            "example": {
+              "error": {
+                "code": "person_not_found",
+                "message": "No one has that handle."
+              }
+            },
+            "schema": {
+              "$ref": "#/components/schemas/PlatformError"
+            }
+          }
+        },
+        "description": "person_not_found: no one holds the handle."
+      },
+      "people_rate_limited": {
+        "content": {
+          "application/json": {
+            "example": {
+              "error": {
+                "code": "rate_limited",
+                "message": "Too many requests. Try again in a moment."
+              }
+            },
+            "schema": {
+              "$ref": "#/components/schemas/PlatformError"
+            }
+          }
+        },
+        "description": "rate_limited: the caller made more than 60 requests in a minute of this route and the account prefix together. `Retry-After` is the seconds until the next one is answered.",
+        "headers": {
+          "Retry-After": {
+            "description": "Seconds until the next request is answered.",
+            "schema": {
+              "type": "integer"
+            }
+          }
+        }
+      },
+      "people_refused": {
+        "content": {
+          "application/json": {
+            "example": {
+              "error": {
+                "code": "personal_only",
+                "message": "Messaging is personal. Find people from your personal account."
+              }
+            },
+            "schema": {
+              "$ref": "#/components/schemas/PlatformError"
+            }
+          }
+        },
+        "description": "person_required: the token is not a person's own sign-in, but a key's, a hosted agent's or a service account's. personal_only: the token names an organization's context."
+      },
+      "people_unauthorized": {
+        "content": {
+          "application/json": {
+            "example": {
+              "error": {
+                "code": "unauthorized",
+                "message": "A valid bearer token is required."
+              }
+            },
+            "schema": {
+              "$ref": "#/components/schemas/PlatformError"
+            }
+          }
+        },
+        "description": "unauthorized: the request carries no bearer, more than one, or one that does not verify for the audience."
+      },
+      "people_unavailable": {
+        "content": {
+          "application/json": {
+            "example": {
+              "error": {
+                "code": "people_unavailable",
+                "message": "People cannot be found right now. Try again shortly."
+              }
+            },
+            "schema": {
+              "$ref": "#/components/schemas/PlatformError"
+            }
+          }
+        },
+        "description": "people_unavailable: people cannot be found right now; retry shortly. people_unconfigured: the deployment cannot find people."
       }
     },
     "schemas": {
@@ -934,6 +1038,59 @@
           "seq",
           "epoch",
           "kind"
+        ],
+        "type": "object"
+      },
+      "Person": {
+        "description": "A person, as finding them by handle answers them.",
+        "properties": {
+          "display_name": {
+            "description": "The name the person shows, empty when they set none.",
+            "type": "string"
+          },
+          "handle": {
+            "description": "The handle as the person holds it.",
+            "type": "string"
+          },
+          "id": {
+            "description": "The person's id, the `sub` of their token, which the other Messaging routes take as `person`.",
+            "type": "string"
+          }
+        },
+        "required": [
+          "id",
+          "handle",
+          "display_name"
+        ],
+        "type": "object"
+      },
+      "PlatformError": {
+        "description": "A refusal by the platform.",
+        "properties": {
+          "error": {
+            "properties": {
+              "code": {
+                "description": "A stable token a program reads.",
+                "type": "string"
+              },
+              "details": {
+                "description": "Detail for a developer.",
+                "type": "object"
+              },
+              "message": {
+                "description": "One sentence for the person.",
+                "type": "string"
+              }
+            },
+            "required": [
+              "code",
+              "message"
+            ],
+            "type": "object"
+          }
+        },
+        "required": [
+          "error"
         ],
         "type": "object"
       },
@@ -1795,6 +1952,63 @@
         ]
       }
     },
+    "/v1/messaging/people": {
+      "get": {
+        "description": "Answers the person who holds exactly `handle`, compared without case: their id, their handle and their display name. The id is the `person` the other Messaging routes take: list their devices with it, then claim a key package for each to add them to a conversation. There is no search, no listing and no suggestion, so send the handle the person gave you; one that no one holds is `person_not_found`. The caller is a person signed in as themselves, in their personal context, as for every conversation: a key's token or a hosted agent's is refused `person_required`, and an organization's context `personal_only`.",
+        "operationId": "findPerson",
+        "parameters": [
+          {
+            "description": "The handle exactly as the person gave it. Letters match in either case.",
+            "example": "ada",
+            "in": "query",
+            "name": "handle",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "example": {
+                  "display_name": "Ada Lovelace",
+                  "handle": "ada",
+                  "id": "7c0e9b1a-4b7e-4b8e-9d55-0a1f6c2b3d4e"
+                },
+                "schema": {
+                  "$ref": "#/components/schemas/Person"
+                }
+              }
+            },
+            "description": "The person who holds the handle."
+          },
+          "400": {
+            "$ref": "#/components/responses/people_handle_required"
+          },
+          "401": {
+            "$ref": "#/components/responses/people_unauthorized"
+          },
+          "403": {
+            "$ref": "#/components/responses/people_refused"
+          },
+          "404": {
+            "$ref": "#/components/responses/people_not_found"
+          },
+          "429": {
+            "$ref": "#/components/responses/people_rate_limited"
+          },
+          "503": {
+            "$ref": "#/components/responses/people_unavailable"
+          }
+        },
+        "summary": "Find someone by handle",
+        "tags": [
+          "People"
+        ]
+      }
+    },
     "/v1/messaging/people/{person}/devices": {
       "get": {
         "description": "Answers every record of the person's directory, revoked ones included, and every revocation of their keys, so the caller can verify the directory itself before trusting a key in it. A person with no records answers two empty lists. Authorized as `device.list`.",
@@ -2145,6 +2359,10 @@
     {
       "description": "The Welcome messages that let a device join a conversation it was added to.",
       "name": "Welcomes"
+    },
+    {
+      "description": "Finding the person a handle names.",
+      "name": "People"
     }
   ]
 }

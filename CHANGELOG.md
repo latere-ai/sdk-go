@@ -7,6 +7,18 @@ minor version may break code, and every such change is marked **Breaking**.
 
 ## [Unreleased]
 
+### Added
+
+- Package `oversight`: what Latere learned about when to ask a person.
+  `GetLearned` lists each kind of step the person answered with the
+  chance they allow it and what the decision service would suggest now,
+  and how much they let steps run lately; `GetExplanation` says why it
+  suggested what it did for one step, with the answers that moved it most
+  and its parts; `Preview` counts what another trust profile would have
+  done; `GetProfile` and `PutProfile` read and choose the profile;
+  `Answer` sends the person's answer about a step, once, never retried;
+  `Forget` removes what the decision service holds about the person.
+
 ## [0.21.0] - 2026-11-01
 
 ### Added

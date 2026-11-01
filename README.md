@@ -25,6 +25,7 @@ they share. Import the ones you use:
 | [`storage`](https://pkg.go.dev/latere.ai/x/sdk-go/storage) | Files in Latere Storage: upload a file of any size, read, list, move, delete, and link to it; what others shared with you |
 | [`account`](https://pkg.go.dev/latere.ai/x/sdk-go/account) | Your Effort levels, wallet and payment pages, preferences, pins and bookmarks, share links, projects, trigger links and addresses, and computers |
 | [`memory`](https://pkg.go.dev/latere.ai/x/sdk-go/memory) | What Latere remembers about a person across conversations: list, add, change, move, delete, restore, export and import memories, and the memory settings |
+| [`oversight`](https://pkg.go.dev/latere.ai/x/sdk-go/oversight) | What Latere learned about when to ask a person: each kind of step and what it would do now, why it suggested what it did for one step, what another trust profile would have done, the person's answers, and forgetting |
 | [`apps`](https://pkg.go.dev/latere.ai/x/sdk-go/apps) | Apps: create, list, change, delete; their deploys, build logs, pictures, releases, visits, gallery listing and who may open them |
 | [`evals`](https://pkg.go.dev/latere.ai/x/sdk-go/evals) | Evals: the definitions, experiments, cells and comparisons of experiments on agents, and an experiment followed as it runs |
 | [`llm`](https://pkg.go.dev/latere.ai/x/sdk-go/llm) | Calling models in the Lux dialect: generate, stream, count tokens, list models |
@@ -804,6 +805,35 @@ _, err = ag.ForkSession(ctx, id, &agents.ForkSessionParams{
 })
 ```
 
+## Oversight
+
+Package `oversight` is how a program shows a person what Latere learned
+about when to ask them, and lets them steer it. Before an agent's step
+runs, the platform's rules decide it, or, for a step the rules leave open,
+the decision service predicts how likely the person is to allow it, from
+their own Allow and Deny answers. Every call names the person by `Org` and
+`Subject`, both the person's subject in their own context, and a step by
+its `ActionID`, the session's id and the step's tool use id:
+
+```go
+ov := oversight.New(cfg)
+me := oversight.Subject("https://auth.latere.ai", sub)
+learned, err := ov.GetLearned(ctx, &oversight.LearnedParams{Org: me, Subject: me})
+// each kind of step: its label, the chance the person allows it, and what would happen now
+why, err := ov.GetExplanation(ctx, &oversight.ExplanationParams{Org: me, Subject: me, ActionID: oversight.ActionID(session, toolUseID)})
+// the answers that moved the prediction most, and its parts
+p, err := ov.GetProfile(ctx, oversight.Scope{Org: me})
+_, err = ov.PutProfile(ctx, &oversight.Profile{Org: me, Costs: oversight.Costs{FalseAllow: 10, FalseBlock: 4, Ask: 1}, AuditRate: 0.05})
+err = ov.Answer(ctx, &oversight.AnswerParams{Org: me, Subject: me, ActionID: id, Approve: true})
+```
+
+`Preview` counts what another trust profile would have done with the
+person's recent steps, from what was predicted for each as it was made.
+`Forget` removes everything the decision service holds about the person.
+Costs that would let it decide a step of a person it knows nothing about
+are refused with `oversight.ErrAskTooCostly`, and an answer to a step with
+no recorded decision with `oversight.ErrNoDecision`.
+
 ## Evals
 
 Package `evals` reads Evals, the platform's experiments on agents and on
@@ -1049,6 +1079,7 @@ again after a failure:
 | `memory.RestoreMemory` | a repeat finds nothing left to restore |
 | `memory.UpdateMemory`, when it moves a memory | a repeat finds nothing left to move; a change in place is retried |
 | `memory.ApplyRun`, `memory.DeclineRun` | the answer can fail after the decision is saved, and a repeat finds nothing left waiting |
+| `oversight.Answer` | each answer the decision service receives counts, so a repeat after a failure the answer survived would count twice |
 
 A repeat that reaches the API while the first request is still being
 answered gets 409 (`latere.ErrConflict`) even though the first succeeds;

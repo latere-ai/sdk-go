@@ -104,6 +104,7 @@
 //	memory.RestoreMemory              a repeat finds nothing left to restore
 //	memory.UpdateMemory, a move       a repeat finds nothing left to move
 //	memory.ApplyRun, DeclineRun       a repeat finds nothing left waiting
+//	oversight.Answer                  each answer received counts, so a repeat would count twice
 //
 // storage.CompleteUpload is sent again after an answer of a server error,
 // which leaves the upload open, but never after a failure on the network,

@@ -259,6 +259,12 @@
           "client": {
             "type": "boolean"
           },
+          "decided_by": {
+            "type": "string"
+          },
+          "decided_by_rule": {
+            "type": "string"
+          },
           "draw": {
             "type": "number"
           },

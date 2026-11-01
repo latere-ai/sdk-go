@@ -236,7 +236,7 @@ var calls = []call{
 	{"get", "/v1/messaging/welcomes", "200", "", "WelcomeList", true},
 	{"delete", "/v1/messaging/welcomes/{id}", "204", "", "", true},
 	{"get", "/v1/messaging/conversations/{id}/people/{person}", "200", "", "Membership", false},
-	{"get", "/v1/messaging/people", "200", "", "Person", false},
+	{"get", "/v1/messaging/people", "200", "", "Person", false}, // FindPerson with handle, Person with id
 }
 
 // Every operation of the document is a call of the Client, answered with

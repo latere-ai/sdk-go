@@ -7,6 +7,16 @@ minor version may break code, and every such change is marked **Breaking**.
 
 ## [Unreleased]
 
+### Added
+
+- Package `messaging`: `Client.Person` answers the person whose id it is,
+  such as one of a conversation's people, with their handle and display
+  name, so an app can show who started a conversation. An id that is not
+  a person's, including a closed account's, is an error matching
+  `ErrPersonNotFound`, and a person who has not chosen a handle has an
+  empty `Handle`. The messaging document is vendored as the platform
+  publishes it with the route's `id` parameter.
+
 ## [0.20.0] - 2026-10-31
 
 ### Added

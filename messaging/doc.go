@@ -112,7 +112,9 @@
 // The service knows a person only by their id. FindPerson finds the id
 // of the person who holds a handle exactly, the one they gave you, which
 // Directory and ClaimKeyPackages then take to add them to a conversation.
-// There is no search and no listing.
+// Person goes the other way, from an id such as one of a conversation's
+// people to their handle and display name, to show who they are. There
+// is no search and no listing.
 //
 // # Limits
 //

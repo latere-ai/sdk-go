@@ -7,6 +7,19 @@ minor version may break code, and every such change is marked **Breaking**.
 
 ## [Unreleased]
 
+### Added
+
+- `agents.Session.Org` reads the id of the organization that owns a
+  session's agent, and `agents.ToolUse.DecisionOrg` the organization a
+  call's decision was sent to the decision service under: the
+  organization's id, or the subject of the person who started the
+  session. A program names it as the `Org` of an `oversight` call about
+  the step; a call without it was sent under the person's subject.
+  Topos records both in the release after v0.67.0.
+- `agents.Suggestion` reads `AskKind` (`agents.AskUnsure` or
+  `agents.AskSplit`) and `EvidenceRatio`, which Topos records where the
+  decision service sent them, in the release after v0.67.0.
+
 ### Changed
 
 - The `oversight` package documentation says what the decision service

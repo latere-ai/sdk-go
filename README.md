@@ -150,6 +150,16 @@ whose payload decodes into an `agents.ToolConfirmation`, and a session's
 `Policy` is the approval mode, lists and risk thresholds its calls are
 decided by.
 
+A session of an agent that an organization owns names the organization's
+id as `Org`. `ToolUse.DecisionOrg` is the organization that the call's
+decision was sent to the decision service under: the organization's id,
+or the subject of the person who started the session. Use it as the
+`Org` of an `oversight` call about that step. A call without
+`DecisionOrg` was sent under the subject of the person who started the
+session. A `Suggestion` also records `AskKind`, `agents.AskUnsure` or
+`agents.AskSplit` for an ask, and `EvidenceRatio`, how much the person's
+answers settle it, if the service sent them.
+
 An agent may offer the person standing work: a held call of its
 `trigger` tool that proposes a routine or a trigger that fires on events,
 or changes, resumes or deletes one, or a held call of its `wake` tool to

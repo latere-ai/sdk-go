@@ -47,6 +47,15 @@
 // decision from a rule. A call recorded before the API wrote these reads
 // with them empty; show its Reason alone.
 //
+// A session of an agent an organization owns names the organization as
+// Session.Org. ToolUse.DecisionOrg is the organization the call's decision
+// was sent to the decision service under: the organization's id, or the
+// subject of the person who started the session. A program that reads
+// what the service holds about the call, through the oversight package,
+// names it as the Org; a call without it was sent under the subject of
+// the person who started the session. A Suggestion records its AskKind
+// and EvidenceRatio where the service sent them.
+//
 // # Files
 //
 // A session keeps a copy of each file a message carried, and of each

@@ -71,3 +71,41 @@ func TestAPolicyAndAConfirmationAreRead(t *testing.T) {
 		t.Errorf("confirmation %+v", c)
 	}
 }
+
+// A call of an organization's agent reads the organization its decision
+// was sent under, and the session reads the organization that owns its
+// agent; a suggestion reads how much the person's answers settle it. A
+// call and a session recorded before these fields read with none.
+func TestTheOrganizationOfACallIsRead(t *testing.T) {
+	var s agents.Session
+	if err := json.Unmarshal([]byte(`{"id":"ses_1","agent":{"id":"agt_1","name":"helper","version":1},"initiator":{"subject":"https://auth.example|usr_1","kind":"person"},"org":"org_1","status":"idle"}`), &s); err != nil {
+		t.Fatal(err)
+	}
+	if s.Org != "org_1" {
+		t.Errorf("the session's org is %q", s.Org)
+	}
+	raw := `{"tool_use_id":"toolu_1","name":"bash","input":{},"verdict":"ask","decided_by":"score","decision_org":"org_1",
+		"suggestion":{"source":"learned/3","verdict":"ask","approve":0.5,"uncertainty":0.9,"thresholds":{"allow_above":0.9,"block_below":0.25},"audit_rate":0.05,"evidence_ratio":0.2,"ask_kind":"unsure"}}`
+	var u agents.ToolUse
+	if err := json.Unmarshal([]byte(raw), &u); err != nil {
+		t.Fatal(err)
+	}
+	if u.DecisionOrg != "org_1" {
+		t.Errorf("the call's decision org is %q", u.DecisionOrg)
+	}
+	if sg := u.Suggestion; sg == nil || sg.AskKind != agents.AskUnsure || sg.EvidenceRatio == nil || *sg.EvidenceRatio != 0.2 {
+		t.Errorf("suggestion %+v", u.Suggestion)
+	}
+
+	var old agents.ToolUse
+	if err := json.Unmarshal([]byte(`{"tool_use_id":"toolu_0","name":"bash","input":{},"verdict":"ask","suggestion":{"source":"learned/1","verdict":"ask","approve":0.5,"uncertainty":0.9,"thresholds":{"allow_above":0.9,"block_below":0.25},"audit_rate":0.05}}`), &old); err != nil {
+		t.Fatal(err)
+	}
+	if old.DecisionOrg != "" || old.Suggestion.AskKind != "" || old.Suggestion.EvidenceRatio != nil {
+		t.Errorf("an older call: %+v %+v", old, old.Suggestion)
+	}
+	var older agents.Session
+	if err := json.Unmarshal([]byte(`{"id":"ses_0","status":"idle"}`), &older); err != nil || older.Org != "" {
+		t.Errorf("an older session: %q, %v", older.Org, err)
+	}
+}

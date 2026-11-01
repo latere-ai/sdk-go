@@ -77,6 +77,14 @@ type Session struct {
 	Title string `json:"title,omitempty"`
 	// Initiator is who started the session.
 	Initiator Sender `json:"initiator"`
+	// Org is the id of the organization that owns the session's agent, as
+	// the organization's tokens name it, without an issuer; empty for a
+	// session of a person's own agent, and for one created before the API
+	// recorded it. It is set when the session is created and never
+	// changes. A decision service keys a call by it only if the
+	// installation says so: read the organization of one call from its
+	// ToolUse.DecisionOrg.
+	Org string `json:"org,omitempty"`
 	// Runner is where the agent runs.
 	Runner Runner `json:"runner,omitempty"`
 	// Status is the session's state.

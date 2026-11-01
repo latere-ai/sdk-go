@@ -728,6 +728,16 @@ type ToolUse struct {
 	// the list pattern that matched, the tool that held the call, the
 	// score's band, or the decision service's model.
 	DecidedByRule string `json:"decided_by_rule,omitempty"`
+	// DecisionOrg is the organization the call's decision was sent to the
+	// decision service under: an organization's id, as Session.Org names
+	// it, when the installation keys an organization's agent's calls by
+	// the organization, and otherwise the subject of the person who
+	// started the session. A client that reads what the service holds
+	// about the call, such as why it suggested what it did, names this
+	// organization. Empty when no decision service was asked, as in plan
+	// mode, and on a call recorded before the API wrote it, whose
+	// organization is the subject of the person who started the session.
+	DecisionOrg string `json:"decision_org,omitempty"`
 }
 
 // Risk is the score a session's rules gave a tool call.
@@ -759,7 +769,30 @@ type Suggestion struct {
 	// Reason is the service's sentence for the person; never show it to
 	// an agent.
 	Reason string `json:"reason,omitempty"`
+	// EvidenceRatio is how much of what the service did not know about the
+	// call the person's answers settle, from 0 to 1. Nil from a service
+	// that does not send it, and on a call recorded before the API wrote
+	// it.
+	EvidenceRatio *float64 `json:"evidence_ratio,omitempty"`
+	// AskKind says why the service suggests asking: AskUnsure or
+	// AskSplit. Empty for a suggestion that does not ask, from a service
+	// that does not send it, and on a call recorded before the API wrote
+	// it. A client shows a value it does not know as the ask alone.
+	AskKind AskKind `json:"ask_kind,omitempty"`
 }
+
+// AskKind says why a decision service suggests asking about a call.
+type AskKind string
+
+// The kinds of asking a Suggestion records.
+const (
+	// AskUnsure is a call the person's answers say little about yet: they
+	// gave too few, and more answers will move the suggestion.
+	AskUnsure AskKind = "unsure"
+	// AskSplit is a call the person's answers say a lot about, and they
+	// disagree: more answers will not move the suggestion.
+	AskSplit AskKind = "split"
+)
 
 // SuggestionThresholds are a suggestion's thresholds.
 type SuggestionThresholds struct {

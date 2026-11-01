@@ -148,7 +148,10 @@ var leftOut = map[string]string{
 // JSON name, each with the schema it will join and what it is. checkModel
 // takes them as read, and TestFieldsAheadOfTheDocumentAreStillAhead fails
 // once the document describes one, so the model is then held to it.
-var aheadOfTheDocument = map[string]ahead{}
+var aheadOfTheDocument = map[string]ahead{
+	"ToolUse.decided_by":      {"event:agent.tool_use", "the layer that decided the call, which topos v0.65.0 records"},
+	"ToolUse.decided_by_rule": {"event:agent.tool_use", "the rule within that layer, which topos v0.65.0 records"},
+}
 
 // ahead is a field of aheadOfTheDocument: the schema it will join, a
 // component's name or "event:" and an event's type for its payload, and

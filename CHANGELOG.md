@@ -7,6 +7,22 @@ minor version may break code, and every such change is marked **Breaking**.
 
 ## [Unreleased]
 
+### Added
+
+- `agents.ToolUse` reads how its call was decided: `DecidedBy`, the
+  `Layer` that decided it (`LayerNetwork`, `LayerAlwaysConfirm`,
+  `LayerTool`, `LayerPlan`, `LayerReadOnly`, `LayerAlwaysAllow`,
+  `LayerRemembered`, `LayerSandbox`, `LayerScore`, `LayerConfirm`,
+  `LayerMemory`, `LayerQuestion`, `LayerLearned`, `LayerFallback`), and
+  `DecidedByRule`, the rule within it, which Topos v0.65.0 records; and
+  `Risk`, `Mode`, `ReviewProbability` and `Suggestion`, which the API
+  already returned. `Layer.Learned` tells a learned decision from a rule.
+
+### Changed
+
+- `VerdictBlock` documents that a current server records a refused call
+  as `block`, and `VerdictDeny` that an older one recorded `deny`.
+
 ## [0.22.0] - 2026-11-01
 
 ### Added

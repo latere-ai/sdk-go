@@ -704,7 +704,113 @@ type ToolUse struct {
 	// and for a subagent's call in such a turn. Nil on a call recorded
 	// before the API wrote it.
 	Attended *bool `json:"attended,omitempty"`
+	// Risk is the score the session's rules gave the call, with the rule
+	// set that scored it; nil when the call was not scored.
+	Risk *Risk `json:"risk,omitempty"`
+	// Mode is the approval mode the call was decided under: "plan",
+	// "confirm" or "progressive". A call on a person's own computer is
+	// decided as "confirm" whatever the session's mode, and records it.
+	Mode string `json:"mode,omitempty"`
+	// ReviewProbability is the probability, fixed before the call ran,
+	// that a person sees it: 1 for a call that waits for a person, the
+	// audit rate for an automatic verdict picked at random for review.
+	// Nil on a call recorded before the API wrote it.
+	ReviewProbability *float64 `json:"review_probability,omitempty"`
+	// Suggestion is the decision service's suggestion for the call, when
+	// the session asked one.
+	Suggestion *Suggestion `json:"suggestion,omitempty"`
+	// DecidedBy is the layer that decided the call, one of the Layer
+	// constants; empty on a call recorded before the API wrote it. A
+	// client shows a value it does not know by the call's Reason alone.
+	DecidedBy Layer `json:"decided_by,omitempty"`
+	// DecidedByRule names the rule within that layer where one applies:
+	// the list pattern that matched, the tool that held the call, the
+	// score's band, or the decision service's model.
+	DecidedByRule string `json:"decided_by_rule,omitempty"`
 }
+
+// Risk is the score a session's rules gave a tool call.
+type Risk struct {
+	// Score is the call's risk, from 0 to 1.
+	Score float64 `json:"score"`
+	// Source names the rule set that scored it, such as "rules/1".
+	Source string `json:"source"`
+	// Features are the rule features that raised the score.
+	Features []string `json:"features,omitempty"`
+}
+
+// Suggestion is a decision service's suggestion for one tool call.
+type Suggestion struct {
+	// Source names the service's model, such as "learned/3".
+	Source string `json:"source"`
+	// Verdict is the suggested verdict: allow, ask or block.
+	Verdict Verdict `json:"verdict"`
+	// Approve is the probability that the person allows the call.
+	Approve float64 `json:"approve"`
+	// Uncertainty is how unsure the model is of Approve.
+	Uncertainty float64 `json:"uncertainty"`
+	// Thresholds are the approval probabilities above which the service
+	// suggests allow and below which it suggests block.
+	Thresholds SuggestionThresholds `json:"thresholds"`
+	// AuditRate is the share of automatic verdicts picked at random for a
+	// person to review.
+	AuditRate float64 `json:"audit_rate"`
+	// Reason is the service's sentence for the person; never show it to
+	// an agent.
+	Reason string `json:"reason,omitempty"`
+}
+
+// SuggestionThresholds are a suggestion's thresholds.
+type SuggestionThresholds struct {
+	AllowAbove float64 `json:"allow_above"`
+	BlockBelow float64 `json:"block_below"`
+}
+
+// Layer is the layer of a session's approval rules or its decision
+// service that decided a tool call.
+type Layer string
+
+// The layers a ToolUse records in DecidedBy, in the order the rules
+// apply.
+const (
+	// LayerNetwork: the session's network decided a web_fetch.
+	LayerNetwork Layer = "network"
+	// LayerAlwaysConfirm: a pattern of the organization's always-confirm
+	// list matched, so the call asks.
+	LayerAlwaysConfirm Layer = "always_confirm"
+	// LayerTool: the call's tool holds it for a person.
+	LayerTool Layer = "tool"
+	// LayerPlan: plan mode blocked a call that changes something.
+	LayerPlan Layer = "plan"
+	// LayerReadOnly: the call reads and changes nothing, so it runs.
+	LayerReadOnly Layer = "read_only"
+	// LayerAlwaysAllow: a pattern of the always-allow list matched.
+	LayerAlwaysAllow Layer = "always_allow"
+	// LayerRemembered: a pattern the person allowed earlier in the
+	// session matched.
+	LayerRemembered Layer = "remembered"
+	// LayerSandbox: in confirm mode, a write that stays inside a sandbox
+	// runs.
+	LayerSandbox Layer = "sandbox"
+	// LayerScore: in progressive mode, the risk score and its thresholds
+	// decided.
+	LayerScore Layer = "score"
+	// LayerConfirm: in confirm mode, a call no other rule settles asks.
+	LayerConfirm Layer = "confirm"
+	// LayerMemory: a call that reaches memory folders alone runs.
+	LayerMemory Layer = "memory"
+	// LayerQuestion: a question is itself put to a person.
+	LayerQuestion Layer = "question"
+	// LayerLearned: the decision service's suggestion decided.
+	LayerLearned Layer = "learned"
+	// LayerFallback: the decision service did not answer, so the call
+	// waits for a person.
+	LayerFallback Layer = "fallback"
+)
+
+// Learned reports whether what the person learned from decided the call,
+// rather than a rule.
+func (l Layer) Learned() bool { return l == LayerLearned }
 
 // Verdict is what a session's approval policy decided about a tool call or
 // a connection.
@@ -716,11 +822,13 @@ const (
 	VerdictAllow Verdict = "allow"
 	// VerdictAsk waits for a person to allow or deny the call.
 	VerdictAsk Verdict = "ask"
-	// VerdictDeny refuses the call; the agent is told.
+	// VerdictDeny refuses the call; the agent is told. A current server
+	// records a refused call as VerdictBlock; an older one recorded deny.
 	VerdictDeny Verdict = "deny"
 	// VerdictFlag runs the call and marks it for review.
 	VerdictFlag Verdict = "flag"
-	// VerdictBlock refuses a connection without asking and records it.
+	// VerdictBlock refuses a call or a connection without asking and
+	// records it.
 	VerdictBlock Verdict = "block"
 )
 

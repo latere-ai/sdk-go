@@ -135,6 +135,17 @@ to wait for a tool your program runs, is idle with `StopReason`
 `SendToolResult`. End a session whose work is done with `EndSession`, or
 remove it for good with `DeleteSession`.
 
+Each `agents.ToolUse` says how its call was decided. `DecidedBy` is the
+`agents.Layer` that settled it, such as `agents.LayerAlwaysConfirm` for
+the organization's always-confirm list or `agents.LayerLearned` when a
+decision service's suggestion decided, and `DecidedByRule` names the
+rule, such as the pattern that matched. `Risk`, `Mode`,
+`ReviewProbability` and `Suggestion` carry the score, the approval mode,
+the chance a person sees the call and the service's suggestion. A client
+shows a person why a call ran, waited or was stopped from these, and
+tells a rule from what was learned with `Layer.Learned`; the
+`oversight` package explains a learned decision in full.
+
 An agent may offer the person standing work: a held call of its
 `trigger` tool that proposes a routine or a trigger that fires on events,
 or changes, resumes or deletes one, or a held call of its `wake` tool to

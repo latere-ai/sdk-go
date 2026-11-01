@@ -38,6 +38,15 @@
 // held call of the wake tool its offer to keep looking again; ToolUse.Offer
 // reads either, and only the person who started the session answers it.
 //
+// A ToolUse also says how its call was decided: DecidedBy is the Layer of
+// the approval rules that settled it, or LayerLearned when a decision
+// service's suggestion did, with DecidedByRule naming the rule, such as
+// the always-confirm pattern that matched; Risk, Mode, ReviewProbability
+// and Suggestion carry the score, the mode, the chance a person sees the
+// call and the service's suggestion. Layer.Learned tells a learned
+// decision from a rule. A call recorded before the API wrote these reads
+// with them empty; show its Reason alone.
+//
 // # Files
 //
 // A session keeps a copy of each file a message carried, and of each

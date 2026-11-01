@@ -7,6 +7,8 @@ minor version may break code, and every such change is marked **Breaking**.
 
 ## [Unreleased]
 
+## [0.24.0] - 2026-11-01
+
 ### Added
 
 - `oversight.ListCases` and `ListCasesPage` list the steps the decision

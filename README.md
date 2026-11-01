@@ -841,9 +841,14 @@ In learned mode, the decision service decides a step of a progressive
 session if it has evidence about the person. Elsewhere, the rules and the
 risk score decide, and the decision service only suggests.
 
-Every call names the person by `Org` and `Subject`, both the person's
-subject in their own context, and a step by its `ActionID`, the session's
-id and the step's tool use id:
+Every call names a context by `Org` and the person by `Subject`. In the
+person's own context, both are the person's subject. In an
+organization's context, `Org` is the organization's id, and `Subject` is
+the person's subject. A step is in the context that its decision was
+sent under, which its `agents.ToolUse` names as `DecisionOrg`. A tool
+use without `DecisionOrg` is in the context of the person who started
+the session. A step is named by its `ActionID`, the session's id and the
+step's tool use id:
 
 ```go
 ov := oversight.New(cfg)
@@ -855,6 +860,9 @@ why, err := ov.GetExplanation(ctx, &oversight.ExplanationParams{Org: me, Subject
 p, err := ov.GetProfile(ctx, oversight.Scope{Org: me})
 _, err = ov.PutProfile(ctx, &oversight.Profile{Org: me, Costs: oversight.Costs{FalseAllow: 10, FalseBlock: 4, Ask: 1}, AuditRate: 0.05})
 err = ov.Answer(ctx, &oversight.AnswerParams{Org: me, Subject: me, ActionID: id, Approve: true})
+// a step of an organization's agent: its context is the tool use's DecisionOrg
+org := cmp.Or(use.DecisionOrg, me)
+why, err = ov.GetExplanation(ctx, &oversight.ExplanationParams{Org: org, Subject: me, ActionID: oversight.ActionID(session, use.ToolUseID)})
 for c, err := range ov.ListCases(ctx, &oversight.CasesParams{Org: me, Subject: me, Pending: true}) {
 	// each step waiting for the person to check it, oldest first: the step, its suggestion, its decision and the answers
 }

@@ -40,9 +40,14 @@
 //   - Forget removes everything the decision service holds about the
 //     person.
 //
-// Every call names the person by Org and Subject. In a person's own
-// context, both are the person's subject: their issuer and their sign-in
-// id with a "|" between them, as Subject builds. A step is named by its
+// Every call names a context by Org and the person by Subject. In a
+// person's own context, both are the person's subject: their issuer and
+// their sign-in id with a "|" between them, as Subject builds. In an
+// organization's context, Org is the organization's id, which has no "|",
+// and Subject is the person's subject. A step is in the context that its
+// decision was sent under. The step's tool use in the agents package
+// names it as DecisionOrg. A tool use without DecisionOrg is in the
+// context of the person who started the session. A step is named by its
 // ActionID: the conversation's session id and the step's tool use id with
 // a "/" between them, as ActionID builds.
 //
@@ -141,8 +146,8 @@ const (
 
 // LearnedParams names whose learned view GetLearned reads.
 type LearnedParams struct {
-	// Org and Subject name the person, both their subject in their own
-	// context. Both are required.
+	// Org names the context and Subject the person, as the package
+	// documentation says. Both are required.
 	Org, Subject string
 	// Agent and Kind narrow the cost profile the suggestions are made
 	// under to an agent's or a kind of step's, as GetProfile does. Empty
@@ -252,8 +257,9 @@ func (c *Client) GetLearned(ctx context.Context, params *LearnedParams) (*Learne
 
 // ExplanationParams names the step GetExplanation explains.
 type ExplanationParams struct {
-	// Org and Subject name the person; ActionID the step, as ActionID
-	// builds it. All are required.
+	// Org names the step's context and Subject the person, as the
+	// package documentation says; ActionID the step, as ActionID builds
+	// it. All are required.
 	Org, Subject, ActionID string
 }
 
@@ -377,8 +383,8 @@ type Certify struct {
 }
 
 // Scope is what a trust profile applies to: an organization, which is a
-// person's subject in their own context, and optionally one kind of step,
-// one agent, or both.
+// person's subject in their own context and the organization's id in an
+// organization's, and optionally one kind of step, one agent, or both.
 type Scope struct {
 	Org, Kind, Agent string
 }
@@ -523,7 +529,8 @@ func (c *Client) Preview(ctx context.Context, params *PreviewParams) (*Preview, 
 
 // AnswerParams are the person's answer about one step.
 type AnswerParams struct {
-	// Org, Subject and ActionID name the step. All are required.
+	// Org, Subject and ActionID name the step: its context, the person,
+	// and the step, as the package documentation says. All are required.
 	Org      string `json:"org"`
 	Subject  string `json:"subject"`
 	ActionID string `json:"action_id"`

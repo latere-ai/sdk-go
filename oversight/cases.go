@@ -26,8 +26,8 @@ const (
 
 // CasesParams name whose steps ListCases reads, and which.
 type CasesParams struct {
-	// Org and Subject name the person, both their subject in their own
-	// context. Both are required.
+	// Org names the context and Subject the person, as the package
+	// documentation says. Both are required.
 	Org, Subject string
 	// ActionID keeps the one step it names, as ActionID builds it.
 	ActionID string
@@ -133,8 +133,11 @@ type Decision struct {
 	// ReviewProbability is the chance, fixed before the step ran, that the
 	// person is shown it: 1 for a step that waited for them.
 	ReviewProbability float64 `json:"review_probability"`
-	// Source names what decided: a rule set such as "rules/1", or the
-	// suggestion's model when its verdict was applied unchanged.
+	// Source names what decided, as the caller that recorded the decision
+	// sent it, such as a rule set "rules/1". Topos sends its mode and the
+	// layer that decided the step, such as "topos/progressive/score" or
+	// "topos/progressive/learned", and an older Topos the mode alone, such
+	// as "topos/confirm".
 	Source string `json:"source"`
 }
 
@@ -215,8 +218,8 @@ const (
 // ReliabilityParams name whose verdicts GetReliability checks, against
 // which person, over which window.
 type ReliabilityParams struct {
-	// Org and Subject name the person, both their subject in their own
-	// context. Both are required.
+	// Org names the context and Subject the person, as the package
+	// documentation says. Both are required.
 	Org, Subject string
 	// Of is OfLearned, OfApplied, or a decision's source such as
 	// "rules/1". Required.

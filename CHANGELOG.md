@@ -27,6 +27,12 @@ minor version may break code, and every such change is marked **Breaking**.
   evidence about the person, while elsewhere the rules and the risk score
   decide. It also says that a step is one tool call of an agent in a
   session.
+- The `oversight` package documentation and `README.md` say how a call
+  names an organization's context: `Org` is the organization's id and
+  `Subject` the person's subject, and a step is in the context its tool
+  use's `DecisionOrg` names. `oversight.Decision.Source` says that Topos
+  sends its mode and the layer that decided a step, such as
+  `topos/progressive/score`.
 
 ## [0.24.0] - 2026-11-01
 

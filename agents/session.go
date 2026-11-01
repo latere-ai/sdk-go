@@ -95,6 +95,10 @@ type Session struct {
 	// Attended reports whether a person follows the session, so it may stop
 	// to ask them things.
 	Attended bool `json:"attended,omitempty"`
+	// Policy is the session's approval policy: its mode, and the lists and
+	// thresholds its tool calls are decided by. Nil for a session that
+	// leaves them to the agent, as one on a person's own computer does.
+	Policy *Policy `json:"policy,omitempty"`
 	// Metadata holds the caller's own labels, set at creation.
 	Metadata map[string]string `json:"metadata,omitempty"`
 	// Parent is the session and sequence this one was forked from; nil for
@@ -216,6 +220,29 @@ type SessionAgent struct {
 	Name string `json:"name"`
 	// Version is the agent's version the session runs.
 	Version int `json:"version"`
+}
+
+// Policy is a session's approval policy: the agent's approvals merged with
+// the organization's limits when the session was created, so every
+// runner decides its tool calls the same way.
+type Policy struct {
+	// Mode is the approval mode the session's next steps are decided
+	// under.
+	Mode PolicyMode `json:"mode"`
+	// AlwaysConfirm are the patterns of calls that always wait for a
+	// person, and AlwaysAllow those that always run.
+	AlwaysConfirm []string `json:"always_confirm,omitempty"`
+	AlwaysAllow   []string `json:"always_allow,omitempty"`
+	// Thresholds are the progressive mode's risk cut-offs.
+	Thresholds RiskThresholds `json:"thresholds"`
+}
+
+// RiskThresholds are the risk scores, each from 0 to 1, at which the
+// progressive mode flags a call, asks about it, and blocks it.
+type RiskThresholds struct {
+	FlagAt  float64 `json:"flag_at"`
+	AskAt   float64 `json:"ask_at"`
+	BlockAt float64 `json:"block_at"`
 }
 
 // A Sender is whoever wrote an event or started a session.

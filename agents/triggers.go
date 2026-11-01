@@ -584,7 +584,7 @@ func (c *Client) triggersPage(ctx context.Context, params *ListTriggersParams, c
 		q.Set("cursor", cursor)
 	}
 	var page latere.Page[*Trigger]
-	if err := c.cfg.Do(ctx, &latere.Request{Method: http.MethodGet, Path: basePath + "/triggers", Query: q}, &page); err != nil {
+	if err := c.cfg.Do(ctx, &latere.Request{Method: http.MethodGet, Path: BasePath + "/triggers", Query: q}, &page); err != nil {
 		return nil, err
 	}
 	return &page, nil
@@ -615,7 +615,7 @@ func checkRef(ref string) error {
 // triggerPath is the path of a trigger, by id or name, or of one of its
 // sub-resources.
 func triggerPath(ref, rest string) string {
-	return basePath + "/triggers/" + url.PathEscape(ref) + rest
+	return BasePath + "/triggers/" + url.PathEscape(ref) + rest
 }
 
 // GetTrigger returns the trigger ref names, by its id or its name. It
@@ -784,7 +784,7 @@ func (h *TriggerHold) UnmarshalJSON(b []byte) error {
 }
 
 // holdPath is the path of the hold of every trigger of the caller.
-const holdPath = basePath + "/triggers/" + holdRef
+const holdPath = BasePath + "/triggers/" + holdRef
 
 // GetTriggerHold returns whether every trigger of the caller, in the
 // context its credential names, is held.

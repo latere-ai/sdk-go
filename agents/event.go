@@ -29,7 +29,8 @@ const (
 	// EventMessagesRead names the waiting messages the request after it
 	// is the first to read; its payload is a MessagesRead.
 	EventMessagesRead EventType = "messages.read"
-	// EventUserToolConfirmation approved or denied a tool call.
+	// EventUserToolConfirmation approved or denied a tool call; its payload
+	// is a ToolConfirmation.
 	EventUserToolConfirmation EventType = "user.tool_confirmation"
 	// EventUserAnswer answered a question the agent asked.
 	EventUserAnswer EventType = "user.answer"
@@ -912,6 +913,25 @@ type Destination struct {
 	Host string `json:"host"`
 	// Port is the port, when the request names one.
 	Port int `json:"port,omitempty"`
+}
+
+// ToolConfirmation is the payload of an EventUserToolConfirmation event: a
+// person's answer to a tool call that waited for them, or to an
+// ApprovalRequested.
+type ToolConfirmation struct {
+	// Sender is who answered.
+	Sender Sender `json:"sender"`
+	// ToolUseID names the call answered; empty for an answer to an
+	// ApprovalRequested, which ApprovalID names.
+	ToolUseID  string `json:"tool_use_id,omitempty"`
+	ApprovalID string `json:"approval_id,omitempty"`
+	// Decision is DecisionAllow or DecisionDeny.
+	Decision Decision `json:"decision"`
+	// Note is the answer's note, when it has one.
+	Note string `json:"note,omitempty"`
+	// Remember is the pattern the answer applies to calls like this one,
+	// when it asked the session to.
+	Remember string `json:"remember,omitempty"`
 }
 
 // ApprovalDecided is the payload of an EventApprovalDecided event: the

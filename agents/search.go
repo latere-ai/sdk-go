@@ -160,7 +160,7 @@ func (c *Client) searchPage(ctx context.Context, params *SearchSessionsParams, c
 		return nil, errNoQuery
 	}
 	var page latere.Page[*SessionMatch]
-	err := c.cfg.Do(ctx, &latere.Request{Method: http.MethodGet, Path: basePath + "/sessions/search", Query: params.query(cursor)}, &page)
+	err := c.cfg.Do(ctx, &latere.Request{Method: http.MethodGet, Path: BasePath + "/sessions/search", Query: params.query(cursor)}, &page)
 	if err != nil {
 		return nil, err
 	}

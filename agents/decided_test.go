@@ -44,3 +44,30 @@ func TestAToolUseReadsHowItWasDecided(t *testing.T) {
 		t.Errorf("an older call: %+v, %v", old, err)
 	}
 }
+
+// A session reads its approval policy, and a person's answer to a call
+// reads who answered, the decision and the pattern it remembered.
+func TestAPolicyAndAConfirmationAreRead(t *testing.T) {
+	var s agents.Session
+	raw := `{"id":"ses_1","agent":{"id":"agt_1","name":"helper","version":2},"initiator":{"subject":"usr_1","kind":"person"},"status":"idle","turn":1,"last_seq":9,
+		"policy":{"mode":"progressive","always_confirm":["bash(git push*)"],"thresholds":{"flag_at":0.3,"ask_at":0.6,"block_at":0.9}},
+		"created_at":"2026-11-01T09:00:00Z","updated_at":"2026-11-01T09:05:00Z"}`
+	if err := json.Unmarshal([]byte(raw), &s); err != nil {
+		t.Fatal(err)
+	}
+	if p := s.Policy; p == nil || p.Mode != agents.PolicyProgressive || len(p.AlwaysConfirm) != 1 || p.AlwaysAllow != nil || p.Thresholds.AskAt != 0.6 || p.Thresholds.BlockAt != 0.9 {
+		t.Errorf("policy %+v", s.Policy)
+	}
+	var local agents.Session
+	if err := json.Unmarshal([]byte(`{"id":"ses_2","status":"idle"}`), &local); err != nil || local.Policy != nil {
+		t.Errorf("a session without a policy: %+v, %v", local.Policy, err)
+	}
+
+	var c agents.ToolConfirmation
+	if err := json.Unmarshal([]byte(`{"sender":{"subject":"usr_1","kind":"person"},"tool_use_id":"toolu_1","decision":"deny","note":"not on main","remember":"bash(git push*)"}`), &c); err != nil {
+		t.Fatal(err)
+	}
+	if c.Sender.Subject != "usr_1" || c.ToolUseID != "toolu_1" || c.ApprovalID != "" || c.Decision != agents.DecisionDeny || c.Note != "not on main" || c.Remember != "bash(git push*)" {
+		t.Errorf("confirmation %+v", c)
+	}
+}

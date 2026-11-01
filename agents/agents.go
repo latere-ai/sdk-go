@@ -17,8 +17,12 @@ import (
 	"latere.ai/x/sdk-go/latere"
 )
 
-// basePath is where the agents capability is served.
-const basePath = "/v1/agents"
+// BasePath is the path the API serves the agents capability under, below
+// the base URL a Config names: every request the package sends is under
+// it. A program that takes the address of the agents API as one URL with
+// this path, as a command's flag may, cuts it off to name the base URL
+// WithBaseURL takes.
+const BasePath = "/v1/agents"
 
 // Client reaches the agents capability of the Latere API: sessions and
 // their events. It is safe for concurrent use.
@@ -38,7 +42,7 @@ var errNoID = errors.New("agents: the session id is empty")
 
 // sessionPath is the path of a session, or of one of its sub-resources.
 func sessionPath(id string, rest string) string {
-	return basePath + "/sessions/" + url.PathEscape(id) + rest
+	return BasePath + "/sessions/" + url.PathEscape(id) + rest
 }
 
 // ArchiveFilter says whether a list includes archived sessions.
@@ -136,7 +140,7 @@ func (c *Client) ListSessionsPage(ctx context.Context, params *ListSessionsParam
 
 func (c *Client) listPage(ctx context.Context, params *ListSessionsParams, cursor string) (*latere.Page[*Session], error) {
 	var page latere.Page[*Session]
-	err := c.cfg.Do(ctx, &latere.Request{Method: http.MethodGet, Path: basePath + "/sessions", Query: params.query(cursor)}, &page)
+	err := c.cfg.Do(ctx, &latere.Request{Method: http.MethodGet, Path: BasePath + "/sessions", Query: params.query(cursor)}, &page)
 	if err != nil {
 		return nil, err
 	}
@@ -204,7 +208,7 @@ func (c *Client) CreateSession(ctx context.Context, params *CreateSessionParams)
 		body["machine"] = params.Machine
 	}
 	var out Session
-	req := &latere.Request{Method: http.MethodPost, Path: basePath + "/sessions", Body: body, IdempotencyKey: keyOr(params.IdempotencyKey)}
+	req := &latere.Request{Method: http.MethodPost, Path: BasePath + "/sessions", Body: body, IdempotencyKey: keyOr(params.IdempotencyKey)}
 	if err := c.cfg.Do(ctx, req, &out); err != nil {
 		return nil, err
 	}

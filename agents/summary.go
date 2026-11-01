@@ -105,7 +105,7 @@ type SessionCounts struct {
 // counts are of the sessions the caller may read, as the list's are.
 func (c *Client) GetSessionSummary(ctx context.Context, params *SessionSummaryParams) (*SessionSummary, error) {
 	var out SessionSummary
-	if err := c.cfg.Do(ctx, &latere.Request{Method: http.MethodGet, Path: basePath + "/sessions/summary", Query: params.query()}, &out); err != nil {
+	if err := c.cfg.Do(ctx, &latere.Request{Method: http.MethodGet, Path: BasePath + "/sessions/summary", Query: params.query()}, &out); err != nil {
 		return nil, err
 	}
 	return &out, nil

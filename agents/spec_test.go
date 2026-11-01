@@ -269,6 +269,7 @@ func TestModelsMatchTheSchemas(t *testing.T) {
 		{[]string{"user.message"}, reflect.TypeFor[UserMessage]()},
 		{[]string{"session.machine"}, reflect.TypeFor[SessionMachine]()},
 		{[]string{"approval.requested"}, reflect.TypeFor[ApprovalRequested]()},
+		{[]string{"user.tool_confirmation"}, reflect.TypeFor[ToolConfirmation]()},
 		{[]string{"model.request"}, reflect.TypeFor[ModelRequest]()},
 	} {
 		union := &schema{Properties: map[string]*schema{}}
@@ -289,6 +290,11 @@ func TestModelsMatchTheSchemas(t *testing.T) {
 	d.checkModel(t, "files.kept", reflect.TypeFor[FilesKept](), d.payload("files.kept"), true)
 	d.checkModel(t, "KeptFile", reflect.TypeFor[KeptFile](), s["KeptFile"], true)
 	d.checkModel(t, "SkippedFile", reflect.TypeFor[SkippedFile](), s["SkippedFile"], true)
+	// A person's answer to a call, and a session's approval policy, which
+	// a client shows how a call was decided by, are read whole.
+	d.checkModel(t, "user.tool_confirmation", reflect.TypeFor[ToolConfirmation](), d.payload("user.tool_confirmation"), true)
+	d.checkModel(t, "Policy", reflect.TypeFor[Policy](), s["Policy"], true)
+	d.checkModel(t, "SessionThresholds", reflect.TypeFor[RiskThresholds](), s["SessionThresholds"], true)
 }
 
 // metaOutsideTheDocument is the fields ToolMeta reads that none of the

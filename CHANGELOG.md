@@ -7,6 +7,14 @@ minor version may break code, and every such change is marked **Breaking**.
 
 ## [Unreleased]
 
+### Changed
+
+- The `oversight` package documentation says what the decision service
+  decides in learned mode: a step of a progressive session where it has
+  evidence about the person, while elsewhere the rules and the risk score
+  decide. It also says that a step is one tool call of an agent in a
+  session.
+
 ## [0.24.0] - 2026-11-01
 
 ### Added

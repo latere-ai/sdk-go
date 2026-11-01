@@ -4,11 +4,21 @@
 // Package oversight reads what Latere learned about when to ask a person,
 // and lets that person correct it.
 //
-// Before an agent's step runs, the platform's rules decide it, or, for a
-// step the rules leave open, it asks the decision service how likely the
-// person is to allow it. The decision service learns that likelihood from
-// the person's own Allow and Deny answers. This package is how a program
-// shows a person what it learned and lets them steer it:
+// A step is one tool call of an agent in a session. Before a step runs,
+// the platform's rules decide it, or, for a step the rules leave open, it
+// asks the decision service how likely the person is to allow it. The
+// decision service learns that likelihood from the person's own Allow and
+// Deny answers.
+//
+// In learned mode, the decision service decides a step of a progressive
+// session if it has evidence about the person. Elsewhere, the rules and
+// the risk score decide, and the decision service only suggests. It has
+// evidence if it suggests allow or block, or if it asks because the
+// person's answers disagree (split). If it asks because the person gave
+// too few answers (unsure), it has no evidence yet.
+//
+// This package is how a program shows a person what it learned and lets
+// them steer it:
 //
 //   - GetLearned lists each kind of step the person answered, with the
 //     chance they allow it and what the decision service would suggest

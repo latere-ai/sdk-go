@@ -823,12 +823,17 @@ _, err = ag.ForkSession(ctx, id, &agents.ForkSessionParams{
 ## Oversight
 
 Package `oversight` is how a program shows a person what Latere learned
-about when to ask them, and lets them steer it. Before an agent's step
-runs, the platform's rules decide it, or, for a step the rules leave open,
-the decision service predicts how likely the person is to allow it, from
-their own Allow and Deny answers. Every call names the person by `Org` and
-`Subject`, both the person's subject in their own context, and a step by
-its `ActionID`, the session's id and the step's tool use id:
+about when to ask them, and lets them steer it. A step is one tool call of
+an agent in a session. Before a step runs, the platform's rules decide it,
+or, for a step the rules leave open, the decision service predicts how
+likely the person is to allow it, from their own Allow and Deny answers.
+In learned mode, the decision service decides a step of a progressive
+session if it has evidence about the person. Elsewhere, the rules and the
+risk score decide, and the decision service only suggests.
+
+Every call names the person by `Org` and `Subject`, both the person's
+subject in their own context, and a step by its `ActionID`, the session's
+id and the step's tool use id:
 
 ```go
 ov := oversight.New(cfg)

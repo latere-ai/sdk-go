@@ -431,22 +431,6 @@
         },
         "description": "`missing_token`: the request carries no bearer token. `invalid_token`: the token was refused, for example because it expired, is addressed to another audience or is not from the configured issuer; `details.detail` names why. Sign in again."
       },
-      "people_handle_required": {
-        "content": {
-          "application/json": {
-            "example": {
-              "error": {
-                "code": "handle_required",
-                "message": "Enter the handle of the person you are looking for."
-              }
-            },
-            "schema": {
-              "$ref": "#/components/schemas/PlatformError"
-            }
-          }
-        },
-        "description": "handle_required: the request names no handle, an empty one, or more than one."
-      },
       "people_not_found": {
         "content": {
           "application/json": {
@@ -461,7 +445,23 @@
             }
           }
         },
-        "description": "person_not_found: no one holds the handle."
+        "description": "person_not_found: no one holds the handle, or the id is not a person's: no account has it, the account was closed, or it is a service account's or an agent's."
+      },
+      "people_query_invalid": {
+        "content": {
+          "application/json": {
+            "example": {
+              "error": {
+                "code": "person_query_invalid",
+                "message": "Find a person by one handle or by one id."
+              }
+            },
+            "schema": {
+              "$ref": "#/components/schemas/PlatformError"
+            }
+          }
+        },
+        "description": "handle_required: the request names neither a handle nor an id. person_query_invalid: the request names both, sends either one empty or more than once, or sends an id that is not a UUID."
       },
       "people_rate_limited": {
         "content": {
@@ -1042,14 +1042,14 @@
         "type": "object"
       },
       "Person": {
-        "description": "A person, as finding them by handle answers them.",
+        "description": "A person, as finding them by handle or by id answers them.",
         "properties": {
           "display_name": {
             "description": "The name the person shows, empty when they set none.",
             "type": "string"
           },
           "handle": {
-            "description": "The handle as the person holds it.",
+            "description": "The handle as the person holds it, empty when a person found by id has not chosen one.",
             "type": "string"
           },
           "id": {
@@ -1954,16 +1954,27 @@
     },
     "/v1/messaging/people": {
       "get": {
-        "description": "Answers the person who holds exactly `handle`, compared without case: their id, their handle and their display name. The id is the `person` the other Messaging routes take: list their devices with it, then claim a key package for each to add them to a conversation. There is no search, no listing and no suggestion, so send the handle the person gave you; one that no one holds is `person_not_found`. The caller is a person signed in as themselves, in their personal context, as for every conversation: a key's token or a hosted agent's is refused `person_required`, and an organization's context `personal_only`.",
+        "description": "Send exactly one of `handle` or `id`. With `handle`, answers the person who holds exactly that handle, compared without case; with `id`, the person whose id it is, such as one of a conversation's people, so an app can show their name. Either way the answer is their id, their handle and their display name. The id is the `person` the other Messaging routes take: list their devices with it, then claim a key package for each to add them to a conversation. There is no search, no listing and no suggestion, so send the handle the person gave you; a handle no one holds is `person_not_found`, and so is an id that is not a person's, including one whose account was closed. The caller is a person signed in as themselves, in their personal context, as for every conversation: a key's token or a hosted agent's is refused `person_required`, and an organization's context `personal_only`.",
         "operationId": "findPerson",
         "parameters": [
           {
-            "description": "The handle exactly as the person gave it. Letters match in either case.",
+            "description": "The handle exactly as the person gave it. Letters match in either case. Send this or `id`, not both.",
             "example": "ada",
             "in": "query",
             "name": "handle",
-            "required": true,
+            "required": false,
             "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "description": "The person's id, the `sub` of their token, as the other Messaging routes answer it. Send this or `handle`, not both.",
+            "example": "7c0e9b1a-4b7e-4b8e-9d55-0a1f6c2b3d4e",
+            "in": "query",
+            "name": "id",
+            "required": false,
+            "schema": {
+              "format": "uuid",
               "type": "string"
             }
           }
@@ -1982,10 +1993,10 @@
                 }
               }
             },
-            "description": "The person who holds the handle."
+            "description": "The person who holds the handle, or whose id it is."
           },
           "400": {
-            "$ref": "#/components/responses/people_handle_required"
+            "$ref": "#/components/responses/people_query_invalid"
           },
           "401": {
             "$ref": "#/components/responses/people_unauthorized"
@@ -2003,7 +2014,7 @@
             "$ref": "#/components/responses/people_unavailable"
           }
         },
-        "summary": "Find someone by handle",
+        "summary": "Find a person",
         "tags": [
           "People"
         ]
@@ -2361,7 +2372,7 @@
       "name": "Welcomes"
     },
     {
-      "description": "Finding the person a handle names.",
+      "description": "Finding a person by their handle or their id.",
       "name": "People"
     }
   ]

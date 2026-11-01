@@ -5,7 +5,7 @@
   },
   "agents": {
     "url": "https://platform.latere.ai/docs/agents/openapi.yaml",
-    "sha256": "153bee1909f0d2e54e3bfa11a25c9b0054983905c6e4ba41dfa3ad964ce05781"
+    "sha256": "12bb294b96147cf3e7f807d2d06d586a93e5c2b3683937f7df75a1d23bc39376"
   },
   "apps": {
     "url": "https://platform.latere.ai/docs/apps/openapi.yaml",

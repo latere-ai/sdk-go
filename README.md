@@ -25,7 +25,7 @@ they share. Import the ones you use:
 | [`storage`](https://pkg.go.dev/latere.ai/x/sdk-go/storage) | Files in Latere Storage: upload a file of any size, read, list, move, delete, and link to it; what others shared with you |
 | [`account`](https://pkg.go.dev/latere.ai/x/sdk-go/account) | Your Effort levels, wallet and payment pages, preferences, pins and bookmarks, share links, projects, trigger links and addresses, and computers |
 | [`memory`](https://pkg.go.dev/latere.ai/x/sdk-go/memory) | What Latere remembers about a person across conversations: list, add, change, move, delete, restore, export and import memories, and the memory settings |
-| [`oversight`](https://pkg.go.dev/latere.ai/x/sdk-go/oversight) | What Latere learned about when to ask a person: each kind of step and what it would do now, why it suggested what it did for one step, what another trust profile would have done, the person's answers, and forgetting |
+| [`oversight`](https://pkg.go.dev/latere.ai/x/sdk-go/oversight) | What Latere learned about when to ask a person: each kind of step and what it would do now, why it suggested what it did for one step, the steps it holds with their decisions and answers, how often it was wrong, what another trust profile would have done, the person's answers, and forgetting |
 | [`apps`](https://pkg.go.dev/latere.ai/x/sdk-go/apps) | Apps: create, list, change, delete; their deploys, build logs, pictures, releases, visits, gallery listing and who may open them |
 | [`evals`](https://pkg.go.dev/latere.ai/x/sdk-go/evals) | Evals: the definitions, experiments, cells and comparisons of experiments on agents, and an experiment followed as it runs |
 | [`llm`](https://pkg.go.dev/latere.ai/x/sdk-go/llm) | Calling models in the Lux dialect: generate, stream, count tokens, list models |
@@ -144,7 +144,11 @@ rule, such as the pattern that matched. `Risk`, `Mode`,
 the chance a person sees the call and the service's suggestion. A client
 shows a person why a call ran, waited or was stopped from these, and
 tells a rule from what was learned with `Layer.Learned`; the
-`oversight` package explains a learned decision in full.
+`oversight` package explains a learned decision in full. A person's
+answer to a call that waited is an `agents.EventUserToolConfirmation`,
+whose payload decodes into an `agents.ToolConfirmation`, and a session's
+`Policy` is the approval mode, lists and risk thresholds its calls are
+decided by.
 
 An agent may offer the person standing work: a held call of its
 `trigger` tool that proposes a routine or a trigger that fires on events,
@@ -836,6 +840,11 @@ why, err := ov.GetExplanation(ctx, &oversight.ExplanationParams{Org: me, Subject
 p, err := ov.GetProfile(ctx, oversight.Scope{Org: me})
 _, err = ov.PutProfile(ctx, &oversight.Profile{Org: me, Costs: oversight.Costs{FalseAllow: 10, FalseBlock: 4, Ask: 1}, AuditRate: 0.05})
 err = ov.Answer(ctx, &oversight.AnswerParams{Org: me, Subject: me, ActionID: id, Approve: true})
+for c, err := range ov.ListCases(ctx, &oversight.CasesParams{Org: me, Subject: me, Pending: true}) {
+	// each step waiting for the person to check it, oldest first: the step, its suggestion, its decision and the answers
+}
+rel, err := ov.GetReliability(ctx, &oversight.ReliabilityParams{Org: me, Subject: me, Of: oversight.OfLearned, From: from, To: to})
+// how often the suggestions went against the person in the window, and how sure that is
 ```
 
 `Preview` counts what another trust profile would have done with the

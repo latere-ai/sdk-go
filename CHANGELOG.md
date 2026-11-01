@@ -7,6 +7,28 @@ minor version may break code, and every such change is marked **Breaking**.
 
 ## [Unreleased]
 
+### Added
+
+- `oversight.ListCases` and `ListCasesPage` list the steps the decision
+  service holds about a person, oldest first: each `Case` with its
+  `CaseAction`, the `Prediction` as it was made (with `EvidenceRatio` and
+  `AskKind` where the service recorded them), the `Decision` and the
+  `RecordedAnswer`s. `CasesParams.Pending` keeps the steps waiting for the
+  person to check them, and `ActionID` one step.
+- `oversight.GetReliability` reports how often a source's verdicts went
+  against the person over a window: `OfLearned`, `OfApplied`, or a rule
+  set such as `rules/1`, with an `Estimate` of each error rate and the
+  profile's `Certificate`.
+- `agents.Session.Policy` reads a session's approval policy, its
+  `PolicyMode`, its always-confirm and always-allow patterns and its
+  `RiskThresholds`, which the API already returned.
+- `agents.ToolConfirmation` decodes the payload of an
+  `EventUserToolConfirmation`: who answered a call that waited, the
+  decision, the note and the pattern it remembered.
+- `agents.BasePath` and `oversight.BasePath` name the paths the API
+  serves each under, as `apps.BasePath` and `evals.BasePath` do, so a
+  program that takes either address as one URL can name the base URL.
+
 ## [0.23.0] - 2026-11-01
 
 ### Added

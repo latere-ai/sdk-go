@@ -7,6 +7,8 @@ minor version may break code, and every such change is marked **Breaking**.
 
 ## [Unreleased]
 
+## [0.22.0] - 2026-11-01
+
 ### Added
 
 - Package `oversight`: what Latere learned about when to ask a person.

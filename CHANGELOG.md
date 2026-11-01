@@ -7,6 +7,8 @@ minor version may break code, and every such change is marked **Breaking**.
 
 ## [Unreleased]
 
+## [0.21.0] - 2026-11-01
+
 ### Added
 
 - Package `messaging`: `Client.Person` answers the person whose id it is,

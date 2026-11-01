@@ -7,6 +7,8 @@ minor version may break code, and every such change is marked **Breaking**.
 
 ## [Unreleased]
 
+## [0.23.0] - 2026-11-01
+
 ### Added
 
 - `agents.ToolUse` reads how its call was decided: `DecidedBy`, the

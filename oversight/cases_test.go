@@ -72,7 +72,7 @@ func TestListCases(t *testing.T) {
 	if !strings.Contains(string(first.RawJSON()), "added_later") {
 		t.Errorf("RawJSON lost a field: %s", first.RawJSON())
 	}
-	// A prediction recorded before the evidence ratio was has none.
+	// A prediction made before Limen recorded the evidence ratio has none.
 	if second := page.Items[1]; second.Prediction.EvidenceRatio != nil || second.Prediction.AskKind != "" || len(second.Answers) != 0 {
 		t.Errorf("second %+v", second.Prediction)
 	}

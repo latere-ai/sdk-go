@@ -20,6 +20,11 @@
 //   - Preview counts what another trust profile would have done with the
 //     person's recent steps, and GetProfile and PutProfile read and choose
 //     the profile.
+//   - ListCases lists the steps the decision service holds about the
+//     person, each with its suggestion, its decision and the person's
+//     answers, or only those waiting for the person to check them.
+//   - GetReliability reports how often the decision service, or a rule
+//     set, went against the person over a window.
 //   - Answer tells the decision service what the person thinks of a step,
 //     such as one that ran on its own and was picked for them to check.
 //   - Forget removes everything the decision service holds about the
@@ -61,8 +66,12 @@ import (
 	"latere.ai/x/sdk-go/latere"
 )
 
-// basePath is where the oversight routes live.
-const basePath = "/v1/oversight"
+// BasePath is the path the API serves the oversight routes under, below
+// the base URL a Config names: every request the package sends is under
+// it. A program that takes the address of the oversight API as one URL
+// with this path, as a command's flag may, cuts it off to name the base
+// URL WithBaseURL takes.
+const BasePath = "/v1/oversight"
 
 // Client reaches the oversight part of the Latere API. It is safe for
 // concurrent use.
@@ -225,7 +234,7 @@ func (c *Client) GetLearned(ctx context.Context, params *LearnedParams) (*Learne
 		q.Set("kind", params.Kind)
 	}
 	var out Learned
-	if err := c.do(ctx, &latere.Request{Method: http.MethodGet, Path: basePath + "/learned", Query: q}, &out); err != nil {
+	if err := c.do(ctx, &latere.Request{Method: http.MethodGet, Path: BasePath + "/learned", Query: q}, &out); err != nil {
 		return nil, err
 	}
 	return &out, nil
@@ -324,7 +333,7 @@ func (c *Client) GetExplanation(ctx context.Context, params *ExplanationParams) 
 	}
 	q := url.Values{"org": {params.Org}, "subject": {params.Subject}, "action_id": {params.ActionID}}
 	var out Explanation
-	if err := c.do(ctx, &latere.Request{Method: http.MethodGet, Path: basePath + "/explanations", Query: q}, &out); err != nil {
+	if err := c.do(ctx, &latere.Request{Method: http.MethodGet, Path: BasePath + "/explanations", Query: q}, &out); err != nil {
 		return nil, err
 	}
 	return &out, nil
@@ -414,7 +423,7 @@ func (c *Client) GetProfile(ctx context.Context, scope Scope) (*Profile, error) 
 		q.Set("agent", scope.Agent)
 	}
 	var out Profile
-	if err := c.do(ctx, &latere.Request{Method: http.MethodGet, Path: basePath + "/profiles", Query: q}, &out); err != nil {
+	if err := c.do(ctx, &latere.Request{Method: http.MethodGet, Path: BasePath + "/profiles", Query: q}, &out); err != nil {
 		return nil, err
 	}
 	return &out, nil
@@ -430,7 +439,7 @@ func (c *Client) PutProfile(ctx context.Context, profile *Profile) (*Profile, er
 		return nil, errors.New("oversight: PutProfile needs a profile with its Org")
 	}
 	var out Profile
-	if err := c.do(ctx, &latere.Request{Method: http.MethodPut, Path: basePath + "/profiles", Body: profile, Retry: latere.RetryAlways}, &out); err != nil {
+	if err := c.do(ctx, &latere.Request{Method: http.MethodPut, Path: BasePath + "/profiles", Body: profile, Retry: latere.RetryAlways}, &out); err != nil {
 		return nil, err
 	}
 	return &out, nil
@@ -496,7 +505,7 @@ func (c *Client) Preview(ctx context.Context, params *PreviewParams) (*Preview, 
 		return nil, errors.New("oversight: Preview needs the Org and the Subject")
 	}
 	var out Preview
-	if err := c.do(ctx, &latere.Request{Method: http.MethodPost, Path: basePath + "/previews", Body: params, Retry: latere.RetryAlways}, &out); err != nil {
+	if err := c.do(ctx, &latere.Request{Method: http.MethodPost, Path: BasePath + "/previews", Body: params, Retry: latere.RetryAlways}, &out); err != nil {
 		return nil, err
 	}
 	return &out, nil
@@ -527,7 +536,7 @@ func (c *Client) Answer(ctx context.Context, params *AnswerParams) error {
 	if params == nil || params.Org == "" || params.Subject == "" || params.ActionID == "" {
 		return errors.New("oversight: Answer needs the Org, the Subject and the ActionID")
 	}
-	return c.do(ctx, &latere.Request{Method: http.MethodPost, Path: basePath + "/answers", Body: params, Retry: latere.RetryNever}, nil)
+	return c.do(ctx, &latere.Request{Method: http.MethodPost, Path: BasePath + "/answers", Body: params, Retry: latere.RetryNever}, nil)
 }
 
 // ForgetParams name the person whose data Forget removes.
@@ -543,7 +552,7 @@ func (c *Client) Forget(ctx context.Context, params *ForgetParams) error {
 	if params == nil || params.Org == "" || params.Subject == "" {
 		return errors.New("oversight: Forget needs the Org and the Subject")
 	}
-	return c.do(ctx, &latere.Request{Method: http.MethodPost, Path: basePath + "/subjects/forget", Body: params, Retry: latere.RetryAlways}, nil)
+	return c.do(ctx, &latere.Request{Method: http.MethodPost, Path: BasePath + "/subjects/forget", Body: params, Retry: latere.RetryAlways}, nil)
 }
 
 // keep copies b, which the decoder may reuse.

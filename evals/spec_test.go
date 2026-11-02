@@ -200,6 +200,12 @@ func models(t *testing.T, d *document) map[string]struct {
 		"Cell":               {evals.Cell{}, d.at(t, "Cell")},
 		"Comparison":         {evals.Comparison{}, d.at(t, "Comparison")},
 		"Declaration":        {evals.Declaration{}, d.at(t, "Comparison.declaration")},
+		"Trial":              {evals.Trial{}, d.at(t, "Trial")},
+		"TrialFailure":       {evals.TrialFailure{}, d.at(t, "Trial.failure")},
+		"TrialDeclared":      {evals.TrialDeclared{}, d.at(t, "Trial.declared")},
+		"TrialLease":         {evals.TrialLease{}, d.at(t, "Trial.lease")},
+		"TrialSent":          {evals.TrialSent{}, d.at(t, "Trial.sent")},
+		"TrialSentSetting":   {evals.TrialSentSetting{}, d.at(t, "Trial.sent.by_setting.[]")},
 	}
 }
 
@@ -302,6 +308,7 @@ var routes = []struct{ method, path string }{
 	{"get", "/experiments"}, {"get", "/experiments/{id}"},
 	{"get", "/experiments/{id}/cells"}, {"get", "/experiments/{id}/comparisons"},
 	{"get", "/experiments/{id}/stream"},
+	{"get", "/experiments/{id}/trials"}, {"get", "/trials/{id}"},
 }
 
 func TestEndpointsAreInTheDocument(t *testing.T) {
@@ -318,9 +325,9 @@ func TestEndpointsAreInTheDocument(t *testing.T) {
 func route(path string) string {
 	segs := strings.Split(strings.TrimPrefix(path, "/v1/evals"), "/")
 	switch {
-	case len(segs) == 3 && segs[1] == "experiments":
+	case len(segs) == 3 && (segs[1] == "experiments" || segs[1] == "trials" || segs[1] == "comparisons"):
 		segs[2] = "{id}"
-	case len(segs) == 4 && segs[1] == "experiments":
+	case len(segs) == 4 && (segs[1] == "experiments" || segs[1] == "trials" || segs[1] == "comparisons"):
 		segs[2] = "{id}"
 	case len(segs) == 3:
 		segs[2] = "{ref}"
@@ -388,6 +395,11 @@ func TestQueriesAreTheDocuments(t *testing.T) {
 				Automatic: &yes, Declared: &yes, Exploratory: &yes, Final: &yes, Limit: 1, Cursor: "c"})
 			return err
 		},
+		func() error {
+			_, err := c.ListTrialsPage(ctx, "exp_1", &evals.ListTrialsParams{Cell: "c", Task: "t", Candidate: "c", State: evals.TrialDone, Outcome: evals.OutcomeCompleted,
+				Imported: &yes, Retried: &yes, Metric: "m", Value: "v", Limit: 1, Cursor: "c"})
+			return err
+		},
 	} {
 		if err := call(); err != nil {
 			t.Fatal(err)
@@ -422,7 +434,7 @@ func TestQueriesAreTheDocuments(t *testing.T) {
 			}
 		}
 	}
-	if len(sent) != 13 {
+	if len(sent) != 14 {
 		t.Errorf("sent %d requests", len(sent))
 	}
 }

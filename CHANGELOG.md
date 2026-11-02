@@ -38,8 +38,9 @@ minor version may break code, and every such change is marked **Breaking**.
   allowed with too little weight or in too few sessions.
 - `oversight.Prediction.Scope`, the reach of a step as the decision
   service compared it, as a `StepScope` whose members can be
-  `oversight.Unknown`. Its `Crosses` reads a boundary written as a
-  boolean or as `yes` or `no`.
+  `oversight.Unknown`. Its `Crosses` reads each boundary the service
+  knows as a boolean, and one it leaves out as not known. It also reads
+  `yes` and `no`.
 - `oversight.Prediction.Cover` and `Explanation.Cover`: whether the
   person's approvals cover the step, their `Weight` and `Sessions`
   against `MinWeight` and `MinSessions`, and on an explanation the

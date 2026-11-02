@@ -220,7 +220,9 @@ const (
 )
 
 // Crosses is the boundaries a step crosses. Each is true when the step
-// crosses it, false when it does not, and nil when it is not known.
+// crosses it, false when it does not, and nil when it is not known. The
+// decision service writes each boundary it knows as a JSON boolean and
+// leaves out each one it does not know.
 type Crosses struct {
 	// Machine is the machine outside the workspace, such as a home or a
 	// system path.
@@ -236,10 +238,11 @@ type Crosses struct {
 	Public *bool `json:"public,omitempty"`
 }
 
-// UnmarshalJSON reads each boundary as true or false, or as "yes" or
-// "no", and reads a boundary that is left out, null, "unknown" or any
-// other word as not known, so a decision service that names an unknown
-// boundary is read as one that leaves it out.
+// UnmarshalJSON reads each boundary as a JSON boolean, and a boundary left
+// out as not known. It also reads the words of the scope's dimensions,
+// "yes" and "no", and reads null, "unknown" or any other word as not
+// known, so a decision service that names an unknown boundary is read as
+// one that leaves it out.
 func (c *Crosses) UnmarshalJSON(b []byte) error {
 	var raw map[string]json.RawMessage
 	if err := json.Unmarshal(b, &raw); err != nil {

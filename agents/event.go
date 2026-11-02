@@ -786,11 +786,16 @@ type AskKind string
 
 // The kinds of asking a Suggestion records.
 const (
-	// AskUnsure is a call the person's answers say little about yet: they
-	// gave too few, and more answers will move the suggestion.
+	// AskUnsure is a call the person's answers say little about yet, an
+	// EvidenceRatio below 0.5: they gave too few, and more answers can
+	// move the suggestion.
 	AskUnsure AskKind = "unsure"
-	// AskSplit is a call the person's answers say a lot about, and they
-	// disagree: more answers will not move the suggestion.
+	// AskSplit is a call the person's answers say a lot about, an
+	// EvidenceRatio of 0.5 or more, with Approve still between the
+	// thresholds. The answers can agree or disagree: two Allows of a call
+	// and no Deny can give 0.80 under an AllowAbove of 0.90, and more
+	// Allows can move the suggestion above 0.90. AskSplit alone does not
+	// say that the person gave different answers.
 	AskSplit AskKind = "split"
 )
 

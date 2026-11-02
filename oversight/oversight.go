@@ -13,9 +13,11 @@
 // In learned mode, the decision service decides a step of a progressive
 // session if it has evidence about the person. Elsewhere, the rules and
 // the risk score decide, and the decision service only suggests. It has
-// evidence if it suggests allow or block, or if it asks because the
-// person's answers disagree (split). If it asks because the person gave
-// too few answers (unsure), it has no evidence yet.
+// evidence if it suggests allow or block, or if it asks with AskSplit:
+// the person's answers say much about this kind of step, but the chance
+// that the person allows it is still between the thresholds. Those
+// answers can agree or disagree. If it asks because the person gave too
+// few answers (AskUnsure), it has no evidence yet.
 //
 // This package is how a program shows a person what it learned and lets
 // them steer it:
@@ -141,11 +143,15 @@ type AskKind string
 
 // The kinds of asking.
 const (
-	// AskUnsure is a step the person's answers say little about yet; more
-	// answers will move it.
+	// AskUnsure is a step the person's answers say little about yet, an
+	// EvidenceRatio below 0.5; more answers can move it.
 	AskUnsure AskKind = "unsure"
-	// AskSplit is a step the person's answers say a lot about, and they
-	// disagree; more answers will not move it.
+	// AskSplit is a step the person's answers say a lot about, an
+	// EvidenceRatio of 0.5 or more, with Approve still between the
+	// thresholds. The answers can agree or disagree: two Allows of a step
+	// and no Deny can give 0.80 under an AllowAbove of 0.90, and more
+	// Allows can move it above 0.90. AskSplit alone does not say that the
+	// person gave different answers.
 	AskSplit AskKind = "split"
 )
 

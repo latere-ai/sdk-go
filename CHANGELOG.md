@@ -7,6 +7,17 @@ minor version may break code, and every such change is marked **Breaking**.
 
 ## [Unreleased]
 
+### Fixed
+
+- The documentation of `oversight.AskSplit`, `agents.AskSplit` and the
+  `oversight` package said that a split ask is one on answers that
+  disagree, and that more answers will not move it. A split ask has an
+  `EvidenceRatio` of 0.5 or more, with `Approve` still between the
+  thresholds. The person's answers can agree or disagree: two Allows and
+  no Deny can give 0.80 under an `AllowAbove` of 0.90, and more Allows
+  can move it above 0.90. `AskUnsure` says that more answers can move
+  the suggestion, not that they will.
+
 ## [0.27.0] - 2026-11-02
 
 ### Added

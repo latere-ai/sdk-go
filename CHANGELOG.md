@@ -7,6 +7,8 @@ minor version may break code, and every such change is marked **Breaking**.
 
 ## [Unreleased]
 
+## [0.26.0] - 2026-11-02
+
 ### Added
 
 - `oversight.Client.DeleteProfile` removes the trust profile saved for

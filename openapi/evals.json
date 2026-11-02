@@ -1062,6 +1062,7 @@
             "additionalProperties": {
               "type": "string"
             },
+            "description": "The labels the experiment was created with, as given: at most METADATA_MAX_PAIRS (16) string pairs, which Examen never reads. Absent when there are none. `GET /experiments?metadata.\u003ckey\u003e=\u003cvalue\u003e` lists the experiments that carry a pair.",
             "type": "object"
           },
           "mode": {
@@ -1076,6 +1077,7 @@
           },
           "progress": {
             "additionalProperties": false,
+            "description": "Counts computed when the experiment is read: its cells by state, its trials by state, and its trials' outcomes.",
             "properties": {
               "cells": {
                 "additionalProperties": {
@@ -1092,6 +1094,13 @@
               "trials": {
                 "additionalProperties": {
                   "type": "integer"
+                },
+                "description": "The experiment's trials by state, and under `retried` the trials a retry replaced, present when there is one. `retried` is not a state: each such trial is also counted under its state, so `done` less `retried` counts each finished run once, and a client compares that with the runs the experiment declares, `trials` times its tasks and candidates.",
+                "properties": {
+                  "retried": {
+                    "description": "The trials a retry replaced: an infrastructure failure retried automatically, or an index a cell's retry ran again.",
+                    "type": "integer"
+                  }
                 },
                 "type": "object"
               }
@@ -1296,6 +1305,7 @@
             "additionalProperties": {
               "type": "string"
             },
+            "description": "Your own labels for the experiment, such as a commit, a branch or a CI run: at most METADATA_MAX_PAIRS (16) string pairs, none with a key beginning `examen.`, which Examen reserves. Fixed at create; Examen reads none of them, and `GET /experiments?metadata.\u003ckey\u003e=\u003cvalue\u003e` lists the experiments that carry a pair.",
             "type": "object"
           },
           "mode": {
@@ -1621,6 +1631,7 @@
                             "type": "integer"
                           },
                           "retried": {
+                            "description": "The cell's trials a retry replaced. Each is also counted under its state, so `done` less `retried` counts each finished run of the cell once.",
                             "type": "integer"
                           },
                           "running": {
@@ -3150,6 +3161,7 @@
             "type": "string"
           },
           "retry_of": {
+            "description": "The id of the earlier trial of the same cell and index that this trial runs again: one that ended `infra_failed`, retried automatically, or one a cell's retry runs again. That trial is marked retried and leaves every figure; absent on a first attempt.",
             "type": "string"
           },
           "sent": {

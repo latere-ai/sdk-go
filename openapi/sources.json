@@ -5,7 +5,7 @@
   },
   "agents": {
     "url": "https://platform.latere.ai/docs/agents/openapi.yaml",
-    "sha256": "12bb294b96147cf3e7f807d2d06d586a93e5c2b3683937f7df75a1d23bc39376"
+    "sha256": "a670c7252e5f897a8ef7a43d9afe3bfc22eca680c9f535f2a819f71f430c955b"
   },
   "apps": {
     "url": "https://platform.latere.ai/docs/apps/openapi.yaml",
@@ -17,11 +17,11 @@
   },
   "evals": {
     "url": "https://platform.latere.ai/docs/evals/openapi.yaml",
-    "sha256": "5fc4afc52cae8fea75eafdcad5f962a223149053b3b482f158ecd146fbe39626"
+    "sha256": "ba45e9565b00498e3fab7c6875e251118a299a53c4cb89e0a855e659dea5fb2c"
   },
   "messaging": {
     "url": "https://platform.latere.ai/docs/messaging/openapi.yaml",
-    "sha256": "ab5dbd9256a5926b8945a62d5181e3a9787eaa0b664be048ae110855ac3f8624"
+    "sha256": "804f97c55d4bec465ddcc008b3a59e6aec5b2f2c6bdd2c40264fdb75940148cf"
   },
   "storage": {
     "url": "https://platform.latere.ai/docs/storage/openapi.yaml",

@@ -237,16 +237,47 @@ type Budget struct {
 	Currency string `json:"currency,omitempty"`
 }
 
+// TrialsRetried is the key under which Progress.Trials counts the trials a
+// retry replaced, present when there is one. It is not a TrialState: each
+// such trial is also counted under its own state, so Trials[TrialDone]
+// less Trials[TrialsRetried] counts each finished run once. RunsDone does
+// that sum.
+const TrialsRetried = "retried"
+
 // Progress counts an experiment's cells and trials by state, and its
 // finished trials by outcome. A state or an outcome with no count is
 // absent.
 type Progress struct {
 	// Cells counts the cells by state.
 	Cells map[CellState]int `json:"cells,omitempty"`
-	// Trials counts the trials by state.
+	// Trials counts the trials by state. It may also hold the key
+	// TrialsRetried, "retried", which is not a state: the trials a retry
+	// replaced, an infrastructure failure retried automatically or an
+	// index a cell's retry ran again, each also counted under its state.
+	// Read the runs finished with Experiment.RunsDone, which leaves them
+	// out.
 	Trials map[TrialState]int `json:"trials,omitempty"`
 	// Outcomes counts the finished trials by outcome.
 	Outcomes map[TrialOutcome]int `json:"outcomes,omitempty"`
+	// Declared is how many runs the experiment declares: its Trials times
+	// its tasks and candidates. Zero when it is not known, as when the
+	// API did not answer it; a program that knows the suite's task count
+	// may set it before it calls RunsDone.
+	Declared int `json:"declared,omitempty"`
+}
+
+// RunsDone returns how many of the experiment's runs have finished. Each
+// finished trial counts once: the done trials less the ones a retry
+// replaced, which are also counted done. For an experiment in mode
+// ModeExecute the count is held to Progress.Declared when that is known,
+// since a retry can leave a finished run counted beside the one that
+// replaced it; for an import, which declares no runs, every run counts.
+func (e *Experiment) RunsDone() int {
+	done := e.Progress.Trials[TrialDone] - e.Progress.Trials[TrialsRetried]
+	if e.Mode == ModeImport || e.Progress.Declared <= 0 {
+		return done
+	}
+	return min(done, e.Progress.Declared)
 }
 
 // Usage is what the calls made with an experiment's key recorded, as far

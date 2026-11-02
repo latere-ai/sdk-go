@@ -203,6 +203,32 @@ func models(t *testing.T, d *document) map[string]struct {
 	}
 }
 
+// aheadOfTheDocument are fields a model reads that the document does not
+// define yet, each with its reason. TestAheadFieldsAreStillAhead fails
+// once the document defines one, so the model is held to it then.
+var aheadOfTheDocument = map[string]string{
+	"Progress.declared": "the runs an experiment declares, which the document leaves to a client to compute as trials times tasks times candidates; a program may set it, and RunsDone reads it",
+}
+
+func TestAheadFieldsAreStillAhead(t *testing.T) {
+	d := loadDocument(t)
+	for key := range aheadOfTheDocument {
+		name, prop, _ := strings.Cut(key, ".")
+		if c, ok := models(t, d)[name]; ok && c.schema.Properties[prop] != nil {
+			t.Errorf("the document now defines %s: take it off aheadOfTheDocument", key)
+		}
+	}
+}
+
+// TrialsRetried is the key the document gives the trials a retry replaced,
+// under the progress of an experiment's trials.
+func TestTrialsRetriedIsTheDocuments(t *testing.T) {
+	d := loadDocument(t)
+	if d.at(t, "Experiment.progress.trials").Properties[evals.TrialsRetried] == nil {
+		t.Errorf("the document's progress trials do not name %q", evals.TrialsRetried)
+	}
+}
+
 func TestModelsMatchTheSchemas(t *testing.T) {
 	d := loadDocument(t)
 	for name, c := range models(t, d) {
@@ -211,6 +237,9 @@ func TestModelsMatchTheSchemas(t *testing.T) {
 		for _, f := range fields {
 			names = append(names, f.name)
 			prop, ok := c.schema.Properties[f.name]
+			if !ok && aheadOfTheDocument[name+"."+f.name] != "" {
+				continue
+			}
 			if !ok {
 				t.Errorf("%s.%s is not in the schema", name, f.name)
 				continue

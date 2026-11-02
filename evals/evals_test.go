@@ -467,3 +467,49 @@ func TestAnAnswerThatDoesNotDecodeFails(t *testing.T) {
 		}
 	}
 }
+
+// RunsDone counts each finished run once: the done trials less the ones a
+// retry replaced, held to the runs an execute experiment declares, with
+// every run of an import counted.
+func TestRunsDone(t *testing.T) {
+	for _, c := range []struct {
+		name     string
+		mode     evals.Mode
+		done     int
+		retried  int
+		declared int
+		want     int
+	}{
+		{"retried runs leave the count, then it is held to declared", evals.ModeExecute, 118, 18, 100, 100},
+		{"retried runs leave the count", evals.ModeExecute, 50, 5, 100, 45},
+		{"no retried, held to declared", evals.ModeExecute, 118, 0, 100, 100},
+		{"an import counts every run", evals.ModeImport, 57, 0, 50, 57},
+		{"an unknown declared holds nothing", evals.ModeExecute, 12, 2, 0, 10},
+	} {
+		e := &evals.Experiment{Mode: c.mode, Progress: evals.Progress{
+			Trials:   map[evals.TrialState]int{evals.TrialDone: c.done},
+			Declared: c.declared,
+		}}
+		if c.retried > 0 {
+			e.Progress.Trials[evals.TrialsRetried] = c.retried
+		}
+		if got := e.RunsDone(); got != c.want {
+			t.Errorf("%s: RunsDone = %d, want %d", c.name, got, c.want)
+		}
+	}
+	var none evals.Experiment
+	if got := none.RunsDone(); got != 0 {
+		t.Errorf("an experiment with no progress: %d", got)
+	}
+}
+
+// Progress decodes the retried key beside the states and the declared runs.
+func TestProgressDecodesRetriedAndDeclared(t *testing.T) {
+	var e evals.Experiment
+	if err := json.Unmarshal([]byte(`{"mode":"execute","progress":{"trials":{"done":9,"retried":2},"declared":7}}`), &e); err != nil {
+		t.Fatal(err)
+	}
+	if e.Progress.Trials[evals.TrialsRetried] != 2 || e.Progress.Declared != 7 || e.RunsDone() != 7 {
+		t.Errorf("progress = %+v, runs done %d", e.Progress, e.RunsDone())
+	}
+}

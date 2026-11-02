@@ -8,6 +8,7 @@ import (
 	"encoding/json"
 	"errors"
 	"iter"
+	"net/http"
 	"net/url"
 	"time"
 
@@ -452,6 +453,46 @@ func (c *Client) GetExperiment(ctx context.Context, id string) (*Experiment, err
 		return nil, err
 	}
 	return get[Experiment](ctx, c, p)
+}
+
+// CancelExperiment cancels the experiment id: every cell not complete is
+// parked as canceled, its open trials end canceled, and every trial and
+// measurement stays readable. It returns the experiment as it is now.
+// Canceling a canceled experiment changes nothing and returns it again, so
+// the call is retried and safe to repeat. An id the caller's context holds
+// no experiment by returns an error matching latere.ErrNotFound, and a
+// complete experiment, which has nothing left to cancel, one matching
+// latere.ErrConflict whose Code is "experiment_finished".
+func (c *Client) CancelExperiment(ctx context.Context, id string) (*Experiment, error) {
+	return c.endExperiment(ctx, id, "/cancel")
+}
+
+// CloseExperiment ends the intake of the import experiment id: every cell
+// moves on to grading with the trials it holds, and the experiment
+// completes as any does. It returns the experiment as it is now. Closing
+// an experiment whose intake is closed changes nothing and returns it
+// again, so the call is retried and safe to repeat. An id the caller's
+// context holds no experiment by returns an error matching
+// latere.ErrNotFound. An experiment that is not in mode ModeImport, which
+// has no intake, returns one matching latere.ErrConflict whose Code is
+// "wrong_mode", and a canceled one whose intake is open the same with Code
+// "experiment_finished".
+func (c *Client) CloseExperiment(ctx context.Context, id string) (*Experiment, error) {
+	return c.endExperiment(ctx, id, "/close")
+}
+
+// endExperiment posts the action at suffix to the experiment id, which
+// answers the experiment and answers a repeat the same way.
+func (c *Client) endExperiment(ctx context.Context, id, suffix string) (*Experiment, error) {
+	p, err := experimentPath(id, suffix)
+	if err != nil {
+		return nil, err
+	}
+	var out Experiment
+	if err := c.cfg.Do(ctx, &latere.Request{Method: http.MethodPost, Path: p, Retry: latere.RetryAlways}, &out); err != nil {
+		return nil, err
+	}
+	return &out, nil
 }
 
 // ---- cells ----

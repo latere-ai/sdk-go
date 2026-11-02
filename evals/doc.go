@@ -62,8 +62,12 @@
 // experiment's events as they happen. It creates an experiment, leases the
 // pending trials of its external candidates and submits their outcomes;
 // Experiment.RunsDone counts the runs a read experiment has finished.
-// Applying definitions, canceling and closing experiments, and importing
-// trials are not covered yet; call them with latere.Config.Do. Nor is the
-// owner parameter of the definition reads: every call reads the context the
-// token names, as the Credentials section says.
+// ApplyMetric, ApplyGrader, ApplyTask, ApplySuite and ApplyCandidate apply
+// a definition as a version of its name, optionally only while a digest is
+// current or only while the name is new, and say whether the version is
+// new. CancelExperiment cancels an experiment and CloseExperiment ends an
+// import experiment's intake. Importing trials is not covered yet; call it
+// with latere.Config.Do. Nor is the owner parameter of the definition
+// reads: every call reads the context the token names, as the Credentials
+// section says.
 package evals

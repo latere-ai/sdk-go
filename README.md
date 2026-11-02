@@ -1001,8 +1001,13 @@ suite names no check and no model judge; any other is refused with an
 error matching `evals.ErrSignInNotKept`, since only the console keeps the
 sign-in an experiment that acts as the person needs. `LeaseTrials` takes such an
 experiment's pending trials and `SubmitTrial` sends each one's outcome.
-Applying definitions and canceling and closing experiments are not covered
-yet.
+`ApplyMetric`, `ApplyGrader`, `ApplyTask`, `ApplySuite` and `ApplyCandidate`
+apply a definition as a version of its name and report in `Created` whether
+the version is new or an existing one made current again. `ApplyParams`
+sends the owner, and `IfMatch` or `OnlyNew` to apply only while a digest is
+current or only while the name has no version; a precondition that does not
+hold matches `latere.ErrPreconditionFailed`. `CancelExperiment` cancels an
+experiment and `CloseExperiment` ends an import experiment's intake.
 
 ## Models
 

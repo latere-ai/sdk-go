@@ -9,6 +9,22 @@ minor version may break code, and every such change is marked **Breaking**.
 
 ### Added
 
+- `evals.Client.ApplyMetric`, `ApplyGrader`, `ApplyTask`, `ApplySuite` and
+  `ApplyCandidate` apply a definition as a version of its name. The answer,
+  an `evals.Applied`, holds the version and `Created`, false when the
+  content already was a version and was made current again.
+  `ApplyParams` sets the `Owner`, `IfMatch` to apply only while that
+  digest is current, and `OnlyNew` to apply only while the name has no
+  version; a precondition that does not hold matches
+  `latere.ErrPreconditionFailed`. The record members of a definition read
+  from the API, its id, owner, name, digest, current and creation time,
+  are not sent, since the API refuses a body that holds them.
+- `evals.Client.CancelExperiment` and `CloseExperiment`. Canceling parks
+  every cell not complete as canceled and ends its open trials; closing
+  ends an import experiment's intake so every cell moves on to grading.
+  Each answers the experiment and answers a repeat the same way; a
+  complete experiment cannot be canceled, and an experiment not in mode
+  import cannot be closed, which match `latere.ErrConflict`.
 - `agents.ToolUse.Scope` reads what a call reaches, as it was decided on
   and before it waits for a person, as a `CallScope`: `Undo`, the
   boundaries it `Crosses` (`Machine`, `Remote`, `Network`,

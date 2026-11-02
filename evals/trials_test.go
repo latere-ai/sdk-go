@@ -30,6 +30,8 @@ type request struct {
 	method, path, query string
 	key                 string
 	body                string
+	// ifMatch and ifNoneMatch are the preconditions the request sent.
+	ifMatch, ifNoneMatch string
 }
 
 // recorder answers the routes of replies, keyed "METHOD /path" (a body
@@ -63,7 +65,7 @@ func newRecorder(t *testing.T, replies map[string]reply) (*evals.Client, *record
 			t.Error(err)
 		}
 		rec.mu.Lock()
-		rec.sent = append(rec.sent, request{req.Method, req.URL.EscapedPath(), req.URL.RawQuery, req.Header.Get("Idempotency-Key"), string(body)})
+		rec.sent = append(rec.sent, request{req.Method, req.URL.EscapedPath(), req.URL.RawQuery, req.Header.Get("Idempotency-Key"), string(body), req.Header.Get("If-Match"), req.Header.Get("If-None-Match")})
 		rec.mu.Unlock()
 		rp, ok := replies[req.Method+" "+req.URL.EscapedPath()]
 		w.Header().Set("Content-Type", "application/json")

@@ -7,6 +7,8 @@ minor version may break code, and every such change is marked **Breaking**.
 
 ## [Unreleased]
 
+## [0.25.0] - 2026-11-02
+
 ### Added
 
 - `agents.Session.Org` reads the id of the organization that owns a

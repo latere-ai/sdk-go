@@ -128,6 +128,11 @@ if err != nil {
 }
 ```
 
+`GetAgent` reads one agent, by its id or by its name among the agents of
+the context the caller acts in. Its `Status.ID` is the id that a session
+names as `SessionAgent.ID`, and that the decision service keys the
+agent's steps by.
+
 A session that stops to ask a question, to have a tool call approved, or
 to wait for a tool your program runs, is idle with `StopReason`
 `agents.StopQuestion`, `agents.StopToolConfirmation` or

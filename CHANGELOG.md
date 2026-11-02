@@ -31,6 +31,11 @@ minor version may break code, and every such change is marked **Breaking**.
   prediction: with `Agent`, the agent's own; with `Subject`, a member's
   own profile made it stricter; otherwise the organization's. `Scope`
   gains the JSON names it is read with.
+- `agents.Client.GetAgent` reads one agent, by its id or by its name
+  among the agents of the context the caller acts in, as `Agent`, with
+  `AgentMetadata` and `AgentStatus`. `Status.ID` is the id a session and
+  the decision service name the agent by; the spec is kept whole in
+  `RawJSON`.
 
 ## [0.25.0] - 2026-11-02
 

@@ -249,6 +249,7 @@ func TestModelsMatchTheSchemas(t *testing.T) {
 	d, _ := loadDocument(t)
 	s := d.Components.Schemas
 	d.checkModel(t, "Session", reflect.TypeFor[Session](), s["Session"], false)
+	d.checkModel(t, "Agent", reflect.TypeFor[Agent](), s["Agent"], false)
 	d.checkModel(t, "Event", reflect.TypeFor[Event](), s["EventEnvelope"], true)
 	d.checkModel(t, "Delta", reflect.TypeFor[Delta](), s["Delta"], false)
 	// A model may stand for the payloads of several event types, as
@@ -659,6 +660,7 @@ func TestEndpointsAreInTheDocument(t *testing.T) {
 		{"get", "/sessions/{id}/files"},
 		{"get", "/sessions/search"},
 		{"get", "/sessions/summary"},
+		{"get", "/agents/{ref}"},
 	} {
 		if _, ok := d.Paths[e.path][e.method]; !ok {
 			t.Errorf("%s %s is not in the document", strings.ToUpper(e.method), e.path)

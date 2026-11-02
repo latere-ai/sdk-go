@@ -7,6 +7,8 @@ minor version may break code, and every such change is marked **Breaking**.
 
 ## [Unreleased]
 
+## [0.28.0] - 2026-11-03
+
 ### Added
 
 - `evals.Client.ApplyMetric`, `ApplyGrader`, `ApplyTask`, `ApplySuite` and
@@ -67,6 +69,10 @@ minor version may break code, and every such change is marked **Breaking**.
 - `oversight.Certificate.Considered` counts the checks of the clean run
   that were considered answers; nil from a decision service that does not
   send it.
+- The fields above from `agents.ToolUse.Scope` to
+  `oversight.Certificate.Considered` describe a decision service and an
+  agents core that are not released yet: a server today leaves them out,
+  and a name among them may still change in the next minor version.
 
 ### Changed
 

@@ -469,26 +469,26 @@ func TestAnAnswerThatDoesNotDecodeFails(t *testing.T) {
 }
 
 // RunsDone counts each finished run once: the done trials less the ones a
-// retry replaced, held to the runs an execute experiment declares, with
-// every run of an import counted.
+// retry replaced, held to the runs an execute experiment declares, its
+// trials for each of its cells, with every run of an import counted.
 func TestRunsDone(t *testing.T) {
 	for _, c := range []struct {
-		name     string
-		mode     evals.Mode
-		done     int
-		retried  int
-		declared int
-		want     int
+		name    string
+		mode    evals.Mode
+		trials  int
+		cells   int
+		done    int
+		retried int
+		want    int
 	}{
-		{"retried runs leave the count, then it is held to declared", evals.ModeExecute, 118, 18, 100, 100},
-		{"retried runs leave the count", evals.ModeExecute, 50, 5, 100, 45},
-		{"no retried, held to declared", evals.ModeExecute, 118, 0, 100, 100},
-		{"an import counts every run", evals.ModeImport, 57, 0, 50, 57},
-		{"an unknown declared holds nothing", evals.ModeExecute, 12, 2, 0, 10},
+		{"retried runs leave the count, then it is held to declared", evals.ModeExecute, 10, 10, 118, 18, 100},
+		{"retried runs leave the count", evals.ModeExecute, 10, 10, 50, 5, 45},
+		{"no retried, held to declared", evals.ModeExecute, 10, 10, 118, 0, 100},
+		{"an import counts every run", evals.ModeImport, 10, 5, 57, 0, 57},
 	} {
-		e := &evals.Experiment{Mode: c.mode, Progress: evals.Progress{
-			Trials:   map[evals.TrialState]int{evals.TrialDone: c.done},
-			Declared: c.declared,
+		e := &evals.Experiment{Mode: c.mode, Trials: c.trials, Progress: evals.Progress{
+			Cells:  map[evals.CellState]int{evals.CellComplete: c.cells},
+			Trials: map[evals.TrialState]int{evals.TrialDone: c.done},
 		}}
 		if c.retried > 0 {
 			e.Progress.Trials[evals.TrialsRetried] = c.retried
@@ -503,13 +503,14 @@ func TestRunsDone(t *testing.T) {
 	}
 }
 
-// Progress decodes the retried key beside the states and the declared runs.
-func TestProgressDecodesRetriedAndDeclared(t *testing.T) {
+// Progress decodes the retried key beside the states, and the runs
+// declared are the trials for each cell.
+func TestProgressDecodesRetried(t *testing.T) {
 	var e evals.Experiment
-	if err := json.Unmarshal([]byte(`{"mode":"execute","progress":{"trials":{"done":9,"retried":2},"declared":7}}`), &e); err != nil {
+	if err := json.Unmarshal([]byte(`{"mode":"execute","trials":2,"progress":{"cells":{"running":3,"complete":1},"trials":{"done":9,"retried":2}}}`), &e); err != nil {
 		t.Fatal(err)
 	}
-	if e.Progress.Trials[evals.TrialsRetried] != 2 || e.Progress.Declared != 7 || e.RunsDone() != 7 {
-		t.Errorf("progress = %+v, runs done %d", e.Progress, e.RunsDone())
+	if e.Progress.Trials[evals.TrialsRetried] != 2 || e.RunsDeclared() != 8 || e.RunsDone() != 7 {
+		t.Errorf("progress = %+v, declared %d, runs done %d", e.Progress, e.RunsDeclared(), e.RunsDone())
 	}
 }

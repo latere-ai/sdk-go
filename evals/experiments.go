@@ -260,25 +260,35 @@ type Progress struct {
 	Trials map[TrialState]int `json:"trials,omitempty"`
 	// Outcomes counts the finished trials by outcome.
 	Outcomes map[TrialOutcome]int `json:"outcomes,omitempty"`
-	// Declared is how many runs the experiment declares: its Trials times
-	// its tasks and candidates. Zero when it is not known, as when the
-	// API did not answer it; a program that knows the suite's task count
-	// may set it before it calls RunsDone.
-	Declared int `json:"declared,omitempty"`
+}
+
+// RunsDeclared returns how many runs the experiment declares: its Trials
+// for each of its cells, one cell for each task and candidate, which an
+// experiment in mode ModeExecute holds from its create on. An import
+// declares none and answers 0.
+func (e *Experiment) RunsDeclared() int {
+	if e.Mode == ModeImport {
+		return 0
+	}
+	cells := 0
+	for _, n := range e.Progress.Cells {
+		cells += n
+	}
+	return e.Trials * cells
 }
 
 // RunsDone returns how many of the experiment's runs have finished. Each
 // finished trial counts once: the done trials less the ones a retry
 // replaced, which are also counted done. For an experiment in mode
-// ModeExecute the count is held to Progress.Declared when that is known,
-// since a retry can leave a finished run counted beside the one that
-// replaced it; for an import, which declares no runs, every run counts.
+// ModeExecute the count is held to RunsDeclared, since a retry can leave
+// a finished run counted beside the one that replaced it; for an import,
+// which declares no runs, every run counts.
 func (e *Experiment) RunsDone() int {
 	done := e.Progress.Trials[TrialDone] - e.Progress.Trials[TrialsRetried]
-	if e.Mode == ModeImport || e.Progress.Declared <= 0 {
-		return done
+	if declared := e.RunsDeclared(); declared > 0 {
+		return min(done, declared)
 	}
-	return min(done, e.Progress.Declared)
+	return done
 }
 
 // Usage is what the calls made with an experiment's key recorded, as far

@@ -17,10 +17,9 @@ minor version may break code, and every such change is marked **Breaking**.
   each once. A trial a retry replaced is counted done as well as the one
   that replaced it, so counting `Progress.Trials[evals.TrialDone]` alone
   overcounts. `Progress.Trials` holds the replaced trials under
-  `evals.TrialsRetried`, which is not a state, and `Progress.Declared`
-  holds the runs the experiment declares, which the API's document does
-  not define yet: a program that knows the suite's task count may set it,
-  and `RunsDone` holds an execute experiment to it when it is set.
+  `evals.TrialsRetried`, which is not a state. `RunsDeclared` counts the
+  runs an experiment declares, its trials for each of its cells, and
+  `RunsDone` holds an execute experiment to it.
 - `evals.Client.ListTrials`, `ListTrialsPage` and `GetTrial` read an
   experiment's trials as `Trial`, with the trial it runs again in
   `RetryOf`, its state, outcome, timings, failure, lease and the model

@@ -6,6 +6,7 @@ package evals
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"iter"
 	"net/url"
 	"time"
@@ -585,8 +586,10 @@ const (
 // reference candidate or baseline, or, across tasks, one task of the
 // candidate with another. Each candidate and task is named by its digest.
 //
-// A comparison's figures, its results and summaries with their intervals,
-// corrections and windows, are not modeled; read them from RawJSON.
+// A comparison's suite-level and candidate-level results are in Results and
+// CandidateSuite; its task-level results are paged by ListComparisonRows.
+// The analysis's parameters, correction, windows and unpaired tasks are
+// not modeled; read them from RawJSON.
 type Comparison struct {
 	// ID identifies the comparison.
 	ID string `json:"id"`
@@ -649,6 +652,13 @@ type Comparison struct {
 	InputsDigest string `json:"inputs_digest,omitempty"`
 	// Seed is the root seed of its resampling, in hex.
 	Seed string `json:"seed,omitempty"`
+	// Results are its suite-level and candidate-level results, in the
+	// suite's metric order, on a read of one comparison; empty on a
+	// comparison listed with an experiment's, and while it computes.
+	Results []Result `json:"results,omitempty"`
+	// CandidateSuite is, for a comparison of candidates, the candidate's
+	// summary of each metric at suite level, by metric digest.
+	CandidateSuite map[string]*Summary `json:"candidate_suite,omitempty"`
 	// CreatedAt is when it was made, and ComputedAt when it was last
 	// computed.
 	CreatedAt  time.Time `json:"created_at"`
@@ -749,4 +759,78 @@ func (c *Client) ListExperimentComparisonsPage(ctx context.Context, id string, p
 		cursor = params.Cursor
 	}
 	return page[Comparison](ctx, c, p, params.query(cursor))
+}
+
+// comparisonsPath is the collection of comparisons, which one is read
+// from beside the experiment it belongs to.
+const comparisonsPath = BasePath + "/comparisons"
+
+var errNoComparisonID = errors.New("evals: the comparison's id is empty")
+
+// GetComparison returns the comparison id with its suite-level and
+// candidate-level results; ListComparisonRows pages its task-level ones.
+// Until the analysis has computed it, its State is ComparisonComputing and
+// it holds no results. An id the caller's context holds no comparison by
+// returns an error matching latere.ErrNotFound.
+func (c *Client) GetComparison(ctx context.Context, id string) (*Comparison, error) {
+	seg, err := segment(id, errNoComparisonID)
+	if err != nil {
+		return nil, err
+	}
+	return get[Comparison](ctx, c, comparisonsPath+"/"+seg)
+}
+
+// ListComparisonRowsParams filter and page the task-level results of a
+// comparison. The zero value lists every one, by metric in the suite's
+// order and then by task, in pages of DefaultLimit.
+type ListComparisonRowsParams struct {
+	// Metric keeps the results of this metric, by name or digest.
+	Metric string
+	// Task keeps the results of this task, by name.
+	Task string
+	// Verdict keeps the results with this verdict.
+	Verdict Verdict
+	// Limit is the page size, at most MaxLimit; DefaultLimit when zero.
+	Limit int
+	// Cursor asks ListComparisonRowsPage for the page after the one that
+	// returned it. ListComparisonRows ignores it.
+	Cursor string
+}
+
+func (p *ListComparisonRowsParams) query(cursor string) url.Values {
+	if p == nil {
+		return listQuery(0, cursor)
+	}
+	q := listQuery(p.Limit, cursor)
+	setNonEmpty(q, "metric", p.Metric)
+	setNonEmpty(q, "task", p.Task)
+	setNonEmpty(q, "verdict", string(p.Verdict))
+	return q
+}
+
+// ListComparisonRows returns an iterator over the task-level results of
+// the comparison id that params keeps, fetching pages as the loop asks for
+// more. An id the caller's context holds no comparison by yields an error
+// matching latere.ErrNotFound. params may be nil.
+func (c *Client) ListComparisonRows(ctx context.Context, id string, params *ListComparisonRowsParams) iter.Seq2[*Result, error] {
+	seg, err := segment(id, errNoComparisonID)
+	if err != nil {
+		return func(yield func(*Result, error) bool) { yield(nil, err) }
+	}
+	return latere.Items(ctx, pageFunc[Result](c, comparisonsPath+"/"+seg+"/rows", params.query))
+}
+
+// ListComparisonRowsPage returns one page of the task-level results of
+// the comparison id that params keeps, starting at params.Cursor, and the
+// cursor of the next page in NextCursor.
+func (c *Client) ListComparisonRowsPage(ctx context.Context, id string, params *ListComparisonRowsParams) (*latere.Page[*Result], error) {
+	seg, err := segment(id, errNoComparisonID)
+	if err != nil {
+		return nil, err
+	}
+	cursor := ""
+	if params != nil {
+		cursor = params.Cursor
+	}
+	return page[Result](ctx, c, comparisonsPath+"/"+seg+"/rows", params.query(cursor))
 }

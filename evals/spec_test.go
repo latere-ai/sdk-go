@@ -200,6 +200,19 @@ func models(t *testing.T, d *document) map[string]struct {
 		"Cell":               {evals.Cell{}, d.at(t, "Cell")},
 		"Comparison":         {evals.Comparison{}, d.at(t, "Comparison")},
 		"Declaration":        {evals.Declaration{}, d.at(t, "Comparison.declaration")},
+		"Result":             {evals.Result{}, d.at(t, "Result")},
+		"TaskDigests":        {evals.TaskDigests{}, d.at(t, "Result.task_digests")},
+		"Summary":            {evals.Summary{}, d.at(t, "Summary")},
+		"LabelShare":         {evals.LabelShare{}, d.at(t, "LabelShare")},
+		"Confound":           {evals.Confound{}, d.at(t, "Confound")},
+		"LeftOut":            {evals.LeftOut{}, d.at(t, "LeftOut")},
+		"Grid":               {evals.Grid{}, d.at(t, "Grid")},
+		"GridMetric":         {evals.GridMetric{}, d.at(t, "Grid.metric")},
+		"GridCandidate":      {evals.GridCandidate{}, d.at(t, "Grid.candidates.[]")},
+		"GridRow":            {evals.GridRow{}, d.at(t, "Grid.items.[]")},
+		"GridTask":           {evals.GridTask{}, d.at(t, "Grid.items.[].task")},
+		"GridCell":           {evals.GridCell{}, d.at(t, "Grid.items.[].cells.[]")},
+		"GridTrials":         {evals.GridTrials{}, d.at(t, "Grid.items.[].cells.[].trials")},
 		"Trial":              {evals.Trial{}, d.at(t, "Trial")},
 		"TrialFailure":       {evals.TrialFailure{}, d.at(t, "Trial.failure")},
 		"TrialDeclared":      {evals.TrialDeclared{}, d.at(t, "Trial.declared")},
@@ -266,15 +279,13 @@ func TestModelsMatchTheSchemas(t *testing.T) {
 // its reason. A field missing from a model and from this list fails
 // TestModelsReadEveryField, so a field the API adds is decided on.
 var leftOut = map[string]string{
-	"Experiment.judgments":       "the records of the gradings that belong to no trial, whose shape is each judge's; read them from RawJSON",
-	"Cell.rollouts":              "how the platform handed the cell's trials to where they run, for its operators; read them from RawJSON",
-	"Cell.tuple":                 "the cell's resolved setup, whose fields its candidate's kind decides; read it from RawJSON",
-	"Comparison.results":         "a figure of the analysis, whose shape analysis_version names; read it from RawJSON",
-	"Comparison.candidate_suite": "a figure of the analysis, whose shape analysis_version names; read it from RawJSON",
-	"Comparison.correction":      "a figure of the analysis, whose shape analysis_version names; read it from RawJSON",
-	"Comparison.parameters":      "a figure of the analysis, whose shape analysis_version names; read it from RawJSON",
-	"Comparison.unpaired_tasks":  "a figure of the analysis, whose shape analysis_version names; read it from RawJSON",
-	"Comparison.windows":         "a figure of the analysis, whose shape analysis_version names; read it from RawJSON",
+	"Experiment.judgments":      "the records of the gradings that belong to no trial, whose shape is each judge's; read them from RawJSON",
+	"Cell.rollouts":             "how the platform handed the cell's trials to where they run, for its operators; read them from RawJSON",
+	"Cell.tuple":                "the cell's resolved setup, whose fields its candidate's kind decides; read it from RawJSON",
+	"Comparison.correction":     "a figure of the analysis, whose shape analysis_version names; read it from RawJSON",
+	"Comparison.parameters":     "a figure of the analysis, whose shape analysis_version names; read it from RawJSON",
+	"Comparison.unpaired_tasks": "a figure of the analysis, whose shape analysis_version names; read it from RawJSON",
+	"Comparison.windows":        "a figure of the analysis, whose shape analysis_version names; read it from RawJSON",
 }
 
 func TestModelsReadEveryField(t *testing.T) {
@@ -309,6 +320,7 @@ var routes = []struct{ method, path string }{
 	{"get", "/experiments/{id}/cells"}, {"get", "/experiments/{id}/comparisons"},
 	{"get", "/experiments/{id}/stream"},
 	{"get", "/experiments/{id}/trials"}, {"get", "/trials/{id}"},
+	{"get", "/experiments/{id}/grid"}, {"get", "/comparisons/{id}"}, {"get", "/comparisons/{id}/rows"},
 }
 
 func TestEndpointsAreInTheDocument(t *testing.T) {
@@ -396,6 +408,14 @@ func TestQueriesAreTheDocuments(t *testing.T) {
 			return err
 		},
 		func() error {
+			_, err := c.ListComparisonRowsPage(ctx, "cmp_1", &evals.ListComparisonRowsParams{Metric: "m", Task: "t", Verdict: evals.VerdictImproved, Limit: 1, Cursor: "c"})
+			return err
+		},
+		func() error {
+			_, err := c.GetGrid(ctx, "exp_1", &evals.GridParams{Metric: "m", Comparisons: []string{"c1"}, Candidates: []string{"a"}, Tasks: []string{"t"}, State: evals.CellComplete, Limit: 1, Cursor: "c"})
+			return err
+		},
+		func() error {
 			_, err := c.ListTrialsPage(ctx, "exp_1", &evals.ListTrialsParams{Cell: "c", Task: "t", Candidate: "c", State: evals.TrialDone, Outcome: evals.OutcomeCompleted,
 				Imported: &yes, Retried: &yes, Metric: "m", Value: "v", Limit: 1, Cursor: "c"})
 			return err
@@ -434,7 +454,7 @@ func TestQueriesAreTheDocuments(t *testing.T) {
 			}
 		}
 	}
-	if len(sent) != 14 {
+	if len(sent) != 16 {
 		t.Errorf("sent %d requests", len(sent))
 	}
 }
@@ -458,6 +478,8 @@ func enums(t *testing.T, d *document) map[string][]string {
 		"TrialOutcome":    d.at(t, "Submit.outcome").Enum,
 		"Verdict":         d.at(t, "Result.verdict").Enum,
 		"Aggregate":       d.at(t, "Summary.aggregate").Enum,
+		"ResultLevel":     d.at(t, "Result.level").Enum,
+		"DeltaKind":       d.at(t, "Result.delta_kind").Enum,
 	}
 }
 

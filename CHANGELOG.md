@@ -7,16 +7,44 @@ minor version may break code, and every such change is marked **Breaking**.
 
 ## [Unreleased]
 
-### Fixed
+### Added
 
-- The documentation of `oversight.AskSplit`, `agents.AskSplit` and the
-  `oversight` package said that a split ask is one on answers that
-  disagree, and that more answers will not move it. A split ask has an
-  `EvidenceRatio` of 0.5 or more, with `Approve` still between the
-  thresholds. The person's answers can agree or disagree: two Allows and
-  no Deny can give 0.80 under an `AllowAbove` of 0.90, and more Allows
-  can move it above 0.90. `AskUnsure` says that more answers can move
-  the suggestion, not that they will.
+- `agents.ToolUse.Scope` reads what a call reaches, as it was decided on
+  and before it waits for a person, as a `CallScope`: `Undo`, the
+  boundaries it `Crosses` (`Machine`, `Remote`, `Network`,
+  `Organization`, `Public`, each nil when not known), `TargetClass`,
+  `TargetKind`, `Contact`, and the `Source` it rests on, the decision
+  service's reading (`ScopeByService`) or the platform's claims alone
+  (`ScopeByPlatform`). `CallScope.Known` is false for a call whose reach
+  nobody read, such as a shell command without a decision service.
+- `agents.ToolConfirmation` reads how the person answered, and
+  `ConfirmToolParams` sends it: `AnswerMS`, `DetailsOpened`,
+  `SuggestionShown` and `Surface` (`SurfacePrompt`,
+  `SurfaceNotification`, `SurfaceQueue`, `SurfaceBulk`). Each is sent
+  only when set. `ConfirmTool` refuses an `AnswerMS` outside 0 to
+  `MaxAnswerMS` and an unknown `Surface` before it sends. A server from
+  before these fields refuses them with `invalid_request`, and
+  `ConfirmTool` then sends the decision once more without them, under
+  the key with `.plain` added.
+- `agents.EventDenialsReached` and its payload `DenialsReached`: the
+  refused call that reached one of the session's limits, 3 in a row or 20
+  in a session, with the counts, the `Limit` reached and the `Effect`.
+  `LayerDenials` is a call that waits for the person after it, and
+  `StopDenials` an unattended turn that it stopped.
+- The ask kinds `agents.AskShort`, `AskWider` and `AskFew`. A short ask
+  rests on answers that agree, with the chance still between the
+  thresholds. A wider ask is a step that reaches wider than any the
+  person allowed, and a few ask one whose reach the person allowed with
+  too little weight or in too few sessions.
+
+### Changed
+
+- `agents.AskSplit` is an ask whose answers disagree: the person both allowed and denied steps of its kind. An ask
+  whose answers agree is `AskShort`. A decision service that does not
+  send `AskShort` still gives `AskSplit` for answers that agree, with an
+  `EvidenceRatio` of 0.5 or more and `Approve` between the thresholds.
+  `AskUnsure` says that more answers can move the suggestion, not that
+  they will.
 
 ## [0.27.0] - 2026-11-02
 

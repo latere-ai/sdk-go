@@ -163,9 +163,34 @@ platform sent the call's decision to the decision service under. It is
 the organization's id, or the subject of the person who started the
 session. Use it as the `Org` of an `oversight` call about that step. For
 a call without `DecisionOrg`, use the subject of the person who started
-the session. A `Suggestion` also records `AskKind`, `agents.AskUnsure` or
-`agents.AskSplit` for an ask, and `EvidenceRatio`, how much the person's
-answers settle it, if the service sent them.
+the session. A `Suggestion` also records `AskKind` for an ask, and
+`EvidenceRatio`, how much the person's answers settle it, if the service
+sent them. `agents.AskUnsure` is too few answers, `agents.AskSplit`
+answers that disagree, and `agents.AskShort` answers that agree with the
+chance still between the thresholds. `agents.AskWider` is a call that
+reaches wider than any the person allowed, and `agents.AskFew` one whose
+reach the person allowed in too few considered answers or sessions. In
+learned mode, a split or a wider ask waits for the person, and the rules
+decide the others.
+
+`ToolUse.Scope` is what a call reaches, recorded before the call waits
+for a person: `Undo`, the boundaries it `Crosses`, its `TargetClass` and
+`TargetKind`, and `Contact`, each a word of a closed list, never a path,
+a host or a branch. Its `Source` says whether the decision service's
+reading is in it. Where `CallScope.Known` is false, as for a shell
+command no decision service read, tell the person that the reach is not
+known rather than showing none. A client that measures how the person
+answered sets `AnswerMS`, `DetailsOpened`, `SuggestionShown` and
+`Surface` on `ConfirmToolParams`, and leaves out what it did not
+measure. A server from before these fields refuses them, and
+`ConfirmTool` then sends the decision once more without them.
+
+After 3 refused calls in a row, or 20 in a session, the session hands its
+calls back to the person with an `agents.EventDenialsReached`, whose
+payload is an `agents.DenialsReached`. On an attended turn, every call
+that changes something then waits for the person, decided by
+`agents.LayerDenials`, until they write again. An unattended turn stops,
+and the session is idle with `agents.StopDenials`.
 
 An agent may offer the person standing work: a held call of its
 `trigger` tool that proposes a routine or a trigger that fires on events,

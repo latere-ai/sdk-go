@@ -56,6 +56,20 @@
 // the person who started the session. A Suggestion records its AskKind
 // and EvidenceRatio where the service sent them.
 //
+// ToolUse.Scope is what the call reaches, recorded before the call waits:
+// whether it can be undone, the boundaries it crosses, the class and the
+// kind of its target, and whether it is a first contact, each a word of a
+// closed list and never a name. A client words it for the person beside
+// the call; where CallScope.Known is false, it says that the reach is not
+// known. A person's answer can say how they answered: ConfirmToolParams
+// carries how long the question was visible, whether they opened the
+// call's details, whether the client showed the service's suggestion
+// first, and where they answered. After 3 refused calls in a row or 20 in
+// a session, an EventDenialsReached hands the session's calls back to the
+// person: each call that changes something waits for them, decided by
+// LayerDenials, until they write again, and an unattended turn stops with
+// StopDenials.
+//
 // # Files
 //
 // A session keeps a copy of each file a message carried, and of each

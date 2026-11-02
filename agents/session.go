@@ -51,6 +51,10 @@ const (
 	// StopMachineWaiting is a turn waiting for the computer it works on,
 	// which is offline or has not let the session in yet.
 	StopMachineWaiting StopReason = "machine_waiting"
+	// StopDenials is an unattended turn that ended because its refused
+	// calls reached one of the session's limits, an EventDenialsReached
+	// with DenialsStop.
+	StopDenials StopReason = "denials"
 )
 
 // Why an ended session ended.

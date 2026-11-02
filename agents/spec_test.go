@@ -148,7 +148,32 @@ var leftOut = map[string]string{
 // JSON name, each with the schema it will join and what it is. checkModel
 // takes them as read, and TestFieldsAheadOfTheDocumentAreStillAhead fails
 // once the document describes one, so the model is then held to it.
-var aheadOfTheDocument = map[string]ahead{}
+var aheadOfTheDocument = map[string]ahead{
+	"ToolUse.scope":                     {"AgentToolUse", "the reach the call was decided on (topos spec 101)"},
+	"ToolConfirmation.answer_ms":        {"UserToolConfirmation", "how long the question was visible to the person (topos spec 101)"},
+	"ToolConfirmation.details_opened":   {"UserToolConfirmation", "whether the person opened the call's details (topos spec 101)"},
+	"ToolConfirmation.suggestion_shown": {"UserToolConfirmation", "whether the client showed the suggestion first (topos spec 101)"},
+	"ToolConfirmation.surface":          {"UserToolConfirmation", "where the person answered (topos spec 101)"},
+}
+
+// enumsAheadOfTheDocument is the values the models' enums declare that the
+// published document does not list yet, by the enum's Go type and the
+// value, each with what it is. TestEnumsAreTheDocuments takes them as
+// listed, and TestEnumsAheadOfTheDocumentAreStillAhead fails once the
+// document lists one, so the enum is then held to it.
+var enumsAheadOfTheDocument = map[string]string{
+	"StopReason.denials":                "an unattended turn that its refused calls stopped (topos spec 101)",
+	"EventType.session.denials_reached": "the refusal that reached a limit on refused calls (topos spec 101)",
+}
+
+// eventsAheadOfTheDocument is the event types whose payload a model reads
+// and the published document has no schema for yet, each with its model.
+// TestEventsAheadOfTheDocumentAreStillAhead fails once the document
+// describes one, so its model is then held to the schema in
+// TestModelsMatchTheSchemas.
+var eventsAheadOfTheDocument = map[string]reflect.Type{
+	"session.denials_reached": reflect.TypeFor[DenialsReached](),
+}
 
 // ahead is a field of aheadOfTheDocument: the schema it will join, a
 // component's name or "event:" and an event's type for its payload, and
@@ -173,6 +198,38 @@ func TestFieldsAheadOfTheDocumentAreStillAhead(t *testing.T) {
 		_, name, _ := strings.Cut(field, ".")
 		if _, ok := s.Properties[name]; ok {
 			t.Errorf("the document now describes %s (%s): hold the model to it and take it off aheadOfTheDocument", field, a.what)
+		}
+	}
+}
+
+// TestEnumsAheadOfTheDocumentAreStillAhead fails once the document lists a
+// value of enumsAheadOfTheDocument, which is then taken off it.
+func TestEnumsAheadOfTheDocumentAreStillAhead(t *testing.T) {
+	d, _ := loadDocument(t)
+	listed := documentEnums(d)
+	declared := constantsOf(t, ".")
+	for key, what := range enumsAheadOfTheDocument {
+		typ, value, _ := strings.Cut(key, ".")
+		if !slices.Contains(declared[typ], value) {
+			t.Errorf("%s: %s declares no such value", key, typ)
+		}
+		if slices.Contains(listed[typ], value) {
+			t.Errorf("the document now lists %s (%s): take it off enumsAheadOfTheDocument", key, what)
+		}
+	}
+}
+
+// TestEventsAheadOfTheDocumentAreStillAhead fails once the document
+// describes the payload of an event of eventsAheadOfTheDocument, which is
+// then taken off it.
+func TestEventsAheadOfTheDocumentAreStillAhead(t *testing.T) {
+	d, _ := loadDocument(t)
+	for typ, model := range eventsAheadOfTheDocument {
+		if !slices.Contains(constantsOf(t, ".")["EventType"], typ) {
+			t.Errorf("%s: no EventType declares it", typ)
+		}
+		if d.payload(typ) != nil {
+			t.Errorf("the document now describes %s: hold %s to it in TestModelsMatchTheSchemas and take it off eventsAheadOfTheDocument", typ, model)
 		}
 	}
 }
@@ -344,22 +401,31 @@ func TestToolMetaFollowsTheDocument(t *testing.T) {
 // the document lists for that field.
 func TestEnumsAreTheDocuments(t *testing.T) {
 	d, _ := loadDocument(t)
-	s := d.Components.Schemas
 	declared := constantsOf(t, ".")
-	for typ, values := range map[string][]string{
-		"Status":     d.resolve(s["Session"].Properties["status"]).Enum,
-		"StopReason": d.resolve(s["Session"].Properties["stop_reason"]).Enum,
-		"EventType":  d.resolve(s["EventEnvelope"].Properties["type"]).Enum,
-	} {
+	for typ, values := range documentEnums(d) {
 		if len(values) == 0 {
 			t.Errorf("the document lists no values for %s", typ)
 			continue
 		}
 		for _, v := range declared[typ] {
+			if _, coming := enumsAheadOfTheDocument[typ+"."+v]; coming {
+				continue
+			}
 			if !slices.Contains(values, v) {
 				t.Errorf("%s declares %q, which the document does not list", typ, v)
 			}
 		}
+	}
+}
+
+// documentEnums is the values the document lists for each enum the
+// models declare, by the enum's Go type.
+func documentEnums(d *document) map[string][]string {
+	s := d.Components.Schemas
+	return map[string][]string{
+		"Status":     d.resolve(s["Session"].Properties["status"]).Enum,
+		"StopReason": d.resolve(s["Session"].Properties["stop_reason"]).Enum,
+		"EventType":  d.resolve(s["EventEnvelope"].Properties["type"]).Enum,
 	}
 }
 
@@ -541,6 +607,46 @@ func TestRequestsFitTheirSchemas(t *testing.T) {
 		}
 		d.checkBody(t, r.name, got, want)
 	}
+}
+
+// TestAConfirmationOfHowThePersonAnsweredFitsItsSchema: a confirmation
+// that says how the person answered sends the document's members and the
+// fields of aheadOfTheDocument alone.
+func TestAConfirmationOfHowThePersonAnsweredFitsItsSchema(t *testing.T) {
+	d, _ := loadDocument(t)
+	var body map[string]any
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if err := json.NewDecoder(r.Body).Decode(&body); err != nil {
+			t.Error(err)
+		}
+		w.Header().Set("Content-Type", "application/json")
+		_, _ = io.WriteString(w, `{"id":"evt_1","seq":1,"session_id":"ses_1","type":"user.tool_confirmation","time":"2026-11-02T12:00:00Z","payload":{}}`)
+	}))
+	t.Cleanup(srv.Close)
+	cfg, err := latere.NewConfig(latere.WithBaseURL(srv.URL), latere.WithTokenSource(latere.StaticToken("key_test")), latere.WithMaxRetries(0))
+	if err != nil {
+		t.Fatal(err)
+	}
+	ms, opened, shown := int64(4200), true, false
+	if _, err := New(cfg).ConfirmTool(context.Background(), "ses_1", &ConfirmToolParams{
+		ToolUseID: "tu_1", Decision: DecisionAllow, AnswerMS: &ms, DetailsOpened: &opened, SuggestionShown: &shown, Surface: SurfacePrompt,
+	}); err != nil {
+		t.Fatal(err)
+	}
+	payload, _ := body["payload"].(map[string]any)
+	for _, name := range []string{"answer_ms", "details_opened", "suggestion_shown", "surface"} {
+		if _, ok := payload[name]; !ok {
+			t.Errorf("the confirmation does not send %s", name)
+		}
+		if _, coming := aheadOfTheDocument["ToolConfirmation."+name]; !coming {
+			if prop := d.resolve(d.sent("user.tool_confirmation")); prop == nil || prop.Properties[name] == nil {
+				t.Errorf("the confirmation sends %s, which neither the document nor aheadOfTheDocument names", name)
+			}
+			continue
+		}
+		delete(payload, name)
+	}
+	d.checkBody(t, "ConfirmTool, how the person answered", payload, d.sent("user.tool_confirmation"))
 }
 
 // checkBody checks a JSON value a request carries against s: every

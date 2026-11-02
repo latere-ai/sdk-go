@@ -9,6 +9,7 @@ import (
 	"errors"
 	"fmt"
 	"iter"
+	"maps"
 	"net/http"
 	"net/url"
 	"strconv"
@@ -790,19 +791,48 @@ type ConfirmToolParams struct {
 	// Remember asks the session to apply the decision to calls like this
 	// one, in the pattern the approval offered.
 	Remember string
+	// AnswerMS, DetailsOpened, SuggestionShown and Surface say how the
+	// person answered, as ToolConfirmation names them, so the decision
+	// service can tell a considered answer from a quick one. Set each one
+	// the client measured and leave out each one it did not; never guess.
+	// AnswerMS is from 0 to MaxAnswerMS: the milliseconds the question was
+	// visible to the person, in a window that had focus, summed over the
+	// times the person left and came back.
+	AnswerMS        *int64
+	DetailsOpened   *bool
+	SuggestionShown *bool
+	Surface         Surface
 	// IdempotencyKey makes a repeated confirmation count once; one is
 	// generated when it is empty.
 	IdempotencyKey string
 }
 
+// howAnswered reports whether params say how the person answered.
+func (p *ConfirmToolParams) howAnswered() bool {
+	return p.AnswerMS != nil || p.DetailsOpened != nil || p.SuggestionShown != nil || p.Surface != ""
+}
+
 // ConfirmTool approves or denies a tool call or an approval the session is
 // waiting on, which resumes it, and returns the event the decision became.
+//
+// A server from before the fields that say how the person answered refuses
+// a confirmation that carries them as invalid_request. ConfirmTool then
+// sends the confirmation once more without them, under a key of its own,
+// so the person's decision is still recorded.
 func (c *Client) ConfirmTool(ctx context.Context, id string, params *ConfirmToolParams) (*Event, error) {
 	if params == nil || (params.ToolUseID == "") == (params.ApprovalID == "") {
 		return nil, errors.New("agents: ConfirmToolParams needs exactly one of ToolUseID and ApprovalID")
 	}
 	if params.Decision != DecisionAllow && params.Decision != DecisionDeny {
 		return nil, fmt.Errorf("agents: ConfirmToolParams.Decision is %q, not DecisionAllow or DecisionDeny", params.Decision)
+	}
+	if ms := params.AnswerMS; ms != nil && (*ms < 0 || *ms > MaxAnswerMS) {
+		return nil, fmt.Errorf("agents: ConfirmToolParams.AnswerMS is %d, not from 0 to %d", *ms, MaxAnswerMS)
+	}
+	switch params.Surface {
+	case "", SurfacePrompt, SurfaceNotification, SurfaceQueue, SurfaceBulk:
+	default:
+		return nil, fmt.Errorf("agents: ConfirmToolParams.Surface is %q, not one of the Surface constants", params.Surface)
 	}
 	payload := map[string]any{"decision": params.Decision}
 	if params.ToolUseID != "" {
@@ -817,7 +847,33 @@ func (c *Client) ConfirmTool(ctx context.Context, id string, params *ConfirmTool
 	if params.Remember != "" {
 		payload["remember"] = params.Remember
 	}
-	return c.send(ctx, id, EventUserToolConfirmation, payload, params.IdempotencyKey)
+	if !params.howAnswered() {
+		return c.send(ctx, id, EventUserToolConfirmation, payload, params.IdempotencyKey)
+	}
+	plain := maps.Clone(payload)
+	if params.AnswerMS != nil {
+		payload["answer_ms"] = *params.AnswerMS
+	}
+	if params.DetailsOpened != nil {
+		payload["details_opened"] = *params.DetailsOpened
+	}
+	if params.SuggestionShown != nil {
+		payload["suggestion_shown"] = *params.SuggestionShown
+	}
+	if params.Surface != "" {
+		payload["surface"] = params.Surface
+	}
+	key := keyOr(params.IdempotencyKey)
+	e, err := c.send(ctx, id, EventUserToolConfirmation, payload, key)
+	var apiErr *latere.Error
+	if err == nil || !errors.As(err, &apiErr) || apiErr.StatusCode != http.StatusBadRequest || apiErr.Code != "invalid_request" {
+		return e, err
+	}
+	// The server keeps the refusal under key and refuses the key with
+	// another body, so the confirmation without the fields goes under a
+	// key derived from it: a repeat of the whole call with the same key
+	// sends the same two requests.
+	return c.send(ctx, id, EventUserToolConfirmation, plain, key+".plain")
 }
 
 // SendToolResultParams is the result of a tool call your program ran.

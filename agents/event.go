@@ -73,6 +73,10 @@ const (
 	// EventModelRequest records one request the session sent a model; its
 	// payload is a ModelRequest.
 	EventModelRequest EventType = "model.request"
+	// EventDenialsReached follows the refusal that reached one of the
+	// session's limits on refused calls: the session hands its calls back
+	// to the person. Its payload is a DenialsReached.
+	EventDenialsReached EventType = "session.denials_reached"
 )
 
 // An Event is one entry of a session's log.
@@ -738,7 +742,128 @@ type ToolUse struct {
 	// mode, and on a call recorded before the API wrote it, whose
 	// organization is the subject of the person who started the session.
 	DecisionOrg string `json:"decision_org,omitempty"`
+	// Scope is what the call reaches, as it was decided on, recorded
+	// before the call waits for a person, so a client can show it beside
+	// the call. Nil on a call recorded before the API wrote it.
+	Scope *CallScope `json:"scope,omitempty"`
 }
+
+// CallScope is what a tool call reaches: whether it can be undone, the
+// boundaries it crosses, the class and the kind of its target, and whether
+// it is the session's first contact with its target. Every member is a
+// word of a closed list, and none holds a path, a host, a branch or any
+// other name. A member left empty is not known, which is not the least
+// reach: a client says that it is not known rather than showing it as
+// safe.
+type CallScope struct {
+	// Undo is whether the call can be undone; empty when not known.
+	Undo Undo `json:"undo,omitempty"`
+	// Crosses is the boundaries the call crosses, as far as they are
+	// known; nil when none is known.
+	Crosses *Crosses `json:"crosses,omitempty"`
+	// TargetClass is the class of what the call changes; empty when not
+	// known.
+	TargetClass TargetClass `json:"target_class,omitempty"`
+	// TargetKind is the kind of what the call changes, without its name,
+	// such as "path", "ref", "app", "host", "repository" or "package";
+	// empty when not known.
+	TargetKind string `json:"target_kind,omitempty"`
+	// Contact is whether the call is the session's first contact with its
+	// target; empty when not known.
+	Contact Contact `json:"contact,omitempty"`
+	// Source is what the scope rests on: ScopeByService when the decision
+	// service's reading of the call is in it, ScopeByPlatform when it is
+	// the platform's own claims alone. Every call that records a scope
+	// names it.
+	Source ScopeSource `json:"source"`
+}
+
+// Known reports whether the scope says anything about the call's reach
+// beyond its Source. A shell command whose reach only the decision service
+// reads has none without it, and a client then says that the reach of
+// the command is not known.
+func (s *CallScope) Known() bool {
+	return s != nil && (s.Undo != "" || s.Crosses.Known() || s.TargetClass != "" || s.TargetKind != "" || s.Contact != "")
+}
+
+// Crosses is the boundaries a call crosses. Each is true when the call
+// crosses it, false when it does not, and nil when it is not known.
+type Crosses struct {
+	// Machine is the machine outside the session's working directory.
+	Machine *bool `json:"machine,omitempty"`
+	// Remote is a system other than the session's machine.
+	Remote *bool `json:"remote,omitempty"`
+	// Network is a host outside the session's network.
+	Network *bool `json:"network,omitempty"`
+	// Organization is a party that the organization does not own.
+	Organization *bool `json:"organization,omitempty"`
+	// Public makes something readable by anyone.
+	Public *bool `json:"public,omitempty"`
+}
+
+// Known reports whether c knows at least one boundary.
+func (c *Crosses) Known() bool {
+	return c != nil && (c.Machine != nil || c.Remote != nil || c.Network != nil || c.Organization != nil || c.Public != nil)
+}
+
+// Undo is whether a call can be undone.
+type Undo string
+
+// The values of Undo, from the least reach to the most.
+const (
+	// UndoNone is a call that changes nothing.
+	UndoNone Undo = "none"
+	// UndoReversible can be undone in the working directory with no loss.
+	UndoReversible Undo = "reversible"
+	// UndoRecoverable can be undone from a copy or by another call.
+	UndoRecoverable Undo = "recoverable"
+	// UndoIrreversible cannot be undone, or others already saw it.
+	UndoIrreversible Undo = "irreversible"
+)
+
+// TargetClass is the class of what a call changes.
+type TargetClass string
+
+// The classes of a target, from the least reach to the most.
+const (
+	// TargetScratch is a disposable thing.
+	TargetScratch TargetClass = "scratch"
+	// TargetOwn is a thing the session made, such as its branch, its
+	// preview or its checkout.
+	TargetOwn TargetClass = "own"
+	// TargetShared is a thing other people use, or the person's own files.
+	TargetShared TargetClass = "shared"
+	// TargetPrimary is the default or a protected branch, production, or a
+	// live release.
+	TargetPrimary TargetClass = "primary"
+)
+
+// Contact is whether a call is the session's first contact with its
+// target.
+type Contact string
+
+// The values of Contact.
+const (
+	// ContactFirst is the session's first contact with the target.
+	ContactFirst Contact = "first"
+	// ContactRepeat is a target the session reached before.
+	ContactRepeat Contact = "repeat"
+)
+
+// ScopeSource is what a CallScope rests on.
+type ScopeSource string
+
+// The sources of a CallScope.
+const (
+	// ScopeByService is a scope with the decision service's reading of the
+	// call in it, joined with the platform's claims: the wider of the two
+	// in each member.
+	ScopeByService ScopeSource = "service"
+	// ScopeByPlatform is the platform's own claims alone: no decision
+	// service read the call, as in plan mode, without a service, or when
+	// its prediction failed, came too late or carried no scope.
+	ScopeByPlatform ScopeSource = "topos"
+)
 
 // Risk is the score a session's rules gave a tool call.
 type Risk struct {
@@ -774,8 +899,8 @@ type Suggestion struct {
 	// that does not send it, and on a call recorded before the API wrote
 	// it.
 	EvidenceRatio *float64 `json:"evidence_ratio,omitempty"`
-	// AskKind says why the service suggests asking: AskUnsure or
-	// AskSplit. Empty for a suggestion that does not ask, from a service
+	// AskKind says why the service suggests asking, one of the AskKind
+	// constants. Empty for a suggestion that does not ask, from a service
 	// that does not send it, and on a call recorded before the API wrote
 	// it. A client shows a value it does not know as the ask alone.
 	AskKind AskKind `json:"ask_kind,omitempty"`
@@ -784,7 +909,10 @@ type Suggestion struct {
 // AskKind says why a decision service suggests asking about a call.
 type AskKind string
 
-// The kinds of asking a Suggestion records.
+// The kinds of asking a Suggestion records. In learned mode, the session
+// keeps AskSplit and AskWider for the person, and its rules and risk score
+// decide a call of any other kind, as they do for a kind a client does not
+// know.
 const (
 	// AskUnsure is a call the person's answers say little about yet, an
 	// EvidenceRatio below 0.5: they gave too few, and more answers can
@@ -792,11 +920,24 @@ const (
 	AskUnsure AskKind = "unsure"
 	// AskSplit is a call the person's answers say a lot about, an
 	// EvidenceRatio of 0.5 or more, with Approve still between the
-	// thresholds. The answers can agree or disagree: two Allows of a call
-	// and no Deny can give 0.80 under an AllowAbove of 0.90, and more
-	// Allows can move the suggestion above 0.90. AskSplit alone does not
-	// say that the person gave different answers.
+	// thresholds, and the person both allowed and denied calls of its
+	// kind: the answers disagree. A service that does not send AskShort
+	// also gives AskSplit for answers that agree.
 	AskSplit AskKind = "split"
+	// AskShort is a call the person's answers say a lot about, an
+	// EvidenceRatio of 0.5 or more, with Approve still between the
+	// thresholds, and the answers agree: two Allows of a call and no Deny
+	// can give 0.80 under an AllowAbove of 0.90, and more Allows can move
+	// the suggestion above 0.90.
+	AskShort AskKind = "short"
+	// AskWider is a call that reaches wider than any call of its kind the
+	// person allowed: the service would allow it from the person's
+	// answers, and asks because no approval covers its scope.
+	AskWider AskKind = "wider"
+	// AskFew is a call whose reach the person allowed, but not with enough
+	// considered answers or not in enough sessions for the service to
+	// allow it.
+	AskFew AskKind = "few"
 )
 
 // SuggestionThresholds are a suggestion's thresholds.
@@ -845,6 +986,11 @@ const (
 	// LayerFallback: the decision service did not answer, so the call
 	// waits for a person.
 	LayerFallback Layer = "fallback"
+	// LayerDenials: after the session reached a limit on refused calls,
+	// an EventDenialsReached, a call that changes something waits for a
+	// person until the person writes again, whatever the other layers
+	// would decide.
+	LayerDenials Layer = "denials"
 )
 
 // Learned reports whether what the person learned from decided the call,
@@ -970,7 +1116,87 @@ type ToolConfirmation struct {
 	// Remember is the pattern the answer applies to calls like this one,
 	// when it asked the session to.
 	Remember string `json:"remember,omitempty"`
+	// AnswerMS is the milliseconds the question was visible to the person
+	// on the client that answered, up to the answer; nil where the client
+	// did not measure it.
+	AnswerMS *int64 `json:"answer_ms,omitempty"`
+	// DetailsOpened is whether the person opened the call's details, such
+	// as the full command, the diff or the target, before answering; nil
+	// where the client offered none.
+	DetailsOpened *bool `json:"details_opened,omitempty"`
+	// SuggestionShown is whether the client showed any part of the
+	// decision service's suggestion before the person answered; nil where
+	// the client did not say.
+	SuggestionShown *bool `json:"suggestion_shown,omitempty"`
+	// Surface is where the person answered; empty where the client did
+	// not say.
+	Surface Surface `json:"surface,omitempty"`
 }
+
+// Surface is where a person answered a call.
+type Surface string
+
+// The surfaces of a ToolConfirmation.
+const (
+	// SurfacePrompt is the conversation, with the call waiting in it.
+	SurfacePrompt Surface = "prompt"
+	// SurfaceNotification is a system notification, without opening the
+	// session.
+	SurfaceNotification Surface = "notification"
+	// SurfaceQueue is a list of waiting questions or reviews.
+	SurfaceQueue Surface = "queue"
+	// SurfaceBulk is one gesture that answered more than one call.
+	SurfaceBulk Surface = "bulk"
+)
+
+// MaxAnswerMS is the largest AnswerMS a confirmation carries: one day.
+const MaxAnswerMS = 86_400_000
+
+// DenialsReached is the payload of an EventDenialsReached event: a refused
+// call reached one of the session's limits on refused calls, counted across
+// the session's own conversation and every subagent. A call refused by the
+// rules, by the session's network, by the decision service, or by a person
+// counts; a call blocked in plan mode does not. A call that changes
+// something and runs ends a run of refusals.
+type DenialsReached struct {
+	// Consecutive is the refusals since the last call that changed
+	// something and ran, and Total every refusal since the session
+	// started or since its calls were last handed back.
+	Consecutive int `json:"consecutive"`
+	Total       int `json:"total"`
+	// Limit is the limit reached first.
+	Limit DenialLimit `json:"limit"`
+	// Effect is what the session does now.
+	Effect DenialEffect `json:"effect"`
+}
+
+// DenialLimit names a limit on a session's refused calls.
+type DenialLimit string
+
+// The limits of a DenialsReached.
+const (
+	// DenialsConsecutive is the limit on refusals in a row, 3 by default.
+	DenialsConsecutive DenialLimit = "consecutive"
+	// DenialsTotal is the limit on refusals in a session, 20 by default.
+	DenialsTotal DenialLimit = "total"
+)
+
+// DenialEffect is what a session does after it reached a limit on refused
+// calls.
+type DenialEffect string
+
+// The effects of a DenialsReached.
+const (
+	// DenialsAsk is an attended turn's: from the next call until the
+	// person's next message, every call that changes something waits for
+	// the person, decided by LayerDenials. The person's next message ends
+	// it and resets both counts.
+	DenialsAsk DenialEffect = "ask"
+	// DenialsStop is an unattended turn's: the turn ends, and the session
+	// is idle with StopDenials. The next turn a person begins asks for
+	// every call that changes something until that person's next message.
+	DenialsStop DenialEffect = "stop"
+)
 
 // ApprovalDecided is the payload of an EventApprovalDecided event: the
 // answer to an ApprovalRequested.

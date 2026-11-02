@@ -7,6 +7,47 @@ minor version may break code, and every such change is marked **Breaking**.
 
 ## [Unreleased]
 
+### Added
+
+- `agents.Client.ListAgentVersions` and `ListAgentVersionsPage` list the
+  versions of an agent, by its id or its name, as `AgentVersion`: the
+  number, the digest, who applied it and when. A program names a version
+  as "agent v2" instead of by its digest.
+- `evals.Experiment.RunsDone` counts the runs an experiment has finished,
+  each once. A trial a retry replaced is counted done as well as the one
+  that replaced it, so counting `Progress.Trials[evals.TrialDone]` alone
+  overcounts. `Progress.Trials` holds the replaced trials under
+  `evals.TrialsRetried`, which is not a state, and `Progress.Declared`
+  holds the runs the experiment declares, which the API's document does
+  not define yet: a program that knows the suite's task count may set it,
+  and `RunsDone` holds an execute experiment to it when it is set.
+- `evals.Client.ListTrials`, `ListTrialsPage` and `GetTrial` read an
+  experiment's trials as `Trial`, with the trial it runs again in
+  `RetryOf`, its state, outcome, timings, failure, lease and the model
+  calls it sent. `ListTrialsParams` filters by cell, task, candidate,
+  state, outcome, imported, retried and a metric's value.
+- `evals.Client.GetGrid` reads an experiment's candidate by task grid as
+  `Grid`, one page of rows at a time, with each cell's state, its trial
+  counts and the analysis's summary and verdict.
+- `evals.Client.GetComparison` returns a comparison with its suite-level
+  and candidate-level `Results`, and `ListComparisonRows` and
+  `ListComparisonRowsPage` list its task-level ones. A `Result` carries each
+  side's `Summary`, label shares, the delta, `P`, `Q`, the verdict and the
+  reason, its confounds and the tasks left out. `Comparison.Results` and
+  `Comparison.CandidateSuite` are no longer left to `RawJSON`.
+- `evals.Client.CreateExperiment` creates an experiment from a suite and
+  candidates with a budget, trials, mode, parallelism, reference,
+  scheduling, declared comparisons and metadata. With an `IdempotencyKey`
+  it creates only an experiment whose candidates are all external and
+  whose suite names no check and no model judge; any other is refused with
+  an error matching `evals.ErrSignInNotKept`, since only the console keeps
+  the sign-in an experiment that acts as the person needs.
+- `evals.Client.LeaseTrials` takes the pending trials of an experiment's
+  external candidates, or renews a lease, and returns nothing when there is
+  nothing to lease. `SubmitTrial` sends a leased trial's outcome, times,
+  outputs and self-reported values; a repeat of the same submission changes
+  nothing.
+
 ## [0.26.0] - 2026-11-02
 
 ### Added

@@ -57,12 +57,13 @@
 //
 // # Scope
 //
-// This package reads: definitions and their versions, experiments, their
-// cells and their comparisons, and an experiment's events as they happen.
-// Applying definitions, creating, canceling and closing experiments,
-// running trials of one's own, and the figures of a comparison's results
-// are not covered yet; call them with latere.Config.Do, and read a
-// comparison's figures from its RawJSON. Nor is the owner parameter of
-// the definition reads: every call reads the context the token names, as
-// the Credentials section says.
+// This package reads definitions and their versions, experiments, their
+// cells, trials, grid and comparisons with their results, and an
+// experiment's events as they happen. It creates an experiment, leases the
+// pending trials of its external candidates and submits their outcomes;
+// Experiment.RunsDone counts the runs a read experiment has finished.
+// Applying definitions, canceling and closing experiments, and importing
+// trials are not covered yet; call them with latere.Config.Do. Nor is the
+// owner parameter of the definition reads: every call reads the context the
+// token names, as the Credentials section says.
 package evals

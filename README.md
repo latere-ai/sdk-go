@@ -27,7 +27,7 @@ they share. Import the ones you use:
 | [`memory`](https://pkg.go.dev/latere.ai/x/sdk-go/memory) | What Latere remembers about a person across conversations: list, add, change, move, delete, restore, export and import memories, and the memory settings |
 | [`oversight`](https://pkg.go.dev/latere.ai/x/sdk-go/oversight) | What Latere learned about when to ask a person: each kind of step and what it would do now, why it suggested what it did for one step, the steps it holds with their decisions and answers, how often it was wrong, what another trust profile would have done, the person's answers, and forgetting; in an organization, an agent's own trust profile, a member's stricter one, and a weekly report that never shows one member |
 | [`apps`](https://pkg.go.dev/latere.ai/x/sdk-go/apps) | Apps: create, list, change, delete; their deploys, build logs, pictures, releases, visits, gallery listing and who may open them |
-| [`evals`](https://pkg.go.dev/latere.ai/x/sdk-go/evals) | Evals: the definitions, experiments, cells and comparisons of experiments on agents, and an experiment followed as it runs |
+| [`evals`](https://pkg.go.dev/latere.ai/x/sdk-go/evals) | Evals: the definitions, experiments, cells, trials, grids and comparisons of experiments on agents, creating one, running its external trials, and an experiment followed as it runs |
 | [`llm`](https://pkg.go.dev/latere.ai/x/sdk-go/llm) | Calling models in the Lux dialect: generate, stream, count tokens, list models |
 | [`llm/wire`](https://pkg.go.dev/latere.ai/x/sdk-go/llm/wire) | The Lux dialect's types alone, for code that reads or writes the format without calling the API |
 | [`web`](https://pkg.go.dev/latere.ai/x/sdk-go/web) | What the platform reads from the web for a program that shows an answer: a site's icon and the pictures an answer shows |
@@ -131,7 +131,9 @@ if err != nil {
 `GetAgent` reads one agent, by its id or by its name among the agents of
 the context the caller acts in. Its `Status.ID` is the id that a session
 names as `SessionAgent.ID`, and that the decision service keys the
-agent's steps by.
+agent's steps by. `ListAgentVersions` lists an agent's versions, each with
+its number, digest and who applied it, to name a version in words rather
+than by its digest.
 
 A session that stops to ask a question, to have a tool call approved, or
 to wait for a tool your program runs, is idle with `StopReason`
@@ -942,9 +944,25 @@ for event, err := range ev.StreamEvents(ctx, experimentID, nil) {
 
 `StreamEvents` follows an experiment to its end, connecting again after a
 dropped connection from the last event it delivered. `Version.Ref` gives
-the name@digest that names one version exactly. The package reads;
-applying definitions and creating, canceling and closing experiments are
-not covered yet, and a comparison's figures are read from its `RawJSON`.
+the name@digest that names one version exactly.
+
+`ListTrials` and `GetTrial` read an experiment's trials, with the trial
+each one runs again in `RetryOf`. `GetGrid` reads the candidate by task
+grid, and `GetComparison` and `ListComparisonRows` read a comparison's
+suite-level and task-level results: each side's summary, the delta, `P`,
+`Q` and the verdict. `Experiment.RunsDone` counts the runs finished, once
+each: the trials a retry replaced are also counted done, and
+`Progress.Trials` holds them under `evals.TrialsRetried`, which is not a
+state.
+
+`CreateExperiment` creates an experiment. With an `IdempotencyKey` it
+creates only one whose candidates are all external and whose suite names no
+check and no model judge; any other is refused with an error matching
+`evals.ErrSignInNotKept`, since only the console keeps the sign-in an
+experiment that acts as the person needs. `LeaseTrials` takes such an
+experiment's pending trials and `SubmitTrial` sends each one's outcome.
+Applying definitions and canceling and closing experiments are not covered
+yet.
 
 ## Models
 

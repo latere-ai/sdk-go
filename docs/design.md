@@ -647,7 +647,7 @@ a shared page, a trigger, a wallet, a person's spending by day, a pin, a context
 and its bookmarks, a share link, a checkout, the
 data places and terms, a project, a trigger's link or address, a device,
 an app, a deploy, an app's sessions and visits, a listing, a frame pass,
-a connection, an Evals definition, experiment, cell or comparison, a
+a connection, an Evals definition, experiment, cell, trial, grid, comparison result or lease, a
 file, a moved folder, a grant, an upload, a finished sign-in, a memory and
 its lists, or a run of Tidy memory, its list and an undo of it, keeps the
 bytes it was decoded from, returned by

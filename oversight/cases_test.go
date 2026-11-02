@@ -104,6 +104,44 @@ func TestListCases(t *testing.T) {
 	}
 }
 
+// A prediction names the scope whose trust profile applied to its step:
+// the organization's, an agent's own, and, with Subject, one the
+// member's own profile made stricter. A prediction recorded without it
+// reads as an empty scope.
+func TestPredictionProfile(t *testing.T) {
+	const page = `{"entries":[
+{"action":{"org":"org_1","subject":"` + member + `","action_id":"ses_1/toolu_1","kind":"tool","name":"bash","effect":"write"},
+ "prediction":{"verdict":"ask","approve":0.6,"uncertainty":0.3,"thresholds":{"allow_above":0.9,"block_below":0.25},"profile":{"org":"org_1"},"audit_rate":0.05,"source":"learned/1"}},
+{"action":{"org":"org_1","subject":"` + member + `","action_id":"ses_1/toolu_2","kind":"tool","name":"bash","effect":"write"},
+ "prediction":{"verdict":"ask","approve":0.6,"uncertainty":0.3,"thresholds":{"allow_above":0.65,"block_below":0.35},"profile":{"org":"org_1","kind":"tool","agent":"agt_release"},"audit_rate":0.05,"source":"learned/1"}},
+{"action":{"org":"org_1","subject":"` + member + `","action_id":"ses_1/toolu_3","kind":"tool","name":"bash","effect":"write"},
+ "prediction":{"verdict":"ask","approve":0.6,"uncertainty":0.3,"thresholds":{"allow_above":0.98,"block_below":0.25},"profile":{"org":"org_1","agent":"agt_release","subject":"` + member + `"},"audit_rate":0.1,"source":"learned/1"}},
+{"action":{"org":"org_1","subject":"` + member + `","action_id":"ses_1/toolu_4","kind":"tool","name":"bash","effect":"write"},
+ "prediction":{"verdict":"ask","approve":0.6,"uncertainty":0.3,"thresholds":{"allow_above":0.9,"block_below":0.25},"audit_rate":0.05,"source":"learned/1"}}]}`
+	c, calls := fakeAPI(t, 0, func(w http.ResponseWriter, _ *http.Request, _ int) { answer(w, http.StatusOK, page) })
+	got, err := c.ListCasesPage(t.Context(), &oversight.CasesParams{Org: "org_1", Subject: member})
+	if err != nil {
+		t.Fatal(err)
+	}
+	want := []oversight.Scope{
+		{Org: "org_1"},
+		{Org: "org_1", Kind: "tool", Agent: "agt_release"},
+		{Org: "org_1", Agent: "agt_release", Subject: member},
+		{},
+	}
+	if len(got.Items) != len(want) {
+		t.Fatalf("%d cases, want %d", len(got.Items), len(want))
+	}
+	for i, k := range got.Items {
+		if k.Prediction == nil || k.Prediction.Profile != want[i] {
+			t.Errorf("case %d: profile %+v, want %+v", i, k.Prediction, want[i])
+		}
+	}
+	if cs := calls(); len(cs) != 1 || cs[0].query["org"] != "org_1" || cs[0].query["subject"] != member {
+		t.Errorf("calls %+v", cs)
+	}
+}
+
 // An empty list is a page with no items, not nil.
 func TestListCasesEmpty(t *testing.T) {
 	c, _ := fakeAPI(t, 0, func(w http.ResponseWriter, _ *http.Request, _ int) { answer(w, http.StatusOK, `{"entries":null}`) })

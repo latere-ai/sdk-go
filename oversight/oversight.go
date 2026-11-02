@@ -399,11 +399,17 @@ type Certify struct {
 // allow thresholds, the lower of the two block thresholds, the higher
 // audit rate and the stricter claim. A person's own profile never makes
 // the organization's looser.
+//
+// A Prediction names the scope whose profile applied to its step in the
+// same form, with Subject set only where the person's own profile made a
+// number stricter.
 type Scope struct {
-	Org, Kind, Agent string
+	Org   string `json:"org"`
+	Kind  string `json:"kind,omitempty"`
+	Agent string `json:"agent,omitempty"`
 	// Subject names the person whose own profile the scope is, as Subject
 	// builds it.
-	Subject string
+	Subject string `json:"subject,omitempty"`
 }
 
 // query is the scope as the profile routes read it.

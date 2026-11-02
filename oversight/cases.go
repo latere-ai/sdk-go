@@ -120,6 +120,14 @@ type Prediction struct {
 	// applied, recorded because a profile can change.
 	Thresholds Thresholds `json:"thresholds"`
 	AuditRate  float64    `json:"audit_rate"`
+	// Profile is the scope of the trust profile that applied, the most
+	// specific one saved: with Agent, the agent's own; without it, the
+	// organization's, for one Kind of step where Kind is set, or the
+	// built-in default where none is saved. Subject is set as well when
+	// the person's own profile made one of its numbers stricter;
+	// Thresholds and AuditRate are then the stricter of the two. Empty
+	// from a decision service that did not record it.
+	Profile Scope `json:"profile"`
 	// Source names the model, such as "learned/3".
 	Source string `json:"source"`
 	// Reason is one sentence for the person; never show it to an agent.

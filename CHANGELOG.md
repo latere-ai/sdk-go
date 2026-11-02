@@ -26,6 +26,11 @@ minor version may break code, and every such change is marked **Breaking**.
   it comes from fewer members or one member gave more than half of it. A
   week a report showed never changes. Only an owner or an admin of the
   organization reads it.
+- `oversight.Prediction.Profile` reads the scope whose trust profile
+  applied to a step, as the decision service recorded it with the
+  prediction: with `Agent`, the agent's own; with `Subject`, a member's
+  own profile made it stricter; otherwise the organization's. `Scope`
+  gains the JSON names it is read with.
 
 ## [0.25.0] - 2026-11-02
 

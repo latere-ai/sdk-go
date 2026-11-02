@@ -885,7 +885,10 @@ stricter for their own steps: a `Scope` with `Subject` and no `Kind` or
 `Agent`. The decision service applies the stricter of the two, number by
 number, so a member's profile never makes the organization's looser.
 `GetProfile` with `Subject` reads what the member saved, or the
-organization's profile when they saved none. `GetReport` reads the
+organization's profile when they saved none. A case's
+`Prediction.Profile` names the scope whose profile applied to its step:
+with `Agent`, the agent's own; with `Subject`, the member's own made it
+stricter; otherwise the organization's. `GetReport` reads the
 organization's report, week by week. A week shows its numbers 7 days
 after it ends, and only when 5 or more members took part. A number read
 from members' checks shows only when it comes from 5 or more members and

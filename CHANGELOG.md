@@ -36,11 +36,12 @@ minor version may break code, and every such change is marked **Breaking**.
   `Comparison.CandidateSuite` are no longer left to `RawJSON`.
 - `evals.Client.CreateExperiment` creates an experiment from a suite and
   candidates with a budget, trials, mode, parallelism, reference,
-  scheduling, declared comparisons and metadata. With an `IdempotencyKey`
-  it creates only an experiment whose candidates are all external and
-  whose suite names no check and no model judge; any other is refused with
-  an error matching `evals.ErrSignInNotKept`, since only the console keeps
-  the sign-in an experiment that acts as the person needs.
+  scheduling, declared comparisons and metadata, once for each
+  `IdempotencyKey`. An API key creates only an experiment whose candidates
+  are all external and whose suite names no check and no model judge; any
+  other is refused with an error matching `evals.ErrSignInNotKept`, since
+  only the console keeps the sign-in an experiment that acts as the person
+  needs.
 - `evals.Client.LeaseTrials` takes the pending trials of an experiment's
   external candidates, or renews a lease, and returns nothing when there is
   nothing to lease. `SubmitTrial` sends a leased trial's outcome, times,

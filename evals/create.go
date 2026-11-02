@@ -14,13 +14,13 @@ import (
 	"latere.ai/x/sdk-go/latere"
 )
 
-// ErrSignInNotKept matches the refusal of an experiment created with an
-// IdempotencyKey that needs the person's sign-in: its API code is
+// ErrSignInNotKept matches the refusal of an experiment an API key
+// creates that would act as the person: its API code is
 // "sign_in_not_kept", with status 403. Only the console keeps the sign-in
-// an experiment that acts as the person needs, so a program creates only
-// experiments whose candidates are all CandidateExternal and whose suite
-// names no check and no model judge. The *latere.Error the call returns
-// is found with errors.As.
+// such an experiment needs, so a program creates only experiments whose
+// candidates are all CandidateExternal and whose suite names no check and
+// no model judge. The *latere.Error the call returns is found with
+// errors.As.
 var ErrSignInNotKept = errors.New("evals: the experiment needs a sign-in the caller does not keep")
 
 // codeError is an *latere.Error that also matches the sentinel of its API
@@ -102,18 +102,20 @@ type CreateExperimentParams struct {
 	// IdempotencyKey, when set, is sent as the Idempotency-Key header: a
 	// repeat with the same key and body within 24 hours answers the first
 	// experiment instead of making a second, and the call is then retried
-	// after a failure. A key creates only an experiment whose candidates
-	// are all CandidateExternal and whose suite names no check and no
-	// model judge; any other is refused 403 sign_in_not_kept, which
-	// matches ErrSignInNotKept, since only the console keeps the sign-in
-	// an experiment that acts as the person needs. Without a key the call
-	// is sent once, and is not retried.
+	// after a failure. Without one the call is sent once, and is not
+	// retried.
 	IdempotencyKey string `json:"-"`
 }
 
 // CreateExperiment creates an experiment as params say and returns it,
 // pending. A request the API refuses returns a *latere.Error, found with
-// errors.As, whose Code says why; see ErrSignInNotKept for a key.
+// errors.As, whose Code says why.
+//
+// An API key creates only an experiment whose candidates are all
+// CandidateExternal and whose suite names no check and no model judge.
+// Any other acts as the person while it runs, and only the console keeps
+// the sign-in such an experiment needs, so a key's create of one is
+// refused 403 sign_in_not_kept, which matches ErrSignInNotKept.
 func (c *Client) CreateExperiment(ctx context.Context, params *CreateExperimentParams) (*Experiment, error) {
 	if params == nil {
 		return nil, errNoParams

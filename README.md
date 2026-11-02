@@ -955,11 +955,11 @@ each: the trials a retry replaced are also counted done, and
 `Progress.Trials` holds them under `evals.TrialsRetried`, which is not a
 state.
 
-`CreateExperiment` creates an experiment. With an `IdempotencyKey` it
-creates only one whose candidates are all external and whose suite names no
-check and no model judge; any other is refused with an error matching
-`evals.ErrSignInNotKept`, since only the console keeps the sign-in an
-experiment that acts as the person needs. `LeaseTrials` takes such an
+`CreateExperiment` creates an experiment, once for each `IdempotencyKey`.
+An API key creates only one whose candidates are all external and whose
+suite names no check and no model judge; any other is refused with an
+error matching `evals.ErrSignInNotKept`, since only the console keeps the
+sign-in an experiment that acts as the person needs. `LeaseTrials` takes such an
 experiment's pending trials and `SubmitTrial` sends each one's outcome.
 Applying definitions and canceling and closing experiments are not covered
 yet.

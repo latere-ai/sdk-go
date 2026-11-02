@@ -250,6 +250,7 @@ func TestModelsMatchTheSchemas(t *testing.T) {
 	s := d.Components.Schemas
 	d.checkModel(t, "Session", reflect.TypeFor[Session](), s["Session"], false)
 	d.checkModel(t, "Agent", reflect.TypeFor[Agent](), s["Agent"], false)
+	d.checkModel(t, "AgentVersion", reflect.TypeFor[AgentVersion](), s["AgentVersion"], true)
 	d.checkModel(t, "Event", reflect.TypeFor[Event](), s["EventEnvelope"], true)
 	d.checkModel(t, "Delta", reflect.TypeFor[Delta](), s["Delta"], false)
 	// A model may stand for the payloads of several event types, as
@@ -661,9 +662,44 @@ func TestEndpointsAreInTheDocument(t *testing.T) {
 		{"get", "/sessions/search"},
 		{"get", "/sessions/summary"},
 		{"get", "/agents/{ref}"},
+		{"get", "/agents/{ref}/versions"},
 	} {
 		if _, ok := d.Paths[e.path][e.method]; !ok {
 			t.Errorf("%s %s is not in the document", strings.ToUpper(e.method), e.path)
 		}
+	}
+}
+
+// TestAgentVersionsQueryIsTheDocuments: each query parameter the list of an
+// agent's versions sends is one the document names for its route.
+func TestAgentVersionsQueryIsTheDocuments(t *testing.T) {
+	raw, err := os.ReadFile("../openapi/agents.json")
+	if err != nil {
+		t.Fatal(err)
+	}
+	var doc struct {
+		Paths map[string]map[string]struct {
+			Parameters []struct {
+				In   string `json:"in"`
+				Name string `json:"name"`
+			} `json:"parameters"`
+		} `json:"paths"`
+	}
+	if err := json.Unmarshal(raw, &doc); err != nil {
+		t.Fatal(err)
+	}
+	named := map[string]bool{}
+	for _, p := range doc.Paths["/agents/{ref}/versions"]["get"].Parameters {
+		if p.In == "query" {
+			named[p.Name] = true
+		}
+	}
+	for key := range (&ListAgentVersionsParams{Limit: 1, Cursor: "c"}).query("c") {
+		if !named[key] {
+			t.Errorf("the list sends %s, which the document does not name for GET /agents/{ref}/versions", key)
+		}
+	}
+	if len(named) != 2 {
+		t.Errorf("the document names %v; the list sends limit and cursor", named)
 	}
 }

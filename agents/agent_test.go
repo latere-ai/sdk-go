@@ -9,6 +9,7 @@ import (
 	"strings"
 	"testing"
 
+	"latere.ai/x/sdk-go/agents"
 	"latere.ai/x/sdk-go/latere"
 )
 
@@ -59,5 +60,70 @@ func TestGetAgent(t *testing.T) {
 	n := len(*calls)
 	if _, err := c.GetAgent(t.Context(), ""); err == nil || len(*calls) != n {
 		t.Errorf("an empty ref: %v, %d calls", err, len(*calls)-n)
+	}
+}
+
+const agentVersions = `{"items":[
+{"version":3,"digest":"sha256:dac7","created_by":"https://login.example|alice","created_at":"2026-09-22T12:02:00Z"},
+{"version":2,"digest":"sha256:beef","created_by":"https://login.example|alice","created_at":"2026-09-21T12:02:00Z"}],"next_cursor":"Mg"}`
+
+// An agent's versions are read by its name or id, a page at a time, each
+// with the digest a program names it by.
+func TestListAgentVersions(t *testing.T) {
+	c, calls := fakeAPI(t, map[string]string{
+		"GET /v1/agents/agents/release-notes/versions": agentVersions,
+	})
+	page, err := c.ListAgentVersionsPage(t.Context(), "release-notes", &agents.ListAgentVersionsParams{Limit: 2, Cursor: "MQ"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(page.Items) != 2 || page.NextCursor != "Mg" {
+		t.Fatalf("page = %+v", page)
+	}
+	v := page.Items[0]
+	if v.Version != 3 || v.Digest != "sha256:dac7" || v.CreatedBy != "https://login.example|alice" || v.CreatedAt.IsZero() {
+		t.Errorf("decoded %+v", v)
+	}
+	if !strings.Contains(string(v.RawJSON()), `"created_by"`) {
+		t.Errorf("RawJSON = %s", v.RawJSON())
+	}
+	if got := (*calls)[0].Query; got != "cursor=MQ&limit=2" {
+		t.Errorf("query = %q", got)
+	}
+	// The iterator follows the cursor until a page names none; the fake
+	// answers every page with one, so stop after the second page.
+	n := 0
+	for v, err := range c.ListAgentVersions(t.Context(), "release-notes", nil) {
+		if err != nil || v == nil {
+			t.Fatalf("%v, %v", v, err)
+		}
+		if n++; n == 3 {
+			break
+		}
+	}
+	if n != 3 {
+		t.Errorf("read %d versions", n)
+	}
+	if _, err := c.ListAgentVersionsPage(t.Context(), "a/b", nil); !errors.Is(err, latere.ErrNotFound) {
+		t.Errorf("a missing agent: %v", err)
+	}
+	if last := (*calls)[len(*calls)-1]; last.Path != "/v1/agents/agents/a%2Fb/versions" {
+		t.Errorf("sent %+v", last)
+	}
+}
+
+// An empty ref is refused before any request, by both methods.
+func TestListAgentVersionsNeedsARef(t *testing.T) {
+	c, calls := fakeAPI(t, nil)
+	if _, err := c.ListAgentVersionsPage(t.Context(), "", nil); err == nil {
+		t.Error("the page method accepted an empty ref")
+	}
+	for _, err := range c.ListAgentVersions(t.Context(), "", nil) {
+		if err == nil {
+			t.Error("the iterator accepted an empty ref")
+		}
+	}
+	if len(*calls) != 0 {
+		t.Errorf("sent %d requests", len(*calls))
 	}
 }

@@ -13,11 +13,17 @@
 // In learned mode, the decision service decides a step of a progressive
 // session if it has evidence about the person. Elsewhere, the rules and
 // the risk score decide, and the decision service only suggests. It has
-// evidence if it suggests allow or block, or if it asks with AskSplit:
-// the person's answers say much about this kind of step, but the chance
-// that the person allows it is still between the thresholds. Those
-// answers can agree or disagree. If it asks because the person gave too
-// few answers (AskUnsure), it has no evidence yet.
+// evidence if it suggests allow or block, or if it asks with AskSplit, the
+// person's answers about this kind of step disagree, or with AskWider, the
+// step reaches wider than any the person allowed. For an ask of another
+// kind (AskUnsure, AskShort, AskFew), the rules and the risk score decide.
+//
+// The decision service suggests allow only for a step that the person's
+// approvals cover: approvals of the same kind of step, of a Scope at least
+// as wide, with enough weight from enough sessions. A quick approval with
+// no details opened has no weight. A step that is not covered is an ask,
+// AskWider or AskFew, and its Prediction says how far the cover is in
+// Cover.
 //
 // This package is how a program shows a person what it learned and lets
 // them steer it:
@@ -80,6 +86,7 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
+	"fmt"
 	"net/http"
 	"net/url"
 	"strings"
@@ -148,11 +155,24 @@ const (
 	AskUnsure AskKind = "unsure"
 	// AskSplit is a step the person's answers say a lot about, an
 	// EvidenceRatio of 0.5 or more, with Approve still between the
-	// thresholds. The answers can agree or disagree: two Allows of a step
-	// and no Deny can give 0.80 under an AllowAbove of 0.90, and more
-	// Allows can move it above 0.90. AskSplit alone does not say that the
-	// person gave different answers.
+	// thresholds, and the person both allowed and denied steps of its
+	// kind: the answers disagree. A decision service that does not send
+	// AskShort also gives AskSplit for answers that agree.
 	AskSplit AskKind = "split"
+	// AskShort is a step the person's answers say a lot about, an
+	// EvidenceRatio of 0.5 or more, with Approve still between the
+	// thresholds, and the answers agree: two Allows of a step and no Deny
+	// can give 0.80 under an AllowAbove of 0.90, and more Allows can move
+	// it above 0.90.
+	AskShort AskKind = "short"
+	// AskWider is a step that no approval of the person covers: no step of
+	// its kind they allowed had a Scope this wide. The model alone would
+	// suggest allow.
+	AskWider AskKind = "wider"
+	// AskFew is a step whose Scope the person allowed, but with too little
+	// weight or in too few sessions, as its Cover says. The model alone
+	// would suggest allow.
+	AskFew AskKind = "few"
 )
 
 // LearnedParams names whose learned view GetLearned reads.
@@ -309,6 +329,10 @@ type Explanation struct {
 	// Evidence are the person's answers that moved the prediction most:
 	// those toward the verdict's side first, then those against it.
 	Evidence []Evidence `json:"evidence"`
+	// Cover is how far the person's approvals cover the step, with the
+	// nearest approvals whose Scope the step exceeds; nil from a decision
+	// service that does not send it.
+	Cover *Cover `json:"cover,omitempty"`
 
 	raw json.RawMessage
 }
@@ -601,7 +625,55 @@ type AnswerParams struct {
 	// By names who answered, when the caller relays the answer of someone
 	// other than itself.
 	By string `json:"by,omitempty"`
+	// AnswerMS, WaitedMS, DetailsOpened, SuggestionShown, Surface and
+	// Remembered say how the person answered, so the decision service can
+	// weigh the answer. Set each one the caller measured and leave out each
+	// one it did not; never guess. None holds text.
+	//
+	// AnswerMS is the milliseconds from the moment the question was visible
+	// to the person to the answer, from 0 to MaxAnswerMS, as the client
+	// measured it.
+	AnswerMS *int64 `json:"answer_ms,omitempty"`
+	// WaitedMS is the milliseconds from the decision that showed the step
+	// to the answer, as the caller that recorded the decision measured it.
+	WaitedMS *int64 `json:"waited_ms,omitempty"`
+	// DetailsOpened is whether the person opened the step's details, such
+	// as the full input, the change and the target, before answering; nil
+	// where the client offered none.
+	DetailsOpened *bool `json:"details_opened,omitempty"`
+	// SuggestionShown is whether the client showed any part of the
+	// suggestion, such as its verdict, the chance, the reason or an
+	// explanation, before the person answered.
+	SuggestionShown *bool `json:"suggestion_shown,omitempty"`
+	// Surface is where the person answered.
+	Surface Surface `json:"surface,omitempty"`
+	// Remembered is true when the answer also made a standing rule for
+	// later steps. The rule itself is never sent.
+	Remembered bool `json:"remembered,omitempty"`
 }
+
+// MaxAnswerMS is the largest AnswerParams.AnswerMS: one day.
+const MaxAnswerMS = 86_400_000
+
+// Surface is where a person answered about a step.
+type Surface string
+
+// The surfaces of an answer.
+const (
+	// SurfacePrompt is a question in the conversation while the step
+	// waits.
+	SurfacePrompt Surface = "prompt"
+	// SurfaceNotification is a system notification.
+	SurfaceNotification Surface = "notification"
+	// SurfaceQueue is a list of waiting questions or of reviews.
+	SurfaceQueue Surface = "queue"
+	// SurfaceBulk is one gesture that answers more than one step.
+	SurfaceBulk Surface = "bulk"
+	// SurfaceRule is a standing rule, not the person at that time. A
+	// caller sends a rule's decision as a decision, not as an answer; an
+	// answer it sends for one has no weight.
+	SurfaceRule Surface = "rule"
+)
 
 // Answer tells the decision service the person's answer about a step whose
 // decision is recorded; a step with none is refused with an error matching
@@ -613,6 +685,12 @@ type AnswerParams struct {
 func (c *Client) Answer(ctx context.Context, params *AnswerParams) error {
 	if params == nil || params.Org == "" || params.Subject == "" || params.ActionID == "" {
 		return errors.New("oversight: Answer needs the Org, the Subject and the ActionID")
+	}
+	if ms := params.AnswerMS; ms != nil && (*ms < 0 || *ms > MaxAnswerMS) {
+		return fmt.Errorf("oversight: AnswerParams.AnswerMS is %d, not from 0 to %d", *ms, MaxAnswerMS)
+	}
+	if ms := params.WaitedMS; ms != nil && *ms < 0 {
+		return fmt.Errorf("oversight: AnswerParams.WaitedMS is %d, below 0", *ms)
 	}
 	return c.do(ctx, &latere.Request{Method: http.MethodPost, Path: BasePath + "/answers", Body: params, Retry: latere.RetryNever}, nil)
 }

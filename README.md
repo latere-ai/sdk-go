@@ -902,6 +902,21 @@ rel, err := ov.GetReliability(ctx, &oversight.ReliabilityParams{Org: me, Subject
 // how often the suggestions went against the person in the window, and how sure that is
 ```
 
+The decision service suggests allow only for a step that the person's
+approvals cover: approvals of the same kind of step whose reach is at
+least as wide, with enough weight from enough sessions. A case's
+`Prediction.Scope` is the reach the service compared, and
+`Prediction.Cover` how far the cover is: `Covered`, `Weight` against
+`MinWeight` and `Sessions` against `MinSessions`. An explanation's
+`Cover.Nearest` names up to three approved steps whose reach the step
+exceeds. A step that is not covered is an ask, `oversight.AskWider` or
+`oversight.AskFew`. An answer weighs more when it says how the person
+gave it: `AnswerParams` carries `AnswerMS`, `WaitedMS`, `DetailsOpened`,
+`SuggestionShown`, `Surface` and `Remembered`. A quick approval with no
+details opened does not count toward the cover. Set only what the caller
+measured. A certificate's `Considered` counts the checks of its clean run
+that were considered answers.
+
 `Preview` counts what another trust profile would have done with the
 person's recent steps, from what was predicted for each as it was made.
 `Forget` removes everything the decision service holds about the person,

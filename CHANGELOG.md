@@ -31,15 +31,30 @@ minor version may break code, and every such change is marked **Breaking**.
   in a session, with the counts, the `Limit` reached and the `Effect`.
   `LayerDenials` is a call that waits for the person after it, and
   `StopDenials` an unattended turn that it stopped.
-- The ask kinds `agents.AskShort`, `AskWider` and `AskFew`. A short ask
-  rests on answers that agree, with the chance still between the
-  thresholds. A wider ask is a step that reaches wider than any the
-  person allowed, and a few ask one whose reach the person allowed with
-  too little weight or in too few sessions.
+- The ask kinds `AskShort`, `AskWider` and `AskFew`, in `agents` and
+  `oversight`. A short ask rests on answers that agree, with the chance
+  still between the thresholds. A wider ask is a step that reaches wider
+  than any the person allowed, and a few ask one whose reach the person
+  allowed with too little weight or in too few sessions.
+- `oversight.Prediction.Scope`, the reach of a step as the decision
+  service compared it, as a `StepScope` whose members can be
+  `oversight.Unknown`. Its `Crosses` reads a boundary written as a
+  boolean or as `yes` or `no`.
+- `oversight.Prediction.Cover` and `Explanation.Cover`: whether the
+  person's approvals cover the step, their `Weight` and `Sessions`
+  against `MinWeight` and `MinSessions`, and on an explanation the
+  `Nearest` approvals whose scope the step exceeds.
+- `oversight.AnswerParams` sends how the person answered: `AnswerMS`,
+  `WaitedMS`, `DetailsOpened`, `SuggestionShown`, `Surface` (with
+  `SurfaceRule`) and `Remembered`, each only when set.
+- `oversight.Certificate.Considered` counts the checks of the clean run
+  that were considered answers; nil from a decision service that does not
+  send it.
 
 ### Changed
 
-- `agents.AskSplit` is an ask whose answers disagree: the person both allowed and denied steps of its kind. An ask
+- `oversight.AskSplit` and `agents.AskSplit` are an ask whose answers
+  disagree: the person both allowed and denied steps of its kind. An ask
   whose answers agree is `AskShort`. A decision service that does not
   send `AskShort` still gives `AskSplit` for answers that agree, with an
   `EvidenceRatio` of 0.5 or more and `Approve` between the thresholds.

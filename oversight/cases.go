@@ -7,6 +7,7 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
+	"fmt"
 	"iter"
 	"net/http"
 	"net/url"
@@ -131,7 +132,184 @@ type Prediction struct {
 	// Source names the model, such as "learned/3".
 	Source string `json:"source"`
 	// Reason is one sentence for the person; never show it to an agent.
+	// The reason of an ask states no chance.
 	Reason string `json:"reason,omitempty"`
+	// Scope is the reach of the step the decision service read and
+	// compared, in each member the wider of its reading of the input and
+	// what the caller claimed; nil from a decision service that does not
+	// send it.
+	Scope *StepScope `json:"scope,omitempty"`
+	// Cover is how far the person's approvals cover the step; nil for a
+	// prediction made without the person's model, and from a decision
+	// service that does not send it.
+	Cover *Cover `json:"cover,omitempty"`
+}
+
+// StepScope is the reach of a step: whether it can be undone, the
+// boundaries it crosses, the class and the kind of its target, and whether
+// it is a first contact. Every member is a word of a closed list, and none
+// holds a path, a host, a branch or other text of the step's input. An
+// approval covers a step of its kind whose scope is within its own, in
+// each member but Contact and TargetKind.
+type StepScope struct {
+	// Undo is whether the step can be undone.
+	Undo Undo `json:"undo,omitempty"`
+	// Crosses is the boundaries the step crosses.
+	Crosses Crosses `json:"crosses"`
+	// TargetClass is the class of what the step changes.
+	TargetClass TargetClass `json:"target_class,omitempty"`
+	// TargetKind is the kind of what the step changes, without its name,
+	// such as "ref", "repository", "package", "host", "path" or "app";
+	// empty where none is known.
+	TargetKind string `json:"target_kind,omitempty"`
+	// Contact is whether no earlier approved step of the person had the
+	// same target.
+	Contact Contact `json:"contact,omitempty"`
+}
+
+// Unknown is the value of a member of a StepScope that nobody read or
+// claimed. It is not the least reach: an approval of unknown reach covers
+// only a step of unknown or the least reach.
+const Unknown = "unknown"
+
+// Undo is whether a step can be undone, or Unknown.
+type Undo string
+
+// The values of Undo, from the least reach to the most.
+const (
+	// UndoNone is a step that changes nothing.
+	UndoNone Undo = "none"
+	// UndoReversible can be undone in the workspace with no loss, such as
+	// an edit of a tracked file or a local commit.
+	UndoReversible Undo = "reversible"
+	// UndoRecoverable can be undone from a copy or by a second step, such
+	// as a push of new commits or an update of a preview.
+	UndoRecoverable Undo = "recoverable"
+	// UndoIrreversible cannot be undone, or other people already saw it,
+	// such as a force push that drops commits or a sent message.
+	UndoIrreversible Undo = "irreversible"
+)
+
+// TargetClass is the class of what a step changes, or Unknown.
+type TargetClass string
+
+// The classes of a target, from the least reach to the most.
+const (
+	// TargetScratch is a disposable thing.
+	TargetScratch TargetClass = "scratch"
+	// TargetOwn is a thing the session or the person made, such as the
+	// session's branch or a preview.
+	TargetOwn TargetClass = "own"
+	// TargetShared is a thing other people use, such as another branch.
+	TargetShared TargetClass = "shared"
+	// TargetPrimary is the default or a protected branch, production, or a
+	// live release.
+	TargetPrimary TargetClass = "primary"
+)
+
+// Contact is whether a step is a first contact with its target, or
+// Unknown.
+type Contact string
+
+// The values of Contact.
+const (
+	// ContactFirst is a target no earlier approved step of the person had.
+	ContactFirst Contact = "first"
+	// ContactRepeat is a target an earlier approved step had.
+	ContactRepeat Contact = "repeat"
+)
+
+// Crosses is the boundaries a step crosses. Each is true when the step
+// crosses it, false when it does not, and nil when it is not known.
+type Crosses struct {
+	// Machine is the machine outside the workspace, such as a home or a
+	// system path.
+	Machine *bool `json:"machine,omitempty"`
+	// Remote is a system other than the machine. Network, Organization
+	// and Public each make it true.
+	Remote *bool `json:"remote,omitempty"`
+	// Network is a host outside the session's network.
+	Network *bool `json:"network,omitempty"`
+	// Organization is a party that the organization does not own.
+	Organization *bool `json:"organization,omitempty"`
+	// Public makes something readable by anyone.
+	Public *bool `json:"public,omitempty"`
+}
+
+// UnmarshalJSON reads each boundary as true or false, or as "yes" or
+// "no", and reads a boundary that is left out, null, "unknown" or any
+// other word as not known, so a decision service that names an unknown
+// boundary is read as one that leaves it out.
+func (c *Crosses) UnmarshalJSON(b []byte) error {
+	var raw map[string]json.RawMessage
+	if err := json.Unmarshal(b, &raw); err != nil {
+		return err
+	}
+	read := func(name string) (*bool, error) {
+		v, ok := raw[name]
+		if !ok || string(v) == "null" {
+			return nil, nil
+		}
+		var flag bool
+		if json.Unmarshal(v, &flag) == nil {
+			return &flag, nil
+		}
+		var word string
+		if err := json.Unmarshal(v, &word); err != nil {
+			return nil, fmt.Errorf("oversight: crosses.%s is %s, not a boolean or a word", name, v)
+		}
+		switch word {
+		case "yes":
+			flag = true
+			return &flag, nil
+		case "no":
+			return &flag, nil
+		}
+		return nil, nil
+	}
+	var out Crosses
+	for name, field := range map[string]**bool{"machine": &out.Machine, "remote": &out.Remote, "network": &out.Network, "organization": &out.Organization, "public": &out.Public} {
+		v, err := read(name)
+		if err != nil {
+			return err
+		}
+		*field = v
+	}
+	*c = out
+	return nil
+}
+
+// Cover is how far a person's approvals cover a step: those of the same
+// kind of step, whose Scope the step's is within, and whose answer has
+// weight. A step is covered when, for each of its kinds, those approvals
+// have MinWeight or more and come from MinSessions or more sessions. The
+// decision service suggests allow only for a covered step.
+type Cover struct {
+	// Covered is whether the step is covered.
+	Covered bool `json:"covered"`
+	// Weight is the total weight of the covering approvals, and Sessions
+	// how many different sessions they come from, for the kind of step
+	// with the least weight. An approval counts 1, and one given quickly
+	// with no details opened counts 0.
+	Weight   float64 `json:"weight"`
+	Sessions int     `json:"sessions"`
+	// MinWeight and MinSessions are the settings that applied.
+	MinWeight   float64 `json:"min_weight"`
+	MinSessions int     `json:"min_sessions"`
+	// Nearest are up to three approved steps of the same kind whose Scope
+	// the step exceeds, the closest first: a client can say "you allowed
+	// this, and the step reaches wider". Only an Explanation sets it.
+	Nearest []NearestApproval `json:"nearest,omitempty"`
+}
+
+// NearestApproval is an approved step whose Scope a step exceeds.
+type NearestApproval struct {
+	// ActionID is the approved step, as ActionID builds it.
+	ActionID string `json:"action_id"`
+	// Label names its kind of step and its reach, such as
+	// "publish: update".
+	Label string    `json:"label"`
+	At    time.Time `json:"at"`
 }
 
 // Decision is what was done about a step.
@@ -302,6 +480,11 @@ type Certificate struct {
 	// Needed is how long the run must be for the claim to hold.
 	Needed int  `json:"needed"`
 	Holds  bool `json:"holds"`
+	// Considered counts the checks of the clean run that are considered
+	// answers, whose weight is 1, so a reader can see if the claim rests
+	// on quick answers. The claim counts every check. Nil from a decision
+	// service that does not send it.
+	Considered *int `json:"considered,omitempty"`
 }
 
 // GetReliability reports how often the source params names went against

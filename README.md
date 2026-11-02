@@ -25,7 +25,7 @@ they share. Import the ones you use:
 | [`storage`](https://pkg.go.dev/latere.ai/x/sdk-go/storage) | Files in Latere Storage: upload a file of any size, read, list, move, delete, and link to it; what others shared with you |
 | [`account`](https://pkg.go.dev/latere.ai/x/sdk-go/account) | Your Effort levels, wallet and payment pages, preferences, pins and bookmarks, share links, projects, trigger links and addresses, and computers |
 | [`memory`](https://pkg.go.dev/latere.ai/x/sdk-go/memory) | What Latere remembers about a person across conversations: list, add, change, move, delete, restore, export and import memories, and the memory settings |
-| [`oversight`](https://pkg.go.dev/latere.ai/x/sdk-go/oversight) | What Latere learned about when to ask a person: each kind of step and what it would do now, why it suggested what it did for one step, the steps it holds with their decisions and answers, how often it was wrong, what another trust profile would have done, the person's answers, and forgetting |
+| [`oversight`](https://pkg.go.dev/latere.ai/x/sdk-go/oversight) | What Latere learned about when to ask a person: each kind of step and what it would do now, why it suggested what it did for one step, the steps it holds with their decisions and answers, how often it was wrong, what another trust profile would have done, the person's answers, and forgetting; in an organization, an agent's own trust profile, a member's stricter one, and a weekly report that never shows one member |
 | [`apps`](https://pkg.go.dev/latere.ai/x/sdk-go/apps) | Apps: create, list, change, delete; their deploys, build logs, pictures, releases, visits, gallery listing and who may open them |
 | [`evals`](https://pkg.go.dev/latere.ai/x/sdk-go/evals) | Evals: the definitions, experiments, cells and comparisons of experiments on agents, and an experiment followed as it runs |
 | [`llm`](https://pkg.go.dev/latere.ai/x/sdk-go/llm) | Calling models in the Lux dialect: generate, stream, count tokens, list models |
@@ -872,10 +872,37 @@ rel, err := ov.GetReliability(ctx, &oversight.ReliabilityParams{Org: me, Subject
 
 `Preview` counts what another trust profile would have done with the
 person's recent steps, from what was predicted for each as it was made.
-`Forget` removes everything the decision service holds about the person.
-Costs that would let it decide a step of a person it knows nothing about
-are refused with `oversight.ErrAskTooCostly`, and an answer to a step with
-no recorded decision with `oversight.ErrNoDecision`.
+`Forget` removes everything the decision service holds about the person,
+their own trust profile included. Costs that would let it decide a step
+of a person it knows nothing about are refused with
+`oversight.ErrAskTooCostly`, and an answer to a step with no recorded
+decision with `oversight.ErrNoDecision`.
+
+In an organization, an owner or an admin can give one agent its own
+trust profile with `PutProfile`, and take it back to the organization's
+with `DeleteProfile`. A member can make the organization's profile
+stricter for their own steps: a `Scope` with `Subject` and no `Kind` or
+`Agent`. The decision service applies the stricter of the two, number by
+number, so a member's profile never makes the organization's looser.
+`GetProfile` with `Subject` reads what the member saved, or the
+organization's profile when they saved none. `GetReport` reads the
+organization's report, week by week. A week shows its numbers 7 days
+after it ends, and only when 5 or more members took part. A number read
+from members' checks shows only when it comes from 5 or more members and
+no member gave more than half. A week a report showed never changes:
+
+```go
+err = ov.DeleteProfile(ctx, oversight.Scope{Org: orgID, Agent: agentID})
+// the agent is back on the organization's trust profile
+_, err = ov.PutProfile(ctx, &oversight.Profile{Org: orgID, Subject: me, Costs: oversight.Costs{FalseAllow: 50, FalseBlock: 4, Ask: 1}, AuditRate: 0.05})
+// stricter for this member's own steps, never looser
+rep, err := ov.GetReport(ctx, &oversight.ReportParams{Org: orgID, From: monday, To: monday.AddDate(0, 0, 28)})
+for _, w := range rep.Weeks {
+	if w.State == oversight.WeekReady && w.Total.FlagChecks.Denied != nil {
+		fmt.Printf("%s: %d of %d flagged steps should have asked\n", w.From.Format("Jan 2"), *w.Total.FlagChecks.Denied, w.Total.FlagChecks.Checks)
+	}
+}
+```
 
 ## Evals
 

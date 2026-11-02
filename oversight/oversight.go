@@ -29,7 +29,12 @@
 //     answers lately.
 //   - Preview counts what another trust profile would have done with the
 //     person's recent steps, and GetProfile and PutProfile read and choose
-//     the profile.
+//     the profile. DeleteProfile removes a saved one, so an agent goes
+//     back to its organization's profile. A person's own profile in an
+//     organization, a Scope with Subject, only ever makes the
+//     organization's profile stricter for that person.
+//   - GetReport reads an organization's weekly report: how its agents'
+//     steps went across all its members, never one person.
 //   - ListCases lists the steps the decision service holds about the
 //     person, each with its suggestion, its decision and the person's
 //     answers, or only those waiting for the person to check them.
@@ -385,8 +390,31 @@ type Certify struct {
 // Scope is what a trust profile applies to: an organization, which is a
 // person's subject in their own context and the organization's id in an
 // organization's, and optionally one kind of step, one agent, or both.
+//
+// A Scope with Subject is that person's own trust profile in the
+// organization, for all their steps there: it has no Kind and no Agent,
+// and in a person's own context Subject is Org. The decision service
+// applies the stricter of the organization's profile and the person's own
+// to each of the person's steps, number by number: the higher of the two
+// allow thresholds, the lower of the two block thresholds, the higher
+// audit rate and the stricter claim. A person's own profile never makes
+// the organization's looser.
 type Scope struct {
 	Org, Kind, Agent string
+	// Subject names the person whose own profile the scope is, as Subject
+	// builds it.
+	Subject string
+}
+
+// query is the scope as the profile routes read it.
+func (s Scope) query() url.Values {
+	q := url.Values{"org": {s.Org}}
+	for name, v := range map[string]string{"kind": s.Kind, "agent": s.Agent, "subject": s.Subject} {
+		if v != "" {
+			q.Set(name, v)
+		}
+	}
+	return q
 }
 
 // Profile is a trust profile: the costs a scope states and what follows
@@ -395,7 +423,10 @@ type Profile struct {
 	Org   string `json:"org"`
 	Kind  string `json:"kind,omitempty"`
 	Agent string `json:"agent,omitempty"`
-	Costs Costs  `json:"costs"`
+	// Subject is set on a person's own profile in the organization, as
+	// Scope says.
+	Subject string `json:"subject,omitempty"`
+	Costs   Costs  `json:"costs"`
 	// AuditRate is the share, from 0 to 1, of the steps run on their own
 	// that are picked at random for the person to check.
 	AuditRate float64  `json:"audit_rate"`
@@ -425,31 +456,49 @@ func (p *Profile) UnmarshalJSON(b []byte) error {
 
 // GetProfile reads the trust profile that applies to scope: the most
 // specific one saved, or the built-in default, which says so in Default.
-// It refuses a caller that may not read the scope's profiles with an error
-// matching latere.ErrForbidden.
+// The Kind and the Agent of the profile it returns say which scope that
+// is: a profile with the Agent of scope is the agent's own, and one
+// without it is the organization's.
+//
+// With Subject, GetProfile reads the person's own profile as they saved
+// it, with Subject set, and the organization's profile, with no Subject,
+// when they saved none. It never returns the stricter of the two that the
+// decision service applies; a program reads both and compares their
+// thresholds.
+//
+// It refuses a caller that may not read the scope's profiles with an
+// error matching latere.ErrForbidden.
 func (c *Client) GetProfile(ctx context.Context, scope Scope) (*Profile, error) {
 	if scope.Org == "" {
 		return nil, errors.New("oversight: GetProfile needs the Org")
 	}
-	q := url.Values{"org": {scope.Org}}
-	if scope.Kind != "" {
-		q.Set("kind", scope.Kind)
-	}
-	if scope.Agent != "" {
-		q.Set("agent", scope.Agent)
-	}
 	var out Profile
-	if err := c.do(ctx, &latere.Request{Method: http.MethodGet, Path: BasePath + "/profiles", Query: q}, &out); err != nil {
+	if err := c.do(ctx, &latere.Request{Method: http.MethodGet, Path: BasePath + "/profiles", Query: scope.query()}, &out); err != nil {
 		return nil, err
 	}
 	return &out, nil
 }
 
+// DeleteProfile removes the trust profile saved for exactly scope, so the
+// next one applies: an agent's scope goes back to its organization's
+// profile, a person's own goes back to the organization's, and an
+// organization's goes back to the built-in default. It changes no step
+// already suggested about. Removing a profile that is not saved is no
+// error, so it is retried like a read. It refuses a caller that may not
+// save the scope's profiles with an error matching latere.ErrForbidden.
+func (c *Client) DeleteProfile(ctx context.Context, scope Scope) error {
+	if scope.Org == "" {
+		return errors.New("oversight: DeleteProfile needs the Org")
+	}
+	return c.do(ctx, &latere.Request{Method: http.MethodDelete, Path: BasePath + "/profiles", Query: scope.query()}, nil)
+}
+
 // PutProfile saves profile for its scope and returns it as saved, with its
-// thresholds. Costs under which the decision service would decide a step
-// of a person it knows nothing about, each kind of error costing two asks
-// or less, are refused with an error matching ErrAskTooCostly. It sets
-// values only, so it is retried like a read.
+// thresholds. A profile with Subject is that person's own profile in the
+// organization, as Scope says. Costs under which the decision service
+// would decide a step of a person it knows nothing about, each kind of
+// error costing two asks or less, are refused with an error matching
+// ErrAskTooCostly. It sets values only, so it is retried like a read.
 func (c *Client) PutProfile(ctx context.Context, profile *Profile) (*Profile, error) {
 	if profile == nil || profile.Org == "" {
 		return nil, errors.New("oversight: PutProfile needs a profile with its Org")
@@ -563,8 +612,11 @@ type ForgetParams struct {
 }
 
 // Forget removes everything the decision service holds about the person in
-// the organization: their steps, their answers and what it learned from
-// them. Forgetting twice is forgetting once, so it is retried like a read.
+// the organization: their steps, their answers, what it learned from them,
+// and their own trust profile there. The weeks of the organization's
+// report that were already read stay as they were: they hold no record of
+// one person. Forgetting twice is forgetting once, so it is retried like a
+// read.
 func (c *Client) Forget(ctx context.Context, params *ForgetParams) error {
 	if params == nil || params.Org == "" || params.Subject == "" {
 		return errors.New("oversight: Forget needs the Org and the Subject")

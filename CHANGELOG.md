@@ -7,6 +7,26 @@ minor version may break code, and every such change is marked **Breaking**.
 
 ## [Unreleased]
 
+### Added
+
+- `oversight.Client.DeleteProfile` removes the trust profile saved for
+  exactly a scope, so an agent goes back to its organization's profile.
+  Removing one that is not saved is no error.
+- `oversight.Scope.Subject` and `oversight.Profile.Subject` name a
+  member's own trust profile in an organization. It has no kind and no
+  agent, and the decision service applies the stricter of it and the
+  organization's, so it never makes the organization's looser.
+  `GetProfile` with a subject reads what the member saved, or the
+  organization's profile when they saved none. `Forget` also removes it.
+- `oversight.Client.GetReport` reads an organization's weekly report:
+  `Report`, `Week`, `ReportCell`, `AgentCell`, `VerdictCounts`,
+  `FlagChecks` and `Rates`. A week shows its numbers 7 days after it
+  ends, and only when `ReportMinMembers` (5) members or more took part. A
+  number read from members' checks is nil and listed in `Withheld` when
+  it comes from fewer members or one member gave more than half of it. A
+  week a report showed never changes. Only an owner or an admin of the
+  organization reads it.
+
 ## [0.25.0] - 2026-11-02
 
 ### Added

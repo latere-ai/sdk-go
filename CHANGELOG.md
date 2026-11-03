@@ -7,6 +7,8 @@ minor version may break code, and every such change is marked **Breaking**.
 
 ## [Unreleased]
 
+## [0.31.0] - 2026-11-03
+
 ### Changed
 
 - The `oversight` models are held to the oversight document of Limen

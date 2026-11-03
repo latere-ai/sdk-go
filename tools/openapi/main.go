@@ -36,6 +36,7 @@ var documents = map[string]string{
 	"connections": "https://platform.latere.ai/docs/connections/openapi.yaml",
 	"evals":       "https://platform.latere.ai/docs/evals/openapi.yaml",
 	"messaging":   "https://platform.latere.ai/docs/messaging/openapi.yaml",
+	"oversight":   "https://platform.latere.ai/docs/oversight/openapi.yaml",
 	"storage":     "https://platform.latere.ai/docs/storage/openapi.yaml",
 }
 

@@ -1,0 +1,3222 @@
+{
+  "components": {
+    "parameters": {
+      "agent": {
+        "description": "The agent a profile is scoped to.",
+        "in": "query",
+        "name": "agent",
+        "schema": {
+          "type": "string"
+        }
+      },
+      "kind": {
+        "description": "The kind of action a profile is scoped to.",
+        "in": "query",
+        "name": "kind",
+        "schema": {
+          "type": "string"
+        }
+      },
+      "org": {
+        "in": "query",
+        "name": "org",
+        "required": true,
+        "schema": {
+          "type": "string"
+        }
+      },
+      "profileSubject": {
+        "description": "The person whose own profile in the organization this is. It excludes kind and agent, and in the context of a person it equals org.",
+        "in": "query",
+        "name": "subject",
+        "schema": {
+          "type": "string"
+        }
+      },
+      "subject": {
+        "in": "query",
+        "name": "subject",
+        "required": true,
+        "schema": {
+          "type": "string"
+        }
+      }
+    },
+    "responses": {
+      "action_conflict": {
+        "content": {
+          "application/json": {
+            "schema": {
+              "$ref": "#/components/schemas/Error"
+            }
+          }
+        },
+        "description": "409 action_conflict: A different action already uses this action ID. Give each action its own ID."
+      },
+      "already_decided": {
+        "content": {
+          "application/json": {
+            "schema": {
+              "$ref": "#/components/schemas/Error"
+            }
+          }
+        },
+        "description": "409 already_decided: This action already has a decision. Limen accepts one decision for each action."
+      },
+      "ask_too_costly": {
+        "content": {
+          "application/json": {
+            "schema": {
+              "$ref": "#/components/schemas/Error"
+            }
+          }
+        },
+        "description": "422 ask_too_costly: With these costs, Limen would not ask about an action of a person that it has no answers from. Make the cost of each type of error more than two times the cost of an ask."
+      },
+      "authorizer_unavailable": {
+        "content": {
+          "application/json": {
+            "schema": {
+              "$ref": "#/components/schemas/Error"
+            }
+          }
+        },
+        "description": "503 authorizer_unavailable: The permission service is not available. Send the request again after a short time."
+      },
+      "body_too_large": {
+        "content": {
+          "application/json": {
+            "schema": {
+              "$ref": "#/components/schemas/Error"
+            }
+          }
+        },
+        "description": "413 body_too_large: The request is larger than the limit of Limen. Send it in smaller parts."
+      },
+      "forbidden": {
+        "content": {
+          "application/json": {
+            "schema": {
+              "$ref": "#/components/schemas/Error"
+            }
+          }
+        },
+        "description": "403 forbidden: You do not have permission for this request. Ask an administrator of the organization for access."
+      },
+      "internal": {
+        "content": {
+          "application/json": {
+            "schema": {
+              "$ref": "#/components/schemas/Error"
+            }
+          }
+        },
+        "description": "500 internal: Limen had an internal failure. Send the request again. If the failure continues, report it with the request ID."
+      },
+      "invalid_action": {
+        "content": {
+          "application/json": {
+            "schema": {
+              "$ref": "#/components/schemas/Error"
+            }
+          }
+        },
+        "description": "400 invalid_action: The action has a missing field or a value that is not permitted. Correct the fields that the details list, then send the action again."
+      },
+      "invalid_answer": {
+        "content": {
+          "application/json": {
+            "schema": {
+              "$ref": "#/components/schemas/Error"
+            }
+          }
+        },
+        "description": "400 invalid_answer: The answer has a missing field or a value that is not permitted. Correct the fields that the details list, then send the answer again."
+      },
+      "invalid_decision": {
+        "content": {
+          "application/json": {
+            "schema": {
+              "$ref": "#/components/schemas/Error"
+            }
+          }
+        },
+        "description": "400 invalid_decision: The decision has a missing field or a value that is not permitted. Correct the fields that the details list, then send the decision again."
+      },
+      "invalid_profile": {
+        "content": {
+          "application/json": {
+            "schema": {
+              "$ref": "#/components/schemas/Error"
+            }
+          }
+        },
+        "description": "400 invalid_profile: The cost profile has a missing field or a value that is not permitted. Correct the fields that the details list, then save the cost profile again."
+      },
+      "invalid_query": {
+        "content": {
+          "application/json": {
+            "schema": {
+              "$ref": "#/components/schemas/Error"
+            }
+          }
+        },
+        "description": "400 invalid_query: The request has a missing field or a value that is not permitted. Correct the fields that the details list, then send the request again."
+      },
+      "invalid_replay": {
+        "content": {
+          "application/json": {
+            "schema": {
+              "$ref": "#/components/schemas/Error"
+            }
+          }
+        },
+        "description": "400 invalid_replay: A replayed record has a missing field or a value that is not permitted. Correct the records that the details list, then send the replay again."
+      },
+      "no_case": {
+        "content": {
+          "application/json": {
+            "schema": {
+              "$ref": "#/components/schemas/Error"
+            }
+          }
+        },
+        "description": "404 no_case: Limen has no record of this action. Check the organization, the person, and the action ID."
+      },
+      "no_decision": {
+        "content": {
+          "application/json": {
+            "schema": {
+              "$ref": "#/components/schemas/Error"
+            }
+          }
+        },
+        "description": "409 no_decision: This action has no recorded decision. Record the decision, then send the answer."
+      },
+      "rate_limited": {
+        "content": {
+          "application/json": {
+            "schema": {
+              "$ref": "#/components/schemas/Error"
+            }
+          }
+        },
+        "description": "429 rate_limited: There are too many requests. Wait a short time, then send the request again."
+      },
+      "service_unavailable": {
+        "content": {
+          "application/json": {
+            "schema": {
+              "$ref": "#/components/schemas/Error"
+            }
+          }
+        },
+        "description": "503 unavailable or authorizer_unavailable: Limen, or the permission service it asks, is unavailable; a decision point holds the action for a person.",
+        "x-limen-codes": [
+          "unavailable",
+          "authorizer_unavailable"
+        ]
+      },
+      "unauthenticated": {
+        "content": {
+          "application/json": {
+            "schema": {
+              "$ref": "#/components/schemas/Error"
+            }
+          }
+        },
+        "description": "401 unauthenticated: The request has no valid credential. Sign in again, then send the request again."
+      },
+      "unavailable": {
+        "content": {
+          "application/json": {
+            "schema": {
+              "$ref": "#/components/schemas/Error"
+            }
+          }
+        },
+        "description": "503 unavailable: Limen is not available now. Hold the action for a person, and send the request again after a short time."
+      }
+    },
+    "schemas": {
+      "Action": {
+        "description": "One proposed action, described by what the decision point can observe before it runs.",
+        "properties": {
+          "action_id": {
+            "description": "The decision point's own id for the action, unique within the organization and subject.",
+            "examples": [
+              "ses_9f/toolu_01"
+            ],
+            "type": "string"
+          },
+          "actor": {
+            "$ref": "#/components/schemas/Actor"
+          },
+          "attributes": {
+            "additionalProperties": {
+              "type": [
+                "string",
+                "number",
+                "boolean"
+              ]
+            },
+            "description": "Further observable facts the domain has. Values are strings, finite numbers, or booleans.",
+            "maxProperties": 64,
+            "type": "object"
+          },
+          "effect": {
+            "description": "The widest effect the action can have.",
+            "enum": [
+              "none",
+              "read",
+              "write",
+              "external"
+            ],
+            "type": "string"
+          },
+          "environment": {
+            "$ref": "#/components/schemas/Environment"
+          },
+          "input": {
+            "description": "The action's input. Only deterministic feature extractors read it; Limen never stores it."
+          },
+          "kind": {
+            "description": "The domain of the action.",
+            "examples": [
+              "tool",
+              "egress",
+              "repo",
+              "spend"
+            ],
+            "type": "string"
+          },
+          "name": {
+            "description": "The operation within the kind.",
+            "examples": [
+              "bash",
+              "mcp__github__merge_pull_request",
+              "ref.update"
+            ],
+            "type": "string"
+          },
+          "org": {
+            "description": "The organization whose cost profile applies and whose records these are.",
+            "type": "string"
+          },
+          "reversible": {
+            "description": "Whether the action can be undone, when known.",
+            "type": "boolean"
+          },
+          "scope": {
+            "$ref": "#/components/schemas/ReachClaim"
+          },
+          "signals": {
+            "items": {
+              "$ref": "#/components/schemas/Signal"
+            },
+            "type": "array"
+          },
+          "subject": {
+            "description": "The person on whose behalf the action runs and whose approvals Limen learns, as the issuer and the token's sub joined by a pipe.",
+            "examples": [
+              "https://issuer.example|usr_42"
+            ],
+            "type": "string"
+          },
+          "target": {
+            "$ref": "#/components/schemas/Target"
+          }
+        },
+        "required": [
+          "org",
+          "subject",
+          "action_id",
+          "kind",
+          "name",
+          "effect"
+        ],
+        "type": "object"
+      },
+      "Actor": {
+        "description": "Who proposed the action.",
+        "properties": {
+          "id": {
+            "type": "string"
+          },
+          "kind": {
+            "examples": [
+              "agent",
+              "service",
+              "person"
+            ],
+            "type": "string"
+          },
+          "session": {
+            "description": "The run the action belongs to, for example an agent's session. The cover rule counts the sessions of a person's approvals by it, and the weight of an answer counts the reviews before it in its session. An action without it counts as the UTC day it was received. Limen never reads a session out of action_id.",
+            "type": "string"
+          }
+        },
+        "required": [
+          "kind"
+        ],
+        "type": "object"
+      },
+      "AgentCell": {
+        "description": "The cell of one agent, named by the actor id of its cases. Its other fields are those of ReportCell.",
+        "properties": {
+          "agent": {
+            "type": "string"
+          },
+          "applied": {
+            "$ref": "#/components/schemas/SourceRates"
+          },
+          "decisions": {
+            "$ref": "#/components/schemas/VerdictCounts"
+          },
+          "flag_reviews": {
+            "$ref": "#/components/schemas/FlagReviews"
+          },
+          "learned": {
+            "$ref": "#/components/schemas/SourceRates"
+          },
+          "subjects": {
+            "minimum": 5,
+            "type": "integer"
+          },
+          "withheld": {
+            "items": {
+              "enum": [
+                "flag_reviews.denied",
+                "applied.false_allow",
+                "applied.false_block",
+                "learned.false_allow",
+                "learned.false_block"
+              ],
+              "type": "string"
+            },
+            "type": "array"
+          }
+        },
+        "required": [
+          "agent",
+          "subjects",
+          "decisions",
+          "flag_reviews",
+          "applied",
+          "learned",
+          "withheld"
+        ],
+        "type": "object"
+      },
+      "Answer": {
+        "properties": {
+          "action_id": {
+            "type": "string"
+          },
+          "answer_ms": {
+            "$ref": "#/components/schemas/AnswerMS"
+          },
+          "approve": {
+            "type": "boolean"
+          },
+          "by": {
+            "description": "Who answered, when the caller relays the answer for someone else. Honored only when the authorizer allows the relay.",
+            "type": "string"
+          },
+          "details_opened": {
+            "$ref": "#/components/schemas/DetailsOpened"
+          },
+          "org": {
+            "type": "string"
+          },
+          "remembered": {
+            "$ref": "#/components/schemas/Remembered"
+          },
+          "subject": {
+            "type": "string"
+          },
+          "suggestion_shown": {
+            "$ref": "#/components/schemas/SuggestionShown"
+          },
+          "surface": {
+            "$ref": "#/components/schemas/Surface"
+          },
+          "waited_ms": {
+            "$ref": "#/components/schemas/WaitedMS"
+          }
+        },
+        "required": [
+          "org",
+          "subject",
+          "action_id",
+          "approve"
+        ],
+        "type": "object"
+      },
+      "AnswerMS": {
+        "description": "How the person answered. The milliseconds from the moment the question was visible to the person to the answer, measured by the client.",
+        "maximum": 86400000,
+        "minimum": 0,
+        "type": "integer"
+      },
+      "Approval": {
+        "properties": {
+          "action_id": {
+            "type": "string"
+          },
+          "at": {
+            "description": "The time of the latest answer of the case.",
+            "format": "date-time",
+            "type": "string"
+          },
+          "label": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "action_id",
+          "label",
+          "at"
+        ],
+        "type": "object"
+      },
+      "AskKind": {
+        "description": "Why a suggestion is an ask. In the ask band: unsure, an evidence ratio below 0.5, little evidence that more answers can move; split, 0.5 or more, and in a family of the action the latest answers of the person hold an approval and a denial; short, 0.5 or more, and the answers of each family agree but are not enough yet. For an allow the cover rule turned into an ask: wider, the person never allowed an action of this reach; few, the person allowed this reach, but not with enough considered approvals or not in enough sessions. A decision point can let its rules decide unsure, short and few, and keep split and wider for the person. A decision point reads a kind it does not know as unsure.",
+        "enum": [
+          "unsure",
+          "split",
+          "short",
+          "wider",
+          "few"
+        ],
+        "type": "string"
+      },
+      "Calibration": {
+        "description": "The calibration report of one person over one window (spec 011).",
+        "properties": {
+          "bins": {
+            "description": "The ten bins of approve, the lowest first.",
+            "items": {
+              "$ref": "#/components/schemas/CalibrationBin"
+            },
+            "maxItems": 10,
+            "minItems": 10,
+            "type": "array"
+          },
+          "error": {
+            "description": "The mean distance between stated and observed over the bins that are not not_estimable, each bin weighted by its cases. Null when no bin is estimable, which is not zero.",
+            "maximum": 1,
+            "minimum": 0,
+            "type": [
+              "number",
+              "null"
+            ]
+          },
+          "estimable": {
+            "$ref": "#/components/schemas/Probability",
+            "description": "The share of the cases of the report that are in a bin that is not not_estimable; 0 with no case."
+          },
+          "from": {
+            "format": "date-time",
+            "type": "string"
+          },
+          "org": {
+            "type": "string"
+          },
+          "subject": {
+            "type": "string"
+          },
+          "to": {
+            "format": "date-time",
+            "type": "string"
+          }
+        },
+        "required": [
+          "org",
+          "subject",
+          "from",
+          "to",
+          "bins",
+          "error",
+          "estimable"
+        ],
+        "type": "object"
+      },
+      "CalibrationBin": {
+        "description": "One bin of a calibration report: the predictions of Limen whose approve is from from up to to, the last bin to 1 included. A bin below 0.5 estimates the share of approvals, and a bin of 0.5 or more estimates the share of denials and observes one minus it, so the observed rate of the bins above the allow threshold is one minus the false-allow rate of their allows.",
+        "properties": {
+          "cases": {
+            "description": "The predictions in the bin, of the cases first received in the window.",
+            "minimum": 0,
+            "type": "integer"
+          },
+          "considered": {
+            "description": "The reviews whose answer is considered, with weight 1 under weights/1. No number of the bin reads the weight.",
+            "minimum": 0,
+            "type": "integer"
+          },
+          "covered": {
+            "$ref": "#/components/schemas/Probability",
+            "description": "The share of the cases whose decision had a review probability above zero; 0 with no case."
+          },
+          "from": {
+            "$ref": "#/components/schemas/Probability"
+          },
+          "interval": {
+            "description": "The Wilson 95% interval of observed at the Kish effective size of the reviews, present with observed.",
+            "items": {
+              "type": "number"
+            },
+            "maxItems": 2,
+            "minItems": 2,
+            "type": "array"
+          },
+          "observed": {
+            "description": "The approval rate of the covered cases, from their reviews, each with weight one over its review probability. Null when the bin is not_estimable, which is not zero.",
+            "maximum": 1,
+            "minimum": 0,
+            "type": [
+              "number",
+              "null"
+            ]
+          },
+          "reviews": {
+            "description": "The reviews of the covered cases.",
+            "minimum": 0,
+            "type": "integer"
+          },
+          "state": {
+            "$ref": "#/components/schemas/CalibrationState"
+          },
+          "stated": {
+            "description": "The mean approve of the covered cases. Null when the bin has none.",
+            "maximum": 1,
+            "minimum": 0,
+            "type": [
+              "number",
+              "null"
+            ]
+          },
+          "to": {
+            "$ref": "#/components/schemas/Probability"
+          }
+        },
+        "required": [
+          "from",
+          "to",
+          "cases",
+          "covered",
+          "stated",
+          "observed",
+          "reviews",
+          "considered",
+          "state"
+        ],
+        "type": "object"
+      },
+      "CalibrationState": {
+        "description": "not_estimable when the Kish effective size of the reviews of the bin is below 20; calibrated when stated is in the interval, the edges included; overconfident when stated is outside it and further from 0.5 than observed; underconfident in the other cases.",
+        "enum": [
+          "calibrated",
+          "overconfident",
+          "underconfident",
+          "not_estimable"
+        ],
+        "type": "string"
+      },
+      "Case": {
+        "description": "Everything Limen holds about one action.",
+        "properties": {
+          "action": {
+            "$ref": "#/components/schemas/Action",
+            "description": "The action, without its input, which Limen never stores."
+          },
+          "answers": {
+            "items": {
+              "$ref": "#/components/schemas/RecordedAnswer"
+            },
+            "type": "array"
+          },
+          "decision": {
+            "$ref": "#/components/schemas/Decision"
+          },
+          "prediction": {
+            "$ref": "#/components/schemas/Prediction"
+          }
+        },
+        "required": [
+          "action"
+        ],
+        "type": "object"
+      },
+      "Certificate": {
+        "properties": {
+          "alpha": {
+            "type": "number"
+          },
+          "clean": {
+            "description": "Consecutive audited allows, most recent first, that the person approved.",
+            "minimum": 0,
+            "type": "integer"
+          },
+          "considered": {
+            "description": "The audits of the clean run whose answer is considered, with weight 1 under weights/1. The claim does not read it; it shows whether the certificate rests on quick answers.",
+            "minimum": 0,
+            "type": "integer"
+          },
+          "delta": {
+            "type": "number"
+          },
+          "holds": {
+            "type": "boolean"
+          },
+          "needed": {
+            "description": "ceil(ln(1/delta)/alpha); 300 for alpha 0.01 and delta 0.05.",
+            "minimum": 1,
+            "type": "integer"
+          }
+        },
+        "required": [
+          "alpha",
+          "delta",
+          "clean",
+          "needed",
+          "holds",
+          "considered"
+        ],
+        "type": "object"
+      },
+      "Certify": {
+        "description": "The claim a reliability report tests, a false-allow rate below alpha at confidence 1 - delta.",
+        "properties": {
+          "alpha": {
+            "exclusiveMinimum": 0,
+            "maximum": 1,
+            "type": "number"
+          },
+          "delta": {
+            "exclusiveMaximum": 1,
+            "exclusiveMinimum": 0,
+            "type": "number"
+          }
+        },
+        "required": [
+          "alpha",
+          "delta"
+        ],
+        "type": "object"
+      },
+      "Consent": {
+        "description": "The settings of the cover rule for the actions in the scope. A profile can make the settings of the installation greater and never smaller. 0, or no value, is the setting of the installation.",
+        "properties": {
+          "min_sessions": {
+            "minimum": 0,
+            "type": "integer"
+          },
+          "min_weight": {
+            "minimum": 0,
+            "type": "integer"
+          }
+        },
+        "type": "object"
+      },
+      "Contact": {
+        "description": "Whether an action is the first contact with its target, or unknown. It is not in the order of scopes.",
+        "enum": [
+          "repeat",
+          "first",
+          "unknown"
+        ],
+        "type": "string"
+      },
+      "Costs": {
+        "description": "The three prices of a decision, in any one unit. Only their ratios matter. Each kind of error must cost more than two interruptions.",
+        "properties": {
+          "ask": {
+            "description": "The cost of one interruption.",
+            "exclusiveMinimum": 0,
+            "type": "number"
+          },
+          "false_allow": {
+            "description": "The cost of running an action the person would deny.",
+            "exclusiveMinimum": 0,
+            "type": "number"
+          },
+          "false_block": {
+            "description": "The cost of refusing an action the person would approve.",
+            "exclusiveMinimum": 0,
+            "type": "number"
+          }
+        },
+        "required": [
+          "false_allow",
+          "false_block",
+          "ask"
+        ],
+        "type": "object"
+      },
+      "Cover": {
+        "description": "The cover rule for an action. An approval covers it when its latest answer approves, it shares a family with the action, and the scope of the action is within its scope. The action is covered when, in each family, the covering approvals with weight have min_weight or more in total, from min_sessions or more sessions. An allow that is not covered is an ask.",
+        "properties": {
+          "covered": {
+            "type": "boolean"
+          },
+          "min_sessions": {
+            "description": "The setting that applied, the greater of the installation's and the cost profile's. 2 by default.",
+            "minimum": 0,
+            "type": "integer"
+          },
+          "min_weight": {
+            "description": "The setting that applied, the greater of the installation's and the cost profile's. 3 by default.",
+            "minimum": 0,
+            "type": "integer"
+          },
+          "sessions": {
+            "description": "The sessions of the covering approvals with weight, for that family.",
+            "minimum": 0,
+            "type": "integer"
+          },
+          "weight": {
+            "description": "The total weight of the covering approvals, for the family with the least weight; if a family misses a setting, only those families are compared.",
+            "minimum": 0,
+            "type": "number"
+          }
+        },
+        "required": [
+          "covered",
+          "weight",
+          "sessions",
+          "min_weight",
+          "min_sessions"
+        ],
+        "type": "object"
+      },
+      "Crosses": {
+        "description": "The boundaries an action crosses, each true for yes and false for no. A boundary that is not known has no key. A value that is not a boolean is unknown, and it is not an error. network, organization and public each make remote true.",
+        "properties": {
+          "machine": {
+            "description": "The action changes the machine outside the workspace, for example a home or system path.",
+            "type": "boolean"
+          },
+          "network": {
+            "description": "The action reaches a host outside the network of the session.",
+            "type": "boolean"
+          },
+          "organization": {
+            "description": "The action reaches a party that the organization does not own.",
+            "type": "boolean"
+          },
+          "public": {
+            "description": "The action makes something readable by anyone.",
+            "type": "boolean"
+          },
+          "remote": {
+            "description": "The action reaches a system other than the machine.",
+            "type": "boolean"
+          }
+        },
+        "type": "object"
+      },
+      "Decision": {
+        "description": "What a decision point did with one action, recorded once, before the action runs or a person sees it.",
+        "properties": {
+          "action": {
+            "$ref": "#/components/schemas/Action"
+          },
+          "action_id": {
+            "type": "string"
+          },
+          "org": {
+            "type": "string"
+          },
+          "review_probability": {
+            "$ref": "#/components/schemas/Probability",
+            "description": "The probability, fixed before the action ran, that a person sees it: positive for flag and ask, below one for allow and block. An answer to the action counts with weight one over it."
+          },
+          "source": {
+            "description": "The policy that decided.",
+            "examples": [
+              "topos/progressive",
+              "rules/1"
+            ],
+            "type": "string"
+          },
+          "subject": {
+            "type": "string"
+          },
+          "verdict": {
+            "$ref": "#/components/schemas/Verdict"
+          }
+        },
+        "required": [
+          "org",
+          "subject",
+          "action_id",
+          "verdict",
+          "review_probability",
+          "source"
+        ],
+        "type": "object"
+      },
+      "DetailsOpened": {
+        "description": "How the person answered. True if the person opened the details of the action (the full input, the change, the target) before the answer; false if the client offered them and the person did not open them.",
+        "type": "boolean"
+      },
+      "Environment": {
+        "properties": {
+          "credentialed": {
+            "description": "The environment holds a credential that reaches outside it.",
+            "type": "boolean"
+          },
+          "holds": {
+            "description": "The limits the environment enforces, so a reach cannot occur. Each bounds Limen's reading of the input. egress, no host outside the session's network is reachable without its own approval, so crosses.network is no; protected_refs, the git host refuses a push to a protected branch, so a primary class read from a git push is unknown; checkpoints, a copy of the workspace can restore it, so an action that crosses no boundary is at most recoverable. A hold outside the list is no hold.",
+            "items": {
+              "examples": [
+                "egress",
+                "protected_refs",
+                "checkpoints"
+              ],
+              "type": "string"
+            },
+            "type": "array"
+          },
+          "kind": {
+            "examples": [
+              "host",
+              "sandbox",
+              "service"
+            ],
+            "type": "string"
+          },
+          "repositories": {
+            "description": "The visibility of the repositories the session pushes to, which is the visibility of a git push. Another word is unknown.",
+            "examples": [
+              "private",
+              "public",
+              "mixed"
+            ],
+            "type": "string"
+          }
+        },
+        "required": [
+          "kind",
+          "credentialed"
+        ],
+        "type": "object"
+      },
+      "Error": {
+        "description": "The one error shape of this API. A caller branches on error.code and shows error.message.",
+        "properties": {
+          "error": {
+            "properties": {
+              "code": {
+                "description": "The stable identifier of the row of the error table.",
+                "type": "string"
+              },
+              "details": {
+                "description": "What varies: always request_id, the developer sentence in detail, and the field paths at fault in fields.",
+                "properties": {
+                  "detail": {
+                    "type": "string"
+                  },
+                  "fields": {
+                    "items": {
+                      "type": "string"
+                    },
+                    "type": "array"
+                  },
+                  "request_id": {
+                    "type": "string"
+                  }
+                },
+                "type": "object"
+              },
+              "message": {
+                "description": "The one sentence of that row, fixed and shown to a person.",
+                "type": "string"
+              }
+            },
+            "required": [
+              "code",
+              "message"
+            ],
+            "type": "object"
+          }
+        },
+        "required": [
+          "error"
+        ],
+        "type": "object"
+      },
+      "Estimate": {
+        "properties": {
+          "audits": {
+            "description": "Reviews whose review probability was below one.",
+            "minimum": 0,
+            "type": "integer"
+          },
+          "covered": {
+            "$ref": "#/components/schemas/Probability",
+            "description": "The share of the source's allows (or blocks) in the window whose review probability was positive; the estimate speaks for that share only."
+          },
+          "interval": {
+            "description": "A 95% interval, present with value.",
+            "items": {
+              "type": "number"
+            },
+            "maxItems": 2,
+            "minItems": 2,
+            "type": "array"
+          },
+          "reviews": {
+            "minimum": 0,
+            "type": "integer"
+          },
+          "unanswered": {
+            "description": "Actions a decision showed a person that have no review yet.",
+            "minimum": 0,
+            "type": "integer"
+          },
+          "value": {
+            "description": "Null when no action in the window could have been reviewed. Null means unknown, not zero.",
+            "minimum": 0,
+            "type": [
+              "number",
+              "null"
+            ]
+          }
+        },
+        "required": [
+          "value",
+          "covered",
+          "reviews",
+          "audits",
+          "unanswered"
+        ],
+        "type": "object"
+      },
+      "Evidence": {
+        "description": "One answer's share of an explanation. An approval pushed toward running, a denial toward stopping.",
+        "properties": {
+          "action_id": {
+            "type": "string"
+          },
+          "approve": {
+            "type": "boolean"
+          },
+          "at": {
+            "format": "date-time",
+            "type": "string"
+          },
+          "label": {
+            "description": "The answered action's label, from the featurizer's closed vocabulary, never from the input.",
+            "type": "string"
+          },
+          "share": {
+            "$ref": "#/components/schemas/Probability",
+            "description": "The answer's absolute contribution over the sum of all absolute contributions."
+          }
+        },
+        "required": [
+          "action_id",
+          "label",
+          "at",
+          "approve",
+          "share"
+        ],
+        "type": "object"
+      },
+      "ExplainedCover": {
+        "description": "The cover of an explanation, with the approvals nearest to covering the action.",
+        "properties": {
+          "covered": {
+            "type": "boolean"
+          },
+          "min_sessions": {
+            "minimum": 0,
+            "type": "integer"
+          },
+          "min_weight": {
+            "minimum": 0,
+            "type": "integer"
+          },
+          "nearest": {
+            "description": "Up to three approved cases of a family of the action whose scope the action exceeds, closest first, so a client can say \"You allowed publish, update. This is publish, make public.\"",
+            "items": {
+              "$ref": "#/components/schemas/Approval"
+            },
+            "maxItems": 3,
+            "type": "array"
+          },
+          "sessions": {
+            "minimum": 0,
+            "type": "integer"
+          },
+          "weight": {
+            "minimum": 0,
+            "type": "number"
+          }
+        },
+        "required": [
+          "covered",
+          "weight",
+          "sessions",
+          "min_weight",
+          "min_sessions"
+        ],
+        "type": "object"
+      },
+      "Explanation": {
+        "description": "One prediction taken apart in the model's own terms (spec 009).",
+        "properties": {
+          "action_id": {
+            "type": "string"
+          },
+          "approve": {
+            "$ref": "#/components/schemas/Probability"
+          },
+          "ask_kind": {
+            "$ref": "#/components/schemas/AskKind"
+          },
+          "calibration": {
+            "$ref": "#/components/schemas/CalibrationState",
+            "description": "The state of the bin of the recorded prediction's approve in the person's calibration report for the last 90 days. Absent when the action has no recorded prediction, and from an older server; a client then states no probability."
+          },
+          "cover": {
+            "$ref": "#/components/schemas/ExplainedCover"
+          },
+          "evidence": {
+            "description": "Up to three answers toward the verdict's side and two against it, or three each way for an ask, by share.",
+            "items": {
+              "$ref": "#/components/schemas/Evidence"
+            },
+            "type": "array"
+          },
+          "evidence_ratio": {
+            "description": "The share of the prior variance the person's answers removed at this action.",
+            "maximum": 1,
+            "minimum": 0,
+            "type": "number"
+          },
+          "mean": {
+            "description": "The model's latent mean at the action; approve is its probit after the uncertainty.",
+            "type": "number"
+          },
+          "minimum": {
+            "$ref": "#/components/schemas/Minimum"
+          },
+          "model": {
+            "$ref": "#/components/schemas/ModelRef"
+          },
+          "org": {
+            "type": "string"
+          },
+          "parts": {
+            "$ref": "#/components/schemas/Parts"
+          },
+          "predicted_by": {
+            "$ref": "#/components/schemas/ModelRef"
+          },
+          "reason": {
+            "description": "One sentence for the person, saying why verdict is what it is, as a prediction's reason does. An older server does not send it.",
+            "type": "string"
+          },
+          "subject": {
+            "type": "string"
+          },
+          "thresholds": {
+            "$ref": "#/components/schemas/Thresholds"
+          },
+          "uncertainty": {
+            "minimum": 0,
+            "type": "number"
+          },
+          "verdict": {
+            "$ref": "#/components/schemas/Suggestion",
+            "description": "The verdict the thresholds give approve, held to the cover rule by the person's approvals now."
+          }
+        },
+        "required": [
+          "org",
+          "subject",
+          "action_id",
+          "model",
+          "approve",
+          "uncertainty",
+          "verdict",
+          "thresholds",
+          "mean",
+          "evidence_ratio",
+          "evidence"
+        ],
+        "type": "object"
+      },
+      "FlagReviews": {
+        "properties": {
+          "denied": {
+            "description": "The reviews among them that denied the action. Absent when withheld.",
+            "minimum": 0,
+            "type": "integer"
+          },
+          "reviews": {
+            "description": "The cases with the verdict flag applied that have a review from before the week closed.",
+            "minimum": 0,
+            "type": "integer"
+          }
+        },
+        "required": [
+          "reviews"
+        ],
+        "type": "object"
+      },
+      "ForgetRequest": {
+        "properties": {
+          "org": {
+            "type": "string"
+          },
+          "subject": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "org",
+          "subject"
+        ],
+        "type": "object"
+      },
+      "Learned": {
+        "description": "What the model has learned about one person.",
+        "properties": {
+          "entries": {
+            "items": {
+              "$ref": "#/components/schemas/LearnedEntry"
+            },
+            "type": "array"
+          },
+          "model": {
+            "$ref": "#/components/schemas/ModelRef"
+          },
+          "org": {
+            "type": "string"
+          },
+          "recent": {
+            "items": {
+              "$ref": "#/components/schemas/TrendPoint"
+            },
+            "maxItems": 20,
+            "type": "array"
+          },
+          "subject": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "org",
+          "subject",
+          "model",
+          "entries",
+          "recent"
+        ],
+        "type": "object"
+      },
+      "LearnedEntry": {
+        "description": "One kind of action the person answered, and what the model suggests for it now.",
+        "properties": {
+          "approve": {
+            "$ref": "#/components/schemas/Probability"
+          },
+          "approved": {
+            "minimum": 0,
+            "type": "integer"
+          },
+          "ask_kind": {
+            "$ref": "#/components/schemas/AskKind"
+          },
+          "cover": {
+            "$ref": "#/components/schemas/Cover"
+          },
+          "denied": {
+            "minimum": 0,
+            "type": "integer"
+          },
+          "evidence_ratio": {
+            "maximum": 1,
+            "minimum": 0,
+            "type": "number"
+          },
+          "kind": {
+            "type": "string"
+          },
+          "label": {
+            "type": "string"
+          },
+          "minimum": {
+            "$ref": "#/components/schemas/Minimum"
+          },
+          "name": {
+            "type": "string"
+          },
+          "thresholds": {
+            "$ref": "#/components/schemas/Thresholds"
+          },
+          "uncertainty": {
+            "minimum": 0,
+            "type": "number"
+          },
+          "verdict": {
+            "$ref": "#/components/schemas/Suggestion",
+            "description": "The verdict the thresholds give approve, held to the cover rule."
+          }
+        },
+        "required": [
+          "label",
+          "kind",
+          "name",
+          "approved",
+          "denied",
+          "approve",
+          "uncertainty",
+          "verdict",
+          "evidence_ratio",
+          "thresholds"
+        ],
+        "type": "object"
+      },
+      "Minimum": {
+        "deprecated": true,
+        "description": "The answer minimum of v0.6, the interim rule that the cover rule replaced. Limen no longer sets it; read cover.",
+        "properties": {
+          "allows": {
+            "minimum": 0,
+            "type": "integer"
+          },
+          "min_allows": {
+            "minimum": 0,
+            "type": "integer"
+          },
+          "min_sessions": {
+            "minimum": 0,
+            "type": "integer"
+          },
+          "sessions": {
+            "minimum": 0,
+            "type": "integer"
+          }
+        },
+        "required": [
+          "allows",
+          "sessions",
+          "min_allows",
+          "min_sessions"
+        ],
+        "type": "object"
+      },
+      "ModelRef": {
+        "description": "One fitted model of a person, the source of its predictions and the number of the person's answers it was fitted through.",
+        "properties": {
+          "answers": {
+            "minimum": 0,
+            "type": "integer"
+          },
+          "source": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "source",
+          "answers"
+        ],
+        "type": "object"
+      },
+      "Page": {
+        "description": "One page of cases. next_cursor is present only when a further page exists.",
+        "properties": {
+          "entries": {
+            "items": {
+              "$ref": "#/components/schemas/Case"
+            },
+            "type": "array"
+          },
+          "next_cursor": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "entries"
+        ],
+        "type": "object"
+      },
+      "Parts": {
+        "description": "The latent mean split by the additive model's terms; they sum to the mean.",
+        "properties": {
+          "action": {
+            "description": "What the model knows about this kind of action at any time.",
+            "type": "number"
+          },
+          "interaction": {
+            "type": "number"
+          },
+          "recent": {
+            "description": "The person's tolerance lately, which every answer moves whatever its action.",
+            "type": "number"
+          }
+        },
+        "required": [
+          "action",
+          "recent",
+          "interaction"
+        ],
+        "type": "object"
+      },
+      "Prediction": {
+        "description": "Limen's opinion about one action, for the decision point to compose with its own rules.",
+        "properties": {
+          "action_id": {
+            "type": "string"
+          },
+          "approve": {
+            "$ref": "#/components/schemas/Probability",
+            "description": "The probability that the subject approves the action."
+          },
+          "ask_kind": {
+            "$ref": "#/components/schemas/AskKind",
+            "description": "Present when verdict is ask."
+          },
+          "audit_rate": {
+            "$ref": "#/components/schemas/Probability",
+            "description": "The share of automatic verdicts the profile asks a person to review at random; the rate the decision point passes to its review draw."
+          },
+          "cover": {
+            "$ref": "#/components/schemas/Cover",
+            "description": "The cover rule for the action. Absent from a prediction that FailClosed made."
+          },
+          "evidence_ratio": {
+            "description": "The share of the prior variance at the action that the subject's answers removed.",
+            "maximum": 1,
+            "minimum": 0,
+            "type": "number"
+          },
+          "minimum": {
+            "$ref": "#/components/schemas/Minimum"
+          },
+          "org": {
+            "type": "string"
+          },
+          "profile": {
+            "$ref": "#/components/schemas/Scope"
+          },
+          "reason": {
+            "description": "One sentence for the person who reads the record. Never shown to an agent. For an allow or a block it gives the approval probability; for an ask it states no probability and no direction, so it does not lead the person who reads it when Limen asks.",
+            "type": "string"
+          },
+          "scope": {
+            "$ref": "#/components/schemas/Reach",
+            "description": "The reach of the action as Limen used it. Absent from a prediction that FailClosed made."
+          },
+          "source": {
+            "description": "The model version that made the prediction, learned/1 or learned/2, or learned/unavailable from FailClosed.",
+            "examples": [
+              "learned/1",
+              "learned/2"
+            ],
+            "type": "string"
+          },
+          "subject": {
+            "type": "string"
+          },
+          "thresholds": {
+            "$ref": "#/components/schemas/Thresholds"
+          },
+          "uncertainty": {
+            "description": "The posterior standard deviation of the latent tolerance behind approve.",
+            "minimum": 0,
+            "type": "number"
+          },
+          "verdict": {
+            "$ref": "#/components/schemas/Suggestion",
+            "description": "The verdict the thresholds give approve, except that an allow the person's approvals do not cover is an ask, of ask_kind wider or few."
+          }
+        },
+        "required": [
+          "org",
+          "subject",
+          "action_id",
+          "verdict",
+          "approve",
+          "uncertainty",
+          "evidence_ratio",
+          "thresholds",
+          "profile",
+          "audit_rate",
+          "source",
+          "reason"
+        ],
+        "type": "object"
+      },
+      "Preview": {
+        "description": "What the previewed costs would have done with the recorded predictions in the window.",
+        "properties": {
+          "allowed_denied": {
+            "type": "integer"
+          },
+          "answered": {
+            "type": "integer"
+          },
+          "audit_rate": {
+            "$ref": "#/components/schemas/Probability"
+          },
+          "blocked_approved": {
+            "type": "integer"
+          },
+          "costs": {
+            "$ref": "#/components/schemas/Costs"
+          },
+          "expected_asks": {
+            "description": "The asks, plus the audits the audit rate would draw from the automatic verdicts.",
+            "type": "number"
+          },
+          "from": {
+            "format": "date-time",
+            "type": "string"
+          },
+          "org": {
+            "type": "string"
+          },
+          "records": {
+            "type": "integer"
+          },
+          "subject": {
+            "type": "string"
+          },
+          "thresholds": {
+            "$ref": "#/components/schemas/Thresholds"
+          },
+          "to": {
+            "format": "date-time",
+            "type": "string"
+          },
+          "would": {
+            "additionalProperties": {
+              "type": "integer"
+            },
+            "description": "The recorded predictions in the window, counted by the verdict the thresholds give them.",
+            "propertyNames": {
+              "$ref": "#/components/schemas/Suggestion"
+            },
+            "type": "object"
+          }
+        },
+        "required": [
+          "org",
+          "subject",
+          "from",
+          "to",
+          "costs",
+          "audit_rate",
+          "thresholds",
+          "records",
+          "would",
+          "answered",
+          "allowed_denied",
+          "blocked_approved",
+          "expected_asks"
+        ],
+        "type": "object"
+      },
+      "PreviewRequest": {
+        "properties": {
+          "audit_rate": {
+            "$ref": "#/components/schemas/Probability"
+          },
+          "costs": {
+            "$ref": "#/components/schemas/Costs"
+          },
+          "from": {
+            "format": "date-time",
+            "type": "string"
+          },
+          "org": {
+            "type": "string"
+          },
+          "subject": {
+            "type": "string"
+          },
+          "to": {
+            "format": "date-time",
+            "type": "string"
+          }
+        },
+        "required": [
+          "org",
+          "subject",
+          "from",
+          "to",
+          "costs",
+          "audit_rate"
+        ],
+        "type": "object"
+      },
+      "Probability": {
+        "maximum": 1,
+        "minimum": 0,
+        "type": "number"
+      },
+      "Profile": {
+        "description": "What an organization states about errors and interruptions for the actions in a scope. With subject, it is one person's own profile in the organization, which only makes the organization's stricter for that person: a prediction applies the meet of the two.",
+        "properties": {
+          "agent": {
+            "type": "string"
+          },
+          "audit_rate": {
+            "$ref": "#/components/schemas/Probability"
+          },
+          "certify": {
+            "$ref": "#/components/schemas/Certify",
+            "description": "The claim reliability reports test. Omitted, it is a false-allow rate below 1% at 95% confidence, which takes 300 clean reviews."
+          },
+          "consent": {
+            "$ref": "#/components/schemas/Consent"
+          },
+          "costs": {
+            "$ref": "#/components/schemas/Costs"
+          },
+          "default": {
+            "description": "True for the built-in profile Limen applies to a scope with no saved profile.",
+            "readOnly": true,
+            "type": "boolean"
+          },
+          "kind": {
+            "type": "string"
+          },
+          "org": {
+            "type": "string"
+          },
+          "subject": {
+            "description": "The person whose own profile this is. A profile with subject has no kind and no agent.",
+            "type": "string"
+          },
+          "thresholds": {
+            "$ref": "#/components/schemas/Thresholds",
+            "readOnly": true
+          }
+        },
+        "required": [
+          "org",
+          "costs",
+          "audit_rate",
+          "thresholds"
+        ],
+        "type": "object"
+      },
+      "Reach": {
+        "description": "The scope of an action as Limen used it: its reading of the input, bounded by the holds of the environment, merged with the claims. Each dimension has a value, unknown included; an unknown boundary of crosses has no key. It holds words of the lists alone.",
+        "properties": {
+          "contact": {
+            "$ref": "#/components/schemas/Contact"
+          },
+          "crosses": {
+            "$ref": "#/components/schemas/Crosses"
+          },
+          "target_class": {
+            "$ref": "#/components/schemas/TargetClass"
+          },
+          "target_kind": {
+            "description": "The kind of the target without its name, the target's kind or a kind the segments of a shell action name.",
+            "examples": [
+              "ref",
+              "repository",
+              "package",
+              "host",
+              "path",
+              "app"
+            ],
+            "type": "string"
+          },
+          "undo": {
+            "$ref": "#/components/schemas/Undo"
+          }
+        },
+        "required": [
+          "undo",
+          "crosses",
+          "target_class",
+          "contact"
+        ],
+        "type": "object"
+      },
+      "ReachClaim": {
+        "description": "What the decision point knows about the reach of the action, in the words of the lists alone, never with a path, a host, a ref name or other text of the input. Limen also reads the reach from the input and the fields of the action, and takes the greater of each claim and its reading, or the greatest value when the two are not comparable: a claim makes the scope wider and never narrower. A member left out is no claim. A word outside its list is a claim of unknown, and it is not an error.",
+        "properties": {
+          "contact": {
+            "description": "Whether the action is the first contact with its target.",
+            "examples": [
+              "first",
+              "repeat"
+            ],
+            "type": "string"
+          },
+          "crosses": {
+            "$ref": "#/components/schemas/Crosses"
+          },
+          "undo": {
+            "description": "Whether the action can be undone.",
+            "examples": [
+              "none",
+              "reversible",
+              "recoverable",
+              "irreversible"
+            ],
+            "type": "string"
+          }
+        },
+        "type": "object"
+      },
+      "RecordedAnswer": {
+        "properties": {
+          "answer_ms": {
+            "$ref": "#/components/schemas/AnswerMS"
+          },
+          "approve": {
+            "type": "boolean"
+          },
+          "at": {
+            "format": "date-time",
+            "type": "string"
+          },
+          "by": {
+            "type": "string"
+          },
+          "details_opened": {
+            "$ref": "#/components/schemas/DetailsOpened"
+          },
+          "remembered": {
+            "$ref": "#/components/schemas/Remembered"
+          },
+          "review": {
+            "description": "True for the answer that reviews an action the decision showed a person, the one answer that enters error estimates.",
+            "type": "boolean"
+          },
+          "suggestion_shown": {
+            "$ref": "#/components/schemas/SuggestionShown"
+          },
+          "surface": {
+            "$ref": "#/components/schemas/Surface"
+          },
+          "waited_ms": {
+            "$ref": "#/components/schemas/WaitedMS"
+          }
+        },
+        "required": [
+          "approve",
+          "by",
+          "at",
+          "review"
+        ],
+        "type": "object"
+      },
+      "Reliability": {
+        "properties": {
+          "certificate": {
+            "$ref": "#/components/schemas/Certificate"
+          },
+          "false_allow": {
+            "$ref": "#/components/schemas/Estimate"
+          },
+          "false_block": {
+            "$ref": "#/components/schemas/Estimate"
+          },
+          "from": {
+            "format": "date-time",
+            "type": "string"
+          },
+          "of": {
+            "type": "string"
+          },
+          "org": {
+            "type": "string"
+          },
+          "subject": {
+            "type": "string"
+          },
+          "to": {
+            "format": "date-time",
+            "type": "string"
+          }
+        },
+        "required": [
+          "org",
+          "subject",
+          "of",
+          "from",
+          "to",
+          "false_allow",
+          "false_block",
+          "certificate"
+        ],
+        "type": "object"
+      },
+      "Remembered": {
+        "description": "How the person answered. True if the answer also made a standing rule for later actions. The rule itself is never sent.",
+        "type": "boolean"
+      },
+      "ReplayRecord": {
+        "description": "One recorded action, one per line.",
+        "properties": {
+          "action": {
+            "$ref": "#/components/schemas/Action"
+          },
+          "answer_ms": {
+            "$ref": "#/components/schemas/AnswerMS"
+          },
+          "answered_at": {
+            "description": "When the person answered, not before at. Without it the answer is at at, so the time Limen measures is 0 and the approval builds no cover.",
+            "format": "date-time",
+            "type": "string"
+          },
+          "approve": {
+            "description": "The person's answer; absent when there was none.",
+            "type": "boolean"
+          },
+          "at": {
+            "format": "date-time",
+            "type": "string"
+          },
+          "details_opened": {
+            "$ref": "#/components/schemas/DetailsOpened"
+          },
+          "remembered": {
+            "$ref": "#/components/schemas/Remembered"
+          },
+          "review_probability": {
+            "$ref": "#/components/schemas/Probability"
+          },
+          "source": {
+            "type": "string"
+          },
+          "suggestion_shown": {
+            "$ref": "#/components/schemas/SuggestionShown"
+          },
+          "surface": {
+            "$ref": "#/components/schemas/Surface"
+          },
+          "verdict": {
+            "$ref": "#/components/schemas/Verdict"
+          },
+          "waited_ms": {
+            "$ref": "#/components/schemas/WaitedMS"
+          }
+        },
+        "required": [
+          "at",
+          "action",
+          "verdict",
+          "review_probability",
+          "source"
+        ],
+        "type": "object"
+      },
+      "ReplayReport": {
+        "properties": {
+          "allowed_denied": {
+            "type": "integer"
+          },
+          "answered": {
+            "type": "integer"
+          },
+          "blocked_approved": {
+            "type": "integer"
+          },
+          "false_allow": {
+            "$ref": "#/components/schemas/Estimate"
+          },
+          "kept": {
+            "type": "boolean"
+          },
+          "records": {
+            "type": "integer"
+          },
+          "would": {
+            "additionalProperties": {
+              "type": "integer"
+            },
+            "description": "Limen's suggestions on the records, counted by verdict.",
+            "propertyNames": {
+              "$ref": "#/components/schemas/Suggestion"
+            },
+            "type": "object"
+          }
+        },
+        "required": [
+          "records",
+          "answered",
+          "would",
+          "allowed_denied",
+          "blocked_approved",
+          "false_allow",
+          "kept"
+        ],
+        "type": "object"
+      },
+      "Report": {
+        "description": "The report of an organization, one entry per week, oldest first. It names no person, no action and no time finer than a week; the only names in it are agent ids. A week a report showed never changes.",
+        "properties": {
+          "from": {
+            "format": "date-time",
+            "type": "string"
+          },
+          "min_subjects": {
+            "description": "The minimum group, 5.",
+            "type": "integer"
+          },
+          "org": {
+            "type": "string"
+          },
+          "to": {
+            "format": "date-time",
+            "type": "string"
+          },
+          "weeks": {
+            "items": {
+              "$ref": "#/components/schemas/WeekReport"
+            },
+            "type": "array"
+          }
+        },
+        "required": [
+          "org",
+          "from",
+          "to",
+          "min_subjects",
+          "weeks"
+        ],
+        "type": "object"
+      },
+      "ReportCell": {
+        "description": "The numbers of one group of a week's cases. A field read from reviews shows only when its reviews come from 5 or more persons and no person gave more than half of them; otherwise it is absent and its path is in withheld.",
+        "properties": {
+          "applied": {
+            "$ref": "#/components/schemas/SourceRates"
+          },
+          "decisions": {
+            "$ref": "#/components/schemas/VerdictCounts"
+          },
+          "flag_reviews": {
+            "$ref": "#/components/schemas/FlagReviews"
+          },
+          "learned": {
+            "$ref": "#/components/schemas/SourceRates"
+          },
+          "subjects": {
+            "description": "The persons with a decided case in the cell.",
+            "minimum": 5,
+            "type": "integer"
+          },
+          "withheld": {
+            "items": {
+              "enum": [
+                "flag_reviews.denied",
+                "applied.false_allow",
+                "applied.false_block",
+                "learned.false_allow",
+                "learned.false_block"
+              ],
+              "type": "string"
+            },
+            "type": "array"
+          }
+        },
+        "required": [
+          "subjects",
+          "decisions",
+          "flag_reviews",
+          "applied",
+          "learned",
+          "withheld"
+        ],
+        "type": "object"
+      },
+      "Scope": {
+        "description": "What a profile applies to. A scope with subject is the person's own profile in the organization: it has no kind and no agent. On a prediction, subject says that the person's own profile made the organization's stricter.",
+        "properties": {
+          "agent": {
+            "type": "string"
+          },
+          "kind": {
+            "type": "string"
+          },
+          "org": {
+            "type": "string"
+          },
+          "subject": {
+            "description": "The person whose own profile this is. In the context of a person, an org with a pipe, it equals org.",
+            "type": "string"
+          }
+        },
+        "required": [
+          "org"
+        ],
+        "type": "object"
+      },
+      "Signal": {
+        "anyOf": [
+          {
+            "required": [
+              "verdict"
+            ]
+          },
+          {
+            "required": [
+              "score"
+            ]
+          }
+        ],
+        "description": "Another opinion about the action, treated as evidence. It carries a verdict, a score, or both.",
+        "properties": {
+          "score": {
+            "$ref": "#/components/schemas/Probability"
+          },
+          "source": {
+            "examples": [
+              "rules/1",
+              "classifier/claude-auto-mode"
+            ],
+            "type": "string"
+          },
+          "verdict": {
+            "$ref": "#/components/schemas/Verdict"
+          }
+        },
+        "required": [
+          "source"
+        ],
+        "type": "object"
+      },
+      "SourceRates": {
+        "description": "One source's error rates in a cell, each one estimate over every case of the cell. A review after the week closed counts as unanswered. A rate is absent when withheld; a rate with no review has value null.",
+        "properties": {
+          "false_allow": {
+            "$ref": "#/components/schemas/Estimate"
+          },
+          "false_block": {
+            "$ref": "#/components/schemas/Estimate"
+          }
+        },
+        "type": "object"
+      },
+      "Suggestion": {
+        "description": "Limen's suggestion. Limen never suggests flag; a flag is the decision point's, when it draws a review.",
+        "enum": [
+          "allow",
+          "ask",
+          "block"
+        ],
+        "type": "string"
+      },
+      "SuggestionShown": {
+        "description": "How the person answered. True if the client showed the suggestion of Limen (the verdict, the approval probability, the reason, or an explanation) before the answer.",
+        "type": "boolean"
+      },
+      "Surface": {
+        "description": "How the person answered. Where the person answered. A surface outside the list is no surface, and it is not an error.",
+        "examples": [
+          "prompt",
+          "notification",
+          "queue",
+          "bulk",
+          "rule"
+        ],
+        "type": "string"
+      },
+      "Target": {
+        "properties": {
+          "class": {
+            "description": "The class of the target, a claim of the scope. A word outside the list is a claim of unknown, and it is not an error.",
+            "examples": [
+              "scratch",
+              "own",
+              "shared",
+              "primary"
+            ],
+            "type": "string"
+          },
+          "id": {
+            "type": "string"
+          },
+          "kind": {
+            "examples": [
+              "path",
+              "ref",
+              "host",
+              "account"
+            ],
+            "type": "string"
+          },
+          "sensitivity": {
+            "$ref": "#/components/schemas/Probability",
+            "description": "From 0, a scratch directory, to 1, production."
+          }
+        },
+        "required": [
+          "kind",
+          "id"
+        ],
+        "type": "object"
+      },
+      "TargetClass": {
+        "description": "The class of what an action changes, from the least reach to the most, or unknown.",
+        "enum": [
+          "scratch",
+          "own",
+          "shared",
+          "primary",
+          "unknown"
+        ],
+        "type": "string"
+      },
+      "Thresholds": {
+        "description": "Above allow_above is an allow, below block_below a block, and everything between, both ends included, an ask.",
+        "properties": {
+          "allow_above": {
+            "$ref": "#/components/schemas/Probability"
+          },
+          "block_below": {
+            "$ref": "#/components/schemas/Probability"
+          }
+        },
+        "required": [
+          "allow_above",
+          "block_below"
+        ],
+        "type": "object"
+      },
+      "TrendPoint": {
+        "properties": {
+          "at": {
+            "format": "date-time",
+            "type": "string"
+          },
+          "t": {
+            "description": "The decision's ordinal in the person's history.",
+            "minimum": 0,
+            "type": "integer"
+          },
+          "value": {
+            "description": "The shared tolerance part of the model at that decision.",
+            "type": "number"
+          }
+        },
+        "required": [
+          "t",
+          "at",
+          "value"
+        ],
+        "type": "object"
+      },
+      "Undo": {
+        "description": "Whether an action can be undone, from the least reach to the most, or unknown.",
+        "enum": [
+          "none",
+          "reversible",
+          "recoverable",
+          "irreversible",
+          "unknown"
+        ],
+        "type": "string"
+      },
+      "Verdict": {
+        "description": "What a decision point does with an action, ordered from most to least permissive. Composing verdicts keeps the least permissive one.",
+        "enum": [
+          "allow",
+          "flag",
+          "ask",
+          "block"
+        ],
+        "type": "string"
+      },
+      "VerdictCounts": {
+        "description": "Decided cases by the verdict applied.",
+        "properties": {
+          "allow": {
+            "minimum": 0,
+            "type": "integer"
+          },
+          "ask": {
+            "minimum": 0,
+            "type": "integer"
+          },
+          "block": {
+            "minimum": 0,
+            "type": "integer"
+          },
+          "flag": {
+            "minimum": 0,
+            "type": "integer"
+          }
+        },
+        "required": [
+          "allow",
+          "flag",
+          "ask",
+          "block"
+        ],
+        "type": "object"
+      },
+      "WaitedMS": {
+        "description": "How the person answered. The milliseconds from the decision that showed the action to the answer, measured by the decision point.",
+        "minimum": 0,
+        "type": "integer"
+      },
+      "WeekReport": {
+        "description": "One week. An open or too_few week has from, to and state alone. A ready week has total, and agents and other when it divides by agent; their counts add up to those of total.",
+        "properties": {
+          "agents": {
+            "description": "One cell for each agent with 5 or more persons in the week, by agent id.",
+            "items": {
+              "$ref": "#/components/schemas/AgentCell"
+            },
+            "type": "array"
+          },
+          "from": {
+            "format": "date-time",
+            "type": "string"
+          },
+          "other": {
+            "$ref": "#/components/schemas/ReportCell",
+            "description": "Every other case of the week, the agents with no cell of their own and the cases with no agent. Absent when there are none."
+          },
+          "state": {
+            "$ref": "#/components/schemas/WeekState"
+          },
+          "to": {
+            "format": "date-time",
+            "type": "string"
+          },
+          "total": {
+            "$ref": "#/components/schemas/ReportCell"
+          }
+        },
+        "required": [
+          "from",
+          "to",
+          "state"
+        ],
+        "type": "object"
+      },
+      "WeekState": {
+        "description": "open until 7 days after the end of the week; too_few when it closed with fewer than 5 persons; ready when it closed with 5 or more.",
+        "enum": [
+          "open",
+          "too_few",
+          "ready"
+        ],
+        "type": "string"
+      }
+    },
+    "securitySchemes": {
+      "bearer": {
+        "bearerFormat": "JWT",
+        "description": "A token from an issuer this installation lists, carrying the audience it verifies.",
+        "scheme": "bearer",
+        "type": "http"
+      }
+    }
+  },
+  "info": {
+    "description": "Limen serves the decision point that lets an automated action run or not: an agent's tool call, a network request, a push, a payment. It predicts, for the person on whose behalf the action runs, the probability that they would approve it and suggests a verdict from the costs their organization states; it keeps a ledger of what each decision point decided, with the probability that a person saw the action, and of the person's answers; and it reports how often any source of decisions allows what the person would deny. The decision point decides and draws reviews itself; Limen never applies a verdict. Every record is keyed by the organization, the subject, and the decision point's own id for the action. The server serves these routes under /v1; a platform may mount them under a prefix of its own. Every route asks the installation's authorizer for the action named in x-limen-action, about a resource of the kind and with the fields named in x-limen-resource, before it acts. Request and response bodies are JSON (the replay upload is newline-delimited JSON); a receiver ignores fields it does not know, so a newer client can talk to an older server, and validates the fields it knows strictly. Where several error codes share a status on one route, the response lists them in x-limen-codes.",
+    "license": {
+      "identifier": "Apache-2.0",
+      "name": "Apache-2.0"
+    },
+    "summary": "The oversight layer for automated actions.",
+    "title": "Limen",
+    "version": "1"
+  },
+  "openapi": "3.1.0",
+  "paths": {
+    "/v1/answers": {
+      "post": {
+        "description": "Record a person's answer about an action whose decision is recorded. Limen stamps the time. The first answer to an action the decision showed a person is its review and enters error estimates; any later answer, or an answer to an action nobody was shown, trains the model only. A caller that relays an answer for someone else names them in by, which is honored only when the authorizer allows the caller to answer for the subject. The decision point relays how the person answered (answer_ms, waited_ms, details_opened, suggestion_shown, surface, remembered) and leaves out each field it does not know. They set the weight of the answer for the cover rule (weights/1): an approval counts 0 if a standing rule gave it, if one gesture answered many actions, if it came faster than 2000 ms, if it followed a lean the client showed, or if 50 reviews came before it in its session, each but the first unless the details were opened. The estimates never read the weight.",
+        "operationId": "answer",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/Answer"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "204": {
+            "description": "The answer is recorded."
+          },
+          "400": {
+            "$ref": "#/components/responses/invalid_answer"
+          },
+          "401": {
+            "$ref": "#/components/responses/unauthenticated"
+          },
+          "403": {
+            "$ref": "#/components/responses/forbidden"
+          },
+          "409": {
+            "$ref": "#/components/responses/no_decision"
+          },
+          "413": {
+            "$ref": "#/components/responses/body_too_large"
+          },
+          "429": {
+            "$ref": "#/components/responses/rate_limited"
+          },
+          "500": {
+            "$ref": "#/components/responses/internal"
+          },
+          "503": {
+            "$ref": "#/components/responses/service_unavailable"
+          }
+        },
+        "summary": "Send an answer",
+        "x-limen-action": "case.answer",
+        "x-limen-resource": {
+          "fields": [
+            "org",
+            "subject"
+          ],
+          "kind": "Case"
+        }
+      }
+    },
+    "/v1/calibration": {
+      "get": {
+        "description": "The approval probabilities Limen stated for one person over one window, beside the approval rates the person's reviews measured, in ten bins of approve: [0, 0.1), [0.1, 0.2), and so on to [0.9, 1]. Each review counts with weight one over its decision's review probability, as in a reliability report. A bin whose reviews have a Kish effective size below 20 is not_estimable, and its observed rate is null, not zero. A client shows an approval probability as a number, or in words that state a probability, only where the bin of the prediction is calibrated in the report for the last 90 days, and for a bin above the allow threshold only while the certificate of of=learned also holds. The route asks reliability.read about the person's Reliability, as the reliability route does.",
+        "operationId": "getCalibration",
+        "parameters": [
+          {
+            "$ref": "#/components/parameters/org"
+          },
+          {
+            "$ref": "#/components/parameters/subject"
+          },
+          {
+            "in": "query",
+            "name": "from",
+            "required": true,
+            "schema": {
+              "format": "date-time",
+              "type": "string"
+            }
+          },
+          {
+            "in": "query",
+            "name": "to",
+            "required": true,
+            "schema": {
+              "format": "date-time",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Calibration"
+                }
+              }
+            },
+            "description": "The report."
+          },
+          "400": {
+            "$ref": "#/components/responses/invalid_query"
+          },
+          "401": {
+            "$ref": "#/components/responses/unauthenticated"
+          },
+          "403": {
+            "$ref": "#/components/responses/forbidden"
+          },
+          "429": {
+            "$ref": "#/components/responses/rate_limited"
+          },
+          "500": {
+            "$ref": "#/components/responses/internal"
+          },
+          "503": {
+            "$ref": "#/components/responses/service_unavailable"
+          }
+        },
+        "summary": "Report the calibration of Limen for a person",
+        "x-limen-action": "reliability.read",
+        "x-limen-resource": {
+          "fields": [
+            "org",
+            "subject"
+          ],
+          "kind": "Reliability"
+        }
+      }
+    },
+    "/v1/cases": {
+      "get": {
+        "description": "One subject's cases in one organization, oldest first: each action without its input, its prediction, its decision, and its answers. With action_id, the one case of that action. With pending=true, the review queue: actions a decision showed a person that have no review yet.",
+        "operationId": "listCases",
+        "parameters": [
+          {
+            "$ref": "#/components/parameters/org"
+          },
+          {
+            "$ref": "#/components/parameters/subject"
+          },
+          {
+            "in": "query",
+            "name": "action_id",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "in": "query",
+            "name": "pending",
+            "schema": {
+              "default": false,
+              "type": "boolean"
+            }
+          },
+          {
+            "description": "The next_cursor of the previous page.",
+            "in": "query",
+            "name": "cursor",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "in": "query",
+            "name": "limit",
+            "schema": {
+              "default": 100,
+              "maximum": 500,
+              "minimum": 1,
+              "type": "integer"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Page"
+                }
+              }
+            },
+            "description": "One page of cases."
+          },
+          "400": {
+            "$ref": "#/components/responses/invalid_query"
+          },
+          "401": {
+            "$ref": "#/components/responses/unauthenticated"
+          },
+          "403": {
+            "$ref": "#/components/responses/forbidden"
+          },
+          "429": {
+            "$ref": "#/components/responses/rate_limited"
+          },
+          "500": {
+            "$ref": "#/components/responses/internal"
+          },
+          "503": {
+            "$ref": "#/components/responses/service_unavailable"
+          }
+        },
+        "summary": "List a person's cases",
+        "x-limen-action": "case.list",
+        "x-limen-resource": {
+          "fields": [
+            "org",
+            "subject"
+          ],
+          "kind": "Case"
+        }
+      }
+    },
+    "/v1/decisions": {
+      "post": {
+        "description": "Record what the decision point did with one action: the verdict it applied, the probability, fixed before the action ran, that a person sees it, and the policy that decided. Record every decision, not only the ones a person sees: a source's allows are the denominator of its error rate. An action takes one decision. When Limen holds no prediction for the action, as after a fail-closed fallback, the decision carries the action.",
+        "operationId": "recordDecision",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/Decision"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "204": {
+            "description": "The decision is recorded."
+          },
+          "400": {
+            "$ref": "#/components/responses/invalid_decision"
+          },
+          "401": {
+            "$ref": "#/components/responses/unauthenticated"
+          },
+          "403": {
+            "$ref": "#/components/responses/forbidden"
+          },
+          "409": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            },
+            "description": "409 already_decided or action_conflict: the action already has a decision, or the action the decision carries differs from the one predicted.",
+            "x-limen-codes": [
+              "already_decided",
+              "action_conflict"
+            ]
+          },
+          "413": {
+            "$ref": "#/components/responses/body_too_large"
+          },
+          "429": {
+            "$ref": "#/components/responses/rate_limited"
+          },
+          "500": {
+            "$ref": "#/components/responses/internal"
+          },
+          "503": {
+            "$ref": "#/components/responses/service_unavailable"
+          }
+        },
+        "summary": "Record a decision",
+        "x-limen-action": "case.decide",
+        "x-limen-resource": {
+          "fields": [
+            "org",
+            "subject"
+          ],
+          "kind": "Case"
+        }
+      }
+    },
+    "/v1/explanations": {
+      "get": {
+        "description": "Takes one action's prediction apart in the model's own terms (spec 009): the answers that moved it most, each with its exact share of the model's latent mean, the split of that mean into what the model knows about this kind of action and about the person lately, and for an ask whether it comes from too few answers (unsure) or from the person's answers with the probability still inside the ask band (split). The explanation is by the person's current model; predicted_by names the model that made the recorded prediction, so a client can say the model has learned since. A decision point never shows an explanation to an agent.",
+        "operationId": "getExplanation",
+        "parameters": [
+          {
+            "$ref": "#/components/parameters/org"
+          },
+          {
+            "$ref": "#/components/parameters/subject"
+          },
+          {
+            "in": "query",
+            "name": "action_id",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Explanation"
+                }
+              }
+            },
+            "description": "The explanation."
+          },
+          "400": {
+            "$ref": "#/components/responses/invalid_query"
+          },
+          "401": {
+            "$ref": "#/components/responses/unauthenticated"
+          },
+          "403": {
+            "$ref": "#/components/responses/forbidden"
+          },
+          "404": {
+            "$ref": "#/components/responses/no_case"
+          },
+          "429": {
+            "$ref": "#/components/responses/rate_limited"
+          },
+          "500": {
+            "$ref": "#/components/responses/internal"
+          },
+          "503": {
+            "$ref": "#/components/responses/service_unavailable"
+          }
+        },
+        "summary": "Explain one prediction",
+        "x-limen-action": "case.list",
+        "x-limen-resource": {
+          "fields": [
+            "org",
+            "subject"
+          ],
+          "kind": "Case"
+        }
+      }
+    },
+    "/v1/learned": {
+      "get": {
+        "description": "What the model has learned about one person: for each kind of action they answered, named by its label, how often they approved and denied it and what the model suggests now under the profile that applies, with the evidence ratio and kind of uncertainty of an ask; and the shared tolerance part over their decisions, for a trend.",
+        "operationId": "getLearned",
+        "parameters": [
+          {
+            "$ref": "#/components/parameters/org"
+          },
+          {
+            "$ref": "#/components/parameters/subject"
+          },
+          {
+            "description": "The agent whose profile applies, with kind; empty applies the organization's.",
+            "in": "query",
+            "name": "agent",
+            "required": false,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "description": "Only the entries of this action kind.",
+            "in": "query",
+            "name": "kind",
+            "required": false,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Learned"
+                }
+              }
+            },
+            "description": "What the model learned."
+          },
+          "400": {
+            "$ref": "#/components/responses/invalid_query"
+          },
+          "401": {
+            "$ref": "#/components/responses/unauthenticated"
+          },
+          "403": {
+            "$ref": "#/components/responses/forbidden"
+          },
+          "429": {
+            "$ref": "#/components/responses/rate_limited"
+          },
+          "500": {
+            "$ref": "#/components/responses/internal"
+          },
+          "503": {
+            "$ref": "#/components/responses/service_unavailable"
+          }
+        },
+        "summary": "Show what the model learned",
+        "x-limen-action": "case.list",
+        "x-limen-resource": {
+          "fields": [
+            "org",
+            "subject"
+          ],
+          "kind": "Case"
+        }
+      }
+    },
+    "/v1/predictions": {
+      "post": {
+        "description": "Limen's prediction for one proposed action: the probability that the subject approves it, how uncertain that is, and the verdict it suggests under the cost profile that applies. Idempotent on the action's key: a repeat with the same action returns the first prediction, and a repeat with a different action is refused with action_conflict. Limen reads the action's input to extract features and never stores it.",
+        "operationId": "predict",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/Action"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Prediction"
+                }
+              }
+            },
+            "description": "The prediction, new or the one already made for this action."
+          },
+          "400": {
+            "$ref": "#/components/responses/invalid_action"
+          },
+          "401": {
+            "$ref": "#/components/responses/unauthenticated"
+          },
+          "403": {
+            "$ref": "#/components/responses/forbidden"
+          },
+          "409": {
+            "$ref": "#/components/responses/action_conflict"
+          },
+          "413": {
+            "$ref": "#/components/responses/body_too_large"
+          },
+          "429": {
+            "$ref": "#/components/responses/rate_limited"
+          },
+          "500": {
+            "$ref": "#/components/responses/internal"
+          },
+          "503": {
+            "$ref": "#/components/responses/service_unavailable"
+          }
+        },
+        "summary": "Predict an action",
+        "x-limen-action": "case.predict",
+        "x-limen-resource": {
+          "fields": [
+            "org",
+            "subject"
+          ],
+          "kind": "Case"
+        }
+      }
+    },
+    "/v1/previews": {
+      "post": {
+        "description": "What other costs would have done with one person's recorded predictions in a window: the predictions as they were made, re-thresholded under the costs' thresholds, with no model refitted. Costs are checked as a profile's are.",
+        "operationId": "createPreview",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/PreviewRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Preview"
+                }
+              }
+            },
+            "description": "The preview."
+          },
+          "400": {
+            "$ref": "#/components/responses/invalid_query"
+          },
+          "401": {
+            "$ref": "#/components/responses/unauthenticated"
+          },
+          "403": {
+            "$ref": "#/components/responses/forbidden"
+          },
+          "413": {
+            "$ref": "#/components/responses/body_too_large"
+          },
+          "422": {
+            "$ref": "#/components/responses/ask_too_costly"
+          },
+          "429": {
+            "$ref": "#/components/responses/rate_limited"
+          },
+          "500": {
+            "$ref": "#/components/responses/internal"
+          },
+          "503": {
+            "$ref": "#/components/responses/service_unavailable"
+          }
+        },
+        "summary": "Preview another profile",
+        "x-limen-action": "reliability.read",
+        "x-limen-resource": {
+          "fields": [
+            "org",
+            "subject"
+          ],
+          "kind": "Reliability"
+        }
+      }
+    },
+    "/v1/profiles": {
+      "delete": {
+        "description": "Remove the profile saved for exactly the scope the query names. The next prediction takes the next scope in the order, and the default after the organization's: an agent's scope goes back to the organization's profile. A recorded prediction keeps its thresholds. Idempotent: a scope with no saved profile is also 204. Asks profile.write, as a save of the same scope does.",
+        "operationId": "deleteProfile",
+        "parameters": [
+          {
+            "$ref": "#/components/parameters/org"
+          },
+          {
+            "$ref": "#/components/parameters/kind"
+          },
+          {
+            "$ref": "#/components/parameters/agent"
+          },
+          {
+            "$ref": "#/components/parameters/profileSubject"
+          }
+        ],
+        "responses": {
+          "204": {
+            "description": "No profile is saved for the scope."
+          },
+          "400": {
+            "$ref": "#/components/responses/invalid_query"
+          },
+          "401": {
+            "$ref": "#/components/responses/unauthenticated"
+          },
+          "403": {
+            "$ref": "#/components/responses/forbidden"
+          },
+          "429": {
+            "$ref": "#/components/responses/rate_limited"
+          },
+          "500": {
+            "$ref": "#/components/responses/internal"
+          },
+          "503": {
+            "$ref": "#/components/responses/service_unavailable"
+          }
+        },
+        "summary": "Remove a saved profile",
+        "x-limen-action": "profile.write",
+        "x-limen-resource": {
+          "fields": [
+            "org",
+            "action_kind",
+            "agent",
+            "subject"
+          ],
+          "kind": "Profile"
+        }
+      },
+      "get": {
+        "description": "The cost profile that applies to a scope: the most specific saved profile, in the order kind and agent, agent, kind, organization, or the built-in default, which says so in default. With subject, the person's own profile as the person saved it, with subject in its scope; when the person saved none, the organization's profile for the scope of the org alone, with no subject. A prediction applies the meet of the two, which this route does not return.",
+        "operationId": "getProfile",
+        "parameters": [
+          {
+            "$ref": "#/components/parameters/org"
+          },
+          {
+            "$ref": "#/components/parameters/kind"
+          },
+          {
+            "$ref": "#/components/parameters/agent"
+          },
+          {
+            "$ref": "#/components/parameters/profileSubject"
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Profile"
+                }
+              }
+            },
+            "description": "The profile with its derived thresholds."
+          },
+          "400": {
+            "$ref": "#/components/responses/invalid_query"
+          },
+          "401": {
+            "$ref": "#/components/responses/unauthenticated"
+          },
+          "403": {
+            "$ref": "#/components/responses/forbidden"
+          },
+          "429": {
+            "$ref": "#/components/responses/rate_limited"
+          },
+          "500": {
+            "$ref": "#/components/responses/internal"
+          },
+          "503": {
+            "$ref": "#/components/responses/service_unavailable"
+          }
+        },
+        "summary": "Read the profile that applies",
+        "x-limen-action": "profile.read",
+        "x-limen-resource": {
+          "fields": [
+            "org",
+            "action_kind",
+            "agent",
+            "subject"
+          ],
+          "kind": "Profile"
+        }
+      },
+      "put": {
+        "description": "Validate and save a profile for its scope. The thresholds are derived from the costs, and a profile that states no certify claim takes the default; values sent for thresholds or default are ignored. A profile with subject is that person's own profile in the organization: it has no kind and no agent, and it only ever makes the organization's profile stricter for that person.",
+        "operationId": "putProfile",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/Profile"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Profile"
+                }
+              }
+            },
+            "description": "The saved profile with its derived thresholds."
+          },
+          "400": {
+            "$ref": "#/components/responses/invalid_profile"
+          },
+          "401": {
+            "$ref": "#/components/responses/unauthenticated"
+          },
+          "403": {
+            "$ref": "#/components/responses/forbidden"
+          },
+          "413": {
+            "$ref": "#/components/responses/body_too_large"
+          },
+          "422": {
+            "$ref": "#/components/responses/ask_too_costly"
+          },
+          "429": {
+            "$ref": "#/components/responses/rate_limited"
+          },
+          "500": {
+            "$ref": "#/components/responses/internal"
+          },
+          "503": {
+            "$ref": "#/components/responses/service_unavailable"
+          }
+        },
+        "summary": "Save a profile",
+        "x-limen-action": "profile.write",
+        "x-limen-resource": {
+          "fields": [
+            "org",
+            "action_kind",
+            "agent",
+            "subject"
+          ],
+          "kind": "Profile"
+        }
+      }
+    },
+    "/v1/reliability": {
+      "get": {
+        "description": "How often one source's verdicts disagreed with one person over one window: Limen's suggestions (of=learned), the verdicts decision points applied (of=applied), one decision source such as rules/1, or one signal source such as classifier/claude-auto-mode. Each review counts with weight one over its decision's review probability. A rate is null, not zero, when no action in the window could have been reviewed.",
+        "operationId": "getReliability",
+        "parameters": [
+          {
+            "$ref": "#/components/parameters/org"
+          },
+          {
+            "$ref": "#/components/parameters/subject"
+          },
+          {
+            "in": "query",
+            "name": "of",
+            "required": true,
+            "schema": {
+              "examples": [
+                "learned",
+                "applied",
+                "rules/1",
+                "classifier/claude-auto-mode"
+              ],
+              "type": "string"
+            }
+          },
+          {
+            "in": "query",
+            "name": "from",
+            "required": true,
+            "schema": {
+              "format": "date-time",
+              "type": "string"
+            }
+          },
+          {
+            "in": "query",
+            "name": "to",
+            "required": true,
+            "schema": {
+              "format": "date-time",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Reliability"
+                }
+              }
+            },
+            "description": "The report."
+          },
+          "400": {
+            "$ref": "#/components/responses/invalid_query"
+          },
+          "401": {
+            "$ref": "#/components/responses/unauthenticated"
+          },
+          "403": {
+            "$ref": "#/components/responses/forbidden"
+          },
+          "429": {
+            "$ref": "#/components/responses/rate_limited"
+          },
+          "500": {
+            "$ref": "#/components/responses/internal"
+          },
+          "503": {
+            "$ref": "#/components/responses/service_unavailable"
+          }
+        },
+        "summary": "Report a source's error rates",
+        "x-limen-action": "reliability.read",
+        "x-limen-resource": {
+          "fields": [
+            "org",
+            "subject"
+          ],
+          "kind": "Reliability"
+        }
+      }
+    },
+    "/v1/replays": {
+      "post": {
+        "description": "Predict recorded actions in time order, each before its own answer is learned, and report what Limen would have suggested. Without keep, the replay learns in a scratch model and keeps nothing; with keep=true, the records are learned into the live models and the ledger, as if they had arrived as decisions and answers. At most 100000 records per replay.",
+        "operationId": "replay",
+        "parameters": [
+          {
+            "in": "query",
+            "name": "keep",
+            "schema": {
+              "default": false,
+              "type": "boolean"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/x-ndjson": {
+              "schema": {
+                "$ref": "#/components/schemas/ReplayRecord"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ReplayReport"
+                }
+              }
+            },
+            "description": "The report."
+          },
+          "400": {
+            "$ref": "#/components/responses/invalid_replay"
+          },
+          "401": {
+            "$ref": "#/components/responses/unauthenticated"
+          },
+          "403": {
+            "$ref": "#/components/responses/forbidden"
+          },
+          "413": {
+            "$ref": "#/components/responses/body_too_large"
+          },
+          "429": {
+            "$ref": "#/components/responses/rate_limited"
+          },
+          "500": {
+            "$ref": "#/components/responses/internal"
+          },
+          "503": {
+            "$ref": "#/components/responses/service_unavailable"
+          }
+        },
+        "summary": "Replay recorded history",
+        "x-limen-action": "replay.create",
+        "x-limen-resource": {
+          "fields": [
+            "org"
+          ],
+          "kind": "Replay"
+        }
+      }
+    },
+    "/v1/reports": {
+      "get": {
+        "description": "The actions of an organization's agents and what the reviews of all its persons said, by week, never one person. from and to are each a Monday at 00:00 UTC, to is after from by at most 13 weeks, and the report has one entry per week. A week is open until 7 days after its end; a review counts in it only when it arrived before. A closed week with fewer than 5 persons is too_few and shows nothing more. A ready week shows its numbers, divided by agent, under the group rule and the answer rule; a field the answer rule removes is absent and listed in withheld. The first read of a closed week keeps it, and every later read returns it unchanged, also after a Forget.",
+        "operationId": "getReport",
+        "parameters": [
+          {
+            "$ref": "#/components/parameters/org"
+          },
+          {
+            "in": "query",
+            "name": "from",
+            "required": true,
+            "schema": {
+              "examples": [
+                "2026-10-05T00:00:00Z"
+              ],
+              "format": "date-time",
+              "type": "string"
+            }
+          },
+          {
+            "in": "query",
+            "name": "to",
+            "required": true,
+            "schema": {
+              "format": "date-time",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Report"
+                }
+              }
+            },
+            "description": "The report."
+          },
+          "400": {
+            "$ref": "#/components/responses/invalid_query"
+          },
+          "401": {
+            "$ref": "#/components/responses/unauthenticated"
+          },
+          "403": {
+            "$ref": "#/components/responses/forbidden"
+          },
+          "429": {
+            "$ref": "#/components/responses/rate_limited"
+          },
+          "500": {
+            "$ref": "#/components/responses/internal"
+          },
+          "503": {
+            "$ref": "#/components/responses/service_unavailable"
+          }
+        },
+        "summary": "Report an organization by week",
+        "x-limen-action": "report.read",
+        "x-limen-resource": {
+          "fields": [
+            "org"
+          ],
+          "kind": "Report"
+        }
+      }
+    },
+    "/v1/subjects/forget": {
+      "post": {
+        "description": "Delete everything Limen holds about one subject in one organization: cases, answers, the model learned from them, and the person's own profile there. The kept weeks of the organization's reports stay, since they hold no record of a person. Idempotent.",
+        "operationId": "forgetSubject",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ForgetRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "204": {
+            "description": "Nothing about the subject remains in the organization."
+          },
+          "400": {
+            "$ref": "#/components/responses/invalid_query"
+          },
+          "401": {
+            "$ref": "#/components/responses/unauthenticated"
+          },
+          "403": {
+            "$ref": "#/components/responses/forbidden"
+          },
+          "413": {
+            "$ref": "#/components/responses/body_too_large"
+          },
+          "429": {
+            "$ref": "#/components/responses/rate_limited"
+          },
+          "500": {
+            "$ref": "#/components/responses/internal"
+          },
+          "503": {
+            "$ref": "#/components/responses/service_unavailable"
+          }
+        },
+        "summary": "Forget a person",
+        "x-limen-action": "subject.forget",
+        "x-limen-resource": {
+          "fields": [
+            "org",
+            "subject"
+          ],
+          "kind": "Subject"
+        }
+      }
+    }
+  },
+  "security": [
+    {
+      "bearer": []
+    }
+  ]
+}

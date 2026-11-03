@@ -23,6 +23,10 @@
     "url": "https://platform.latere.ai/docs/messaging/openapi.yaml",
     "sha256": "804f97c55d4bec465ddcc008b3a59e6aec5b2f2c6bdd2c40264fdb75940148cf"
   },
+  "oversight": {
+    "url": "https://platform.latere.ai/docs/oversight/openapi.yaml",
+    "sha256": "ca6e0d7cd0b7dac807018ad8beaf57330c2837fbcdbbaaefdb32fe191b1fe4fd"
+  },
   "storage": {
     "url": "https://platform.latere.ai/docs/storage/openapi.yaml",
     "sha256": "e56869ec159c5ea46477ca54a2c7e00e6d2c331acb7ed81c989252685495afb9"

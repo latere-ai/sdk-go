@@ -25,7 +25,7 @@
   },
   "oversight": {
     "url": "https://platform.latere.ai/docs/oversight/openapi.yaml",
-    "sha256": "ca6e0d7cd0b7dac807018ad8beaf57330c2837fbcdbbaaefdb32fe191b1fe4fd"
+    "sha256": "7d5e8fef4305c012b829db9a8ae259fbf27016c77485b47f3823b8e129c3d439"
   },
   "storage": {
     "url": "https://platform.latere.ai/docs/storage/openapi.yaml",

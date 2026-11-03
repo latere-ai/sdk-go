@@ -1,6 +1,31 @@
 {
   "components": {
     "parameters": {
+      "BackupCursor": {
+        "description": "The `cursor` to read from: 0, or absent, for the start, and the `next` of the previous answer after that.",
+        "in": "query",
+        "name": "cursor",
+        "required": false,
+        "schema": {
+          "format": "int64",
+          "minimum": 0,
+          "type": "integer"
+        }
+      },
+      "BackupOrder": {
+        "description": "Whether the page is the oldest records after the cursor or the newest before it.",
+        "in": "query",
+        "name": "order",
+        "required": false,
+        "schema": {
+          "default": "oldest",
+          "enum": [
+            "oldest",
+            "newest"
+          ],
+          "type": "string"
+        }
+      },
       "Conversation": {
         "description": "The conversation's id.",
         "in": "path",
@@ -537,6 +562,73 @@
       }
     },
     "schemas": {
+      "BackupList": {
+        "properties": {
+          "next": {
+            "description": "The `cursor` to read on from; set only when the page is full.",
+            "format": "int64",
+            "minimum": 1,
+            "type": "integer"
+          },
+          "records": {
+            "items": {
+              "$ref": "#/components/schemas/StoredBackupRecord"
+            },
+            "type": "array"
+          }
+        },
+        "required": [
+          "records"
+        ],
+        "type": "object"
+      },
+      "BackupPut": {
+        "additionalProperties": false,
+        "properties": {
+          "records": {
+            "description": "The records to store, 1 to 20.",
+            "items": {
+              "$ref": "#/components/schemas/BackupRecord"
+            },
+            "type": "array"
+          }
+        },
+        "required": [
+          "records"
+        ],
+        "type": "object"
+      },
+      "BackupRecord": {
+        "additionalProperties": false,
+        "properties": {
+          "id": {
+            "description": "The id the person's devices derived for the record, 1 to 64 characters; the same message gives the same id on every device.",
+            "type": "string"
+          },
+          "sealed": {
+            "$ref": "#/components/schemas/Bytes",
+            "description": "The record sealed under the backup key, 1 to 266304 bytes."
+          }
+        },
+        "required": [
+          "id",
+          "sealed"
+        ],
+        "type": "object"
+      },
+      "BackupStored": {
+        "properties": {
+          "added": {
+            "description": "How many of the records were not stored before.",
+            "minimum": 0,
+            "type": "integer"
+          }
+        },
+        "required": [
+          "added"
+        ],
+        "type": "object"
+      },
       "Bytes": {
         "contentEncoding": "base64",
         "description": "Bytes in standard base64 with `=` padding.",
@@ -1167,6 +1259,36 @@
         ],
         "type": "object"
       },
+      "StoredBackupRecord": {
+        "properties": {
+          "created": {
+            "description": "When the server stored it.",
+            "format": "date-time",
+            "type": "string"
+          },
+          "cursor": {
+            "description": "The record's place in the order it was stored.",
+            "format": "int64",
+            "minimum": 1,
+            "type": "integer"
+          },
+          "id": {
+            "description": "The record's id.",
+            "type": "string"
+          },
+          "sealed": {
+            "$ref": "#/components/schemas/Bytes",
+            "description": "The record as it was sealed."
+          }
+        },
+        "required": [
+          "id",
+          "sealed",
+          "cursor",
+          "created"
+        ],
+        "type": "object"
+      },
       "Transfer": {
         "additionalProperties": false,
         "properties": {
@@ -1409,6 +1531,129 @@
         "summary": "Get a conversation",
         "tags": [
           "Conversations"
+        ]
+      }
+    },
+    "/v1/messaging/conversations/{id}/backup": {
+      "get": {
+        "description": "Answers the caller's own records of a conversation, for a device that holds the backup key to open. Each record has a `cursor`, its place in the order it was stored. With `order` oldest, the default, the answer is the records after `cursor`, oldest first; with newest, the records before `cursor`, newest first, where a `cursor` of 0 starts at the newest. `next` is set when the page is full: pass it as `cursor` to read on, and stop at an answer with no records. Authorized as `backup.recovery`.",
+        "operationId": "listBackupRecords",
+        "parameters": [
+          {
+            "$ref": "#/components/parameters/Conversation"
+          },
+          {
+            "$ref": "#/components/parameters/BackupCursor"
+          },
+          {
+            "$ref": "#/components/parameters/BackupOrder"
+          },
+          {
+            "$ref": "#/components/parameters/Limit"
+          },
+          {
+            "$ref": "#/components/parameters/DeviceRequired"
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/BackupList"
+                }
+              }
+            },
+            "description": "A page of the caller's records."
+          },
+          "400": {
+            "$ref": "#/components/responses/BadQuery",
+            "description": "`invalid`: `cursor` or `limit` is not a number in its range, or `order` is not oldest or newest."
+          },
+          "401": {
+            "$ref": "#/components/responses/Unauthenticated"
+          },
+          "403": {
+            "$ref": "#/components/responses/Forbidden",
+            "description": "`not_your_device`: the `Sermo-Device` header is missing or names no device of the caller's that stands. `forbidden`: the caller is not, and never was, one of the conversation's people, or the authorizer refused."
+          },
+          "404": {
+            "$ref": "#/components/responses/NotFound",
+            "description": "`not_found`: no conversation has this id."
+          },
+          "500": {
+            "$ref": "#/components/responses/Internal"
+          },
+          "503": {
+            "$ref": "#/components/responses/AuthorizerUnavailable"
+          }
+        },
+        "summary": "List your sealed records of a conversation",
+        "tags": [
+          "Backup"
+        ]
+      },
+      "post": {
+        "description": "Stores records of the caller's history of a conversation, each one message sealed by the caller's device under the person's backup key. The server cannot open them and sees their sizes and ids. A record whose `id` is stored already is left as it is, so two devices of the person store a message's record once, and a call sent again changes nothing. A person's records of all conversations hold at most 268435456 bytes. The retention of the log does not delete them. The caller must be, or have been, one of the conversation's people. Authorized as `backup.recovery`.",
+        "operationId": "putBackupRecords",
+        "parameters": [
+          {
+            "$ref": "#/components/parameters/Conversation"
+          },
+          {
+            "$ref": "#/components/parameters/DeviceRequired"
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/BackupPut"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/BackupStored"
+                }
+              }
+            },
+            "description": "How many of the records were new."
+          },
+          "400": {
+            "$ref": "#/components/responses/BadRequest",
+            "description": "`invalid`: no record is sent; a record's `id` is empty or over 64 characters, or its `sealed` is empty. `unknown_field`: the body has a member this one does not."
+          },
+          "401": {
+            "$ref": "#/components/responses/Unauthenticated"
+          },
+          "403": {
+            "$ref": "#/components/responses/Forbidden",
+            "description": "`not_your_device`: the `Sermo-Device` header is missing or names no device of the caller's that stands. `forbidden`: the caller is not, and never was, one of the conversation's people, or the authorizer refused."
+          },
+          "404": {
+            "$ref": "#/components/responses/NotFound",
+            "description": "`not_found`: no conversation has this id."
+          },
+          "413": {
+            "$ref": "#/components/responses/TooLarge",
+            "description": "`too_large`: the body is over the server's bound; a call carries more than 20 records; a record is over 266304 bytes; or the records would take the person past 268435456 bytes in all."
+          },
+          "500": {
+            "$ref": "#/components/responses/Internal"
+          },
+          "503": {
+            "$ref": "#/components/responses/AuthorizerUnavailable"
+          }
+        },
+        "summary": "Store sealed records of your history in a conversation",
+        "tags": [
+          "Backup"
         ]
       }
     },

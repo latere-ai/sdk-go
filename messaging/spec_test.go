@@ -151,20 +151,23 @@ func TestModelsMatchTheSchemas(t *testing.T) {
 		model  any
 		schema *schema
 	}{
-		"DeviceRecord":      {messaging.DeviceRecord{}, s["DeviceRecord"]},
-		"Revocation":        {messaging.Revocation{}, s["Revocation"]},
-		"DeviceList":        {messaging.DeviceList{}, s["DeviceList"]},
-		"Recovery":          {messaging.Recovery{}, s["Recovery"]},
-		"KeyPackageCount":   {messaging.KeyPackageCount{}, s["KeyPackageCount"]},
-		"ClaimedKeyPackage": {messaging.ClaimedKeyPackage{}, s["ClaimedKeyPackage"]},
-		"Conversation":      {messaging.Conversation{}, s["Conversation"]},
-		"ConversationList":  {messaging.ConversationList{}, s["ConversationList"]},
-		"Outgoing":          {messaging.Outgoing{}, s["MessageSend"]},
-		"Sent":              {messaging.Sent{}, s["MessageSent"]},
-		"Message":           {messaging.Message{}, s["Message"]},
-		"MessageList":       {messaging.MessageList{}, s["MessageList"]},
-		"Welcome":           {messaging.Welcome{}, s["Welcome"]},
-		"Person":            {messaging.Person{}, s["Person"]},
+		"DeviceRecord":       {messaging.DeviceRecord{}, s["DeviceRecord"]},
+		"Revocation":         {messaging.Revocation{}, s["Revocation"]},
+		"DeviceList":         {messaging.DeviceList{}, s["DeviceList"]},
+		"Recovery":           {messaging.Recovery{}, s["Recovery"]},
+		"KeyPackageCount":    {messaging.KeyPackageCount{}, s["KeyPackageCount"]},
+		"ClaimedKeyPackage":  {messaging.ClaimedKeyPackage{}, s["ClaimedKeyPackage"]},
+		"Conversation":       {messaging.Conversation{}, s["Conversation"]},
+		"ConversationList":   {messaging.ConversationList{}, s["ConversationList"]},
+		"Outgoing":           {messaging.Outgoing{}, s["MessageSend"]},
+		"Sent":               {messaging.Sent{}, s["MessageSent"]},
+		"Message":            {messaging.Message{}, s["Message"]},
+		"MessageList":        {messaging.MessageList{}, s["MessageList"]},
+		"Welcome":            {messaging.Welcome{}, s["Welcome"]},
+		"BackupRecord":       {messaging.BackupRecord{}, s["BackupRecord"]},
+		"StoredBackupRecord": {messaging.StoredBackupRecord{}, s["StoredBackupRecord"]},
+		"BackupPage":         {messaging.BackupPage{}, s["BackupList"]},
+		"Person":             {messaging.Person{}, s["Person"]},
 	} {
 		holdToSchema(t, name, c.model, c.schema)
 	}
@@ -233,6 +236,8 @@ var calls = []call{
 	{"get", "/v1/messaging/conversations/{id}/group-info", "200", "", "GroupInfo", true},
 	{"post", "/v1/messaging/conversations/{id}/messages", "201", "MessageSend", "MessageSent", true},
 	{"get", "/v1/messaging/conversations/{id}/messages", "200", "", "MessageList", true},
+	{"post", "/v1/messaging/conversations/{id}/backup", "200", "BackupPut", "BackupStored", true},
+	{"get", "/v1/messaging/conversations/{id}/backup", "200", "", "BackupList", true},
 	{"get", "/v1/messaging/welcomes", "200", "", "WelcomeList", true},
 	{"delete", "/v1/messaging/welcomes/{id}", "204", "", "", true},
 	{"get", "/v1/messaging/conversations/{id}/people/{person}", "200", "", "Membership", false},
@@ -360,5 +365,30 @@ func TestTheCodesAreTheDocuments(t *testing.T) {
 		if !errors.As(err, &apiErr) || apiErr.Code != c.code {
 			t.Errorf("%d %s: the service's answer is not under the error", c.status, c.code)
 		}
+	}
+}
+
+// The orders a page of backup records is read in are the document's.
+func TestTheBackupOrdersAreTheDocuments(t *testing.T) {
+	raw, err := os.ReadFile("../openapi/messaging.json")
+	if err != nil {
+		t.Fatal(err)
+	}
+	var d struct {
+		Components struct {
+			Parameters map[string]struct {
+				Schema struct {
+					Enum []string `json:"enum"`
+				} `json:"schema"`
+			} `json:"parameters"`
+		} `json:"components"`
+	}
+	if err := json.Unmarshal(raw, &d); err != nil {
+		t.Fatal(err)
+	}
+	want := []string{string(messaging.BackupNewest), string(messaging.BackupOldest)}
+	got := slices.Sorted(slices.Values(d.Components.Parameters["BackupOrder"].Schema.Enum))
+	if !slices.Equal(got, want) {
+		t.Errorf("the document lists the orders %v; the package names %v", got, want)
 	}
 }

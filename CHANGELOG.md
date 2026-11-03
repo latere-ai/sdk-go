@@ -7,6 +7,18 @@ minor version may break code, and every such change is marked **Breaking**.
 
 ## [Unreleased]
 
+## [0.32.0] - 2026-11-03
+
+### Added
+
+- `messaging.Client.PutBackupRecords` and `Client.BackupRecords` store and
+  list a person's sealed history records of a conversation, the records
+  `BackupKey.SealRecord` makes, so a new device that holds the backup key
+  reads the history a joining member of a group cannot. Records are
+  stored once by id however many devices store them, and listed oldest
+  after a cursor or newest before it (`BackupOldest`, `BackupNewest`). The
+  models are held to the messaging document of Sermo v0.2.0.
+
 ## [0.31.0] - 2026-11-03
 
 ### Changed

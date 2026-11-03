@@ -265,6 +265,32 @@ func TestCalls(t *testing.T) {
 			}},
 		{"messages at once", 200, `{"messages":[],"next":0}`, "GET", "/v1/messaging/conversations/c1/messages", "", "phone-1", nil,
 			func(c *messaging.Client) error { _, err := c.Messages(ctx, "c1", 0, 0, 0); return err }},
+		{"store backup records", 200, `{"added":1}`, "POST", "/v1/messaging/conversations/c%2F1/backup", "", "phone-1",
+			map[string]any{"records": []any{map[string]any{"id": "r1", "sealed": "AQ=="}}},
+			func(c *messaging.Client) error {
+				n, err := c.PutBackupRecords(ctx, "c/1", []messaging.BackupRecord{{ID: "r1", Sealed: []byte{1}}})
+				if err == nil && n != 1 {
+					t.Errorf("added %d", n)
+				}
+				return err
+			}},
+		{"backup records", 200, `{"records":[{"id":"r1","sealed":"AQ==","cursor":7,"created":"2026-10-29T10:41:07Z"}],"next":7}`,
+			"GET", "/v1/messaging/conversations/c1/backup", "cursor=9&limit=5&order=newest", "phone-1", nil,
+			func(c *messaging.Client) error {
+				p, err := c.BackupRecords(ctx, "c1", 9, messaging.BackupNewest, 5)
+				if err == nil && (len(p.Records) != 1 || p.Next != 7 || p.Records[0].Cursor != 7 || !bytes.Equal(p.Records[0].Sealed, []byte{1})) {
+					t.Errorf("page %+v", p)
+				}
+				return err
+			}},
+		{"backup records by default", 200, `{"records":[]}`, "GET", "/v1/messaging/conversations/c1/backup", "", "phone-1", nil,
+			func(c *messaging.Client) error {
+				p, err := c.BackupRecords(ctx, "c1", 0, "", 0)
+				if err == nil && (p.Records == nil || p.Next != 0) {
+					t.Errorf("page %+v", p)
+				}
+				return err
+			}},
 		{"welcomes", 200, `{"welcomes":[{"id":"w1","conversation":"c1","seq":4,"welcome":"AQ==","notice":"Ag==","created":"2026-10-29T10:41:07Z"}]}`,
 			"GET", "/v1/messaging/welcomes", "", "phone-1", nil,
 			func(c *messaging.Client) error {
@@ -373,7 +399,12 @@ func TestCallsRefused(t *testing.T) {
 		"send":            func() error { _, err := c.Send(ctx, "c1", messaging.Outgoing{}); return err },
 		"messages":        func() error { _, err := c.Messages(ctx, "c1", 0, 0, 0); return err },
 		"welcomes":        func() error { _, err := c.Welcomes(ctx); return err },
-		"membership":      func() error { _, err := c.IsMember(ctx, "c1", "bob"); return err },
+		"store backup": func() error {
+			_, err := c.PutBackupRecords(ctx, "c1", []messaging.BackupRecord{{ID: "r", Sealed: []byte{1}}})
+			return err
+		},
+		"backup":     func() error { _, err := c.BackupRecords(ctx, "c1", 0, "", 0); return err },
+		"membership": func() error { _, err := c.IsMember(ctx, "c1", "bob"); return err },
 	} {
 		if err := call(); !errors.Is(err, messaging.ErrNotYourDevice) || !errors.Is(err, latere.ErrForbidden) {
 			t.Errorf("%s: %v", name, err)
@@ -402,7 +433,11 @@ func TestRetries(t *testing.T) {
 				_, err := c.Send(ctx, "c1", messaging.Outgoing{Message: []byte{1}})
 				return err
 			},
-			"claim":   func(c *messaging.Client) error { _, err := c.ClaimKeyPackages(ctx, "bob", "c1"); return err },
+			"claim": func(c *messaging.Client) error { _, err := c.ClaimKeyPackages(ctx, "bob", "c1"); return err },
+			"backup": func(c *messaging.Client) error {
+				_, err := c.PutBackupRecords(ctx, "c1", []messaging.BackupRecord{{ID: "r", Sealed: []byte{1}}})
+				return err
+			},
 			"publish": func(c *messaging.Client) error { return c.PublishKeyPackages(ctx, nil, nil) },
 			"create":  func(c *messaging.Client) error { _, err := c.CreateConversation(ctx, "c1", nil); return err },
 		} {
@@ -432,7 +467,12 @@ func TestRetries(t *testing.T) {
 			}, 1},
 			"claim":  {func(c *messaging.Client) error { _, err := c.ClaimKeyPackages(ctx, "bob", "c1"); return err }, 1},
 			"revoke": {func(c *messaging.Client) error { return c.Revoke(ctx, messaging.Revocation{}) }, 2},
-			"leave":  {func(c *messaging.Client) error { return c.LeaveTransfer(ctx, "tablet", []byte{1}) }, 2},
+			// A store of records is kept once however often it is sent.
+			"backup": {func(c *messaging.Client) error {
+				_, err := c.PutBackupRecords(ctx, "c1", []messaging.BackupRecord{{ID: "r", Sealed: []byte{1}}})
+				return err
+			}, 2},
+			"leave": {func(c *messaging.Client) error { return c.LeaveTransfer(ctx, "tablet", []byte{1}) }, 2},
 		} {
 			client, got := fakeService(t, 1, func(w http.ResponseWriter, _ *http.Request, n int) {
 				if n == 0 {

@@ -481,6 +481,90 @@ func (c *Client) Messages(ctx context.Context, conversation string, after int64,
 	return &out, nil
 }
 
+// BackupRecord is one record of a person's history to store: the id
+// BackupKey.RecordID derives, and the content BackupKey.SealRecord sealed
+// under it.
+type BackupRecord struct {
+	ID     string `json:"id"`
+	Sealed []byte `json:"sealed"`
+}
+
+// PutBackupRecords stores sealed records of the caller's history in a
+// conversation, as many as the service takes in one call, and says how
+// many were new. A record whose id is stored already is left as it was,
+// so two devices of a person store a message's record once, and a call
+// sent again changes nothing. The caller must be, or have been, one of
+// the conversation's people. An error matching ErrTooLarge says the call
+// has too many records, a record is too large, or the person's records
+// are at the service's limit.
+func (c *Client) PutBackupRecords(ctx context.Context, conversation string, records []BackupRecord) (int, error) {
+	body := struct {
+		Records []BackupRecord `json:"records"`
+	}{records}
+	var out struct {
+		Added int `json:"added"`
+	}
+	if err := c.do(ctx, &latere.Request{Method: http.MethodPost, Path: basePath + "/conversations/" + url.PathEscape(conversation) + "/backup",
+		Body: body, Retry: latere.RetryAlways}, true, &out); err != nil {
+		return 0, err
+	}
+	return out.Added, nil
+}
+
+// BackupOrder is which end of a person's stored records a page starts at.
+type BackupOrder string
+
+// The orders a page of backup records is read in.
+const (
+	// BackupOldest reads the records after the cursor, oldest first.
+	BackupOldest BackupOrder = "oldest"
+	// BackupNewest reads the records before the cursor, newest first; a
+	// cursor of 0 starts at the newest.
+	BackupNewest BackupOrder = "newest"
+)
+
+// StoredBackupRecord is a backup record as the service lists it.
+type StoredBackupRecord struct {
+	ID     string `json:"id"`
+	Sealed []byte `json:"sealed"`
+	// Cursor is the record's place in the order the service stored them.
+	Cursor  int64     `json:"cursor"`
+	Created time.Time `json:"created"`
+}
+
+// BackupPage is a page of the caller's backup records of a conversation.
+type BackupPage struct {
+	Records []StoredBackupRecord `json:"records"`
+	// Next is the cursor to read on from; it is set only when the page is
+	// full, and the next page may be empty.
+	Next int64 `json:"next,omitempty"`
+}
+
+// BackupRecords lists the caller's own backup records of a conversation:
+// limit of them, 0 for the service's default page, from cursor in order.
+// A cursor of 0 starts at the end the order names. Read on with the
+// page's Next until a page has none. BackupKey.OpenRecord opens each.
+func (c *Client) BackupRecords(ctx context.Context, conversation string, cursor int64, order BackupOrder, limit int) (*BackupPage, error) {
+	q := url.Values{}
+	if cursor > 0 {
+		q.Set("cursor", strconv.FormatInt(cursor, 10))
+	}
+	if order != "" {
+		q.Set("order", string(order))
+	}
+	if limit > 0 {
+		q.Set("limit", strconv.Itoa(limit))
+	}
+	var out BackupPage
+	if err := c.do(ctx, &latere.Request{Method: http.MethodGet, Path: basePath + "/conversations/" + url.PathEscape(conversation) + "/backup", Query: q}, true, &out); err != nil {
+		return nil, err
+	}
+	if out.Records == nil {
+		out.Records = []StoredBackupRecord{}
+	}
+	return &out, nil
+}
+
 // Welcome is a Welcome filed for the Client's device by the commit that
 // added it, with the commit's history notice.
 type Welcome struct {

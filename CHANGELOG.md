@@ -7,6 +7,16 @@ minor version may break code, and every such change is marked **Breaking**.
 
 ## [Unreleased]
 
+## [0.29.0] - 2026-11-03
+
+### Changed
+
+- The `agents` models are held to the agents document of Topos v0.69.0,
+  which describes a call's `scope`, how the person answered a
+  confirmation, `session.denials_reached` and the stop reason `denials`.
+  Those servers are now released, so the consent fields of v0.28.0 no
+  longer describe unreleased servers.
+
 ## [0.28.0] - 2026-11-03
 
 ### Added

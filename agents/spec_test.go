@@ -148,32 +148,21 @@ var leftOut = map[string]string{
 // JSON name, each with the schema it will join and what it is. checkModel
 // takes them as read, and TestFieldsAheadOfTheDocumentAreStillAhead fails
 // once the document describes one, so the model is then held to it.
-var aheadOfTheDocument = map[string]ahead{
-	"ToolUse.scope":                     {"AgentToolUse", "the reach the call was decided on (topos spec 101)"},
-	"ToolConfirmation.answer_ms":        {"UserToolConfirmation", "how long the question was visible to the person (topos spec 101)"},
-	"ToolConfirmation.details_opened":   {"UserToolConfirmation", "whether the person opened the call's details (topos spec 101)"},
-	"ToolConfirmation.suggestion_shown": {"UserToolConfirmation", "whether the client showed the suggestion first (topos spec 101)"},
-	"ToolConfirmation.surface":          {"UserToolConfirmation", "where the person answered (topos spec 101)"},
-}
+var aheadOfTheDocument = map[string]ahead{}
 
 // enumsAheadOfTheDocument is the values the models' enums declare that the
 // published document does not list yet, by the enum's Go type and the
 // value, each with what it is. TestEnumsAreTheDocuments takes them as
 // listed, and TestEnumsAheadOfTheDocumentAreStillAhead fails once the
 // document lists one, so the enum is then held to it.
-var enumsAheadOfTheDocument = map[string]string{
-	"StopReason.denials":                "an unattended turn that its refused calls stopped (topos spec 101)",
-	"EventType.session.denials_reached": "the refusal that reached a limit on refused calls (topos spec 101)",
-}
+var enumsAheadOfTheDocument = map[string]string{}
 
 // eventsAheadOfTheDocument is the event types whose payload a model reads
 // and the published document has no schema for yet, each with its model.
 // TestEventsAheadOfTheDocumentAreStillAhead fails once the document
 // describes one, so its model is then held to the schema in
 // TestModelsMatchTheSchemas.
-var eventsAheadOfTheDocument = map[string]reflect.Type{
-	"session.denials_reached": reflect.TypeFor[DenialsReached](),
-}
+var eventsAheadOfTheDocument = map[string]reflect.Type{}
 
 // ahead is a field of aheadOfTheDocument: the schema it will join, a
 // component's name or "event:" and an event's type for its payload, and

@@ -7,6 +7,25 @@ minor version may break code, and every such change is marked **Breaking**.
 
 ## [Unreleased]
 
+### Fixed
+
+- The `oversight` models read the fields of the oversight document they
+  did not read. `oversight/spec_test.go` lists, each with its reason, the
+  fields left out, such as the deprecated `minimum`.
+  - `Profile.Consent`, a new `Consent` of `MinWeight` and `MinSessions`:
+    the settings of the cover rule that a profile makes greater. A
+    profile read with `GetProfile` and saved again with `PutProfile` no
+    longer drops them.
+  - `LearnedKind.Cover`, and `Explanation.Reason`, one sentence for the
+    person.
+  - `Preview.Org`, `Subject`, `From`, `To`, `Costs` and `AuditRate`, the
+    request the preview answers.
+  - `Org`, `Subject` and `ActionID` of a case's `Prediction` and
+    `Decision`.
+  - `RecordedAnswer.AnswerMS`, `WaitedMS`, `DetailsOpened`,
+    `SuggestionShown`, `Surface` and `Remembered`: how the person gave
+    the answer, as the caller sent it.
+
 ## [0.30.0] - 2026-11-03
 
 ### Added

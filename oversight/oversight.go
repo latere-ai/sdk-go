@@ -256,6 +256,10 @@ type LearnedKind struct {
 	// service cannot tell yet apart from one the person is split on.
 	EvidenceRatio float64 `json:"evidence_ratio"`
 	AskKind       AskKind `json:"ask_kind,omitempty"`
+	// Cover is how far the person's approvals cover a step of the label
+	// now, as a Prediction's Cover says, without Nearest; nil from a
+	// decision service that does not send it.
+	Cover *Cover `json:"cover,omitempty"`
 }
 
 // TrendPoint is how much the person let steps run at one point of their
@@ -329,6 +333,11 @@ type Explanation struct {
 	// AskKind is why the decision service suggests asking, when Verdict is
 	// VerdictAsk, and empty otherwise.
 	AskKind AskKind `json:"ask_kind,omitempty"`
+	// Reason is one sentence for the person saying why Verdict is what it
+	// is, as a Prediction's Reason does; never show it to an agent. The
+	// reason of an ask states no chance. Empty from a decision service
+	// that does not send it.
+	Reason string `json:"reason,omitempty"`
 	// Evidence are the person's answers that moved the prediction most:
 	// those toward the verdict's side first, then those against it.
 	Evidence []Evidence `json:"evidence"`
@@ -427,6 +436,17 @@ type Certify struct {
 	Delta float64 `json:"delta"`
 }
 
+// Consent is what a trust profile sets for the cover rule: how much
+// weight the person's approvals need, and from how many sessions, before
+// the decision service suggests allow for a step. A profile can make the
+// decision service's own settings greater and never smaller; zero is its
+// own setting. A Cover names the settings that applied in MinWeight and
+// MinSessions.
+type Consent struct {
+	MinWeight   int `json:"min_weight,omitempty"`
+	MinSessions int `json:"min_sessions,omitempty"`
+}
+
 // Scope is what a trust profile applies to: an organization, which is a
 // person's subject in their own context and the organization's id in an
 // organization's, and optionally one kind of step, one agent, or both.
@@ -437,8 +457,8 @@ type Certify struct {
 // applies the stricter of the organization's profile and the person's own
 // to each of the person's steps, number by number: the higher of the two
 // allow thresholds, the lower of the two block thresholds, the higher
-// audit rate and the stricter claim. A person's own profile never makes
-// the organization's looser.
+// audit rate, the stricter claim and the greater of each Consent setting.
+// A person's own profile never makes the organization's looser.
 //
 // A Prediction names the scope whose profile applied to its step in the
 // same form, with Subject set only where the person's own profile made a
@@ -477,6 +497,10 @@ type Profile struct {
 	// that are picked at random for the person to check.
 	AuditRate float64  `json:"audit_rate"`
 	Certify   *Certify `json:"certify,omitempty"`
+	// Consent makes the settings of the cover rule greater for the steps
+	// of the scope; nil is the decision service's own settings. A profile
+	// read with GetProfile and saved again with PutProfile keeps it.
+	Consent *Consent `json:"consent,omitempty"`
 	// Thresholds follow from Costs; a value set when saving is ignored.
 	Thresholds Thresholds `json:"thresholds"`
 	// Default is true for the built-in profile of a scope with none saved;
@@ -574,6 +598,14 @@ type PreviewParams struct {
 // in a window, from what the decision service predicted for each as it
 // was made.
 type Preview struct {
+	// Org, Subject, From, To, Costs and AuditRate are those of the
+	// request.
+	Org       string    `json:"org"`
+	Subject   string    `json:"subject"`
+	From      time.Time `json:"from"`
+	To        time.Time `json:"to"`
+	Costs     Costs     `json:"costs"`
+	AuditRate float64   `json:"audit_rate"`
 	// Thresholds are those of the previewed costs.
 	Thresholds Thresholds `json:"thresholds"`
 	// Records counts the steps with a prediction in the window, and Would

@@ -23,7 +23,8 @@ const (
  "prediction":{"org":"` + me + `","subject":"` + me + `","action_id":"` + action + `","verdict":"ask","approve":0.55,"uncertainty":0.4,"evidence_ratio":0.8,"ask_kind":"split",
   "thresholds":{"allow_above":0.9,"block_below":0.25},"profile":{"org":"` + me + `"},"audit_rate":0.05,"source":"learned/3","reason":"You allowed and denied steps like this."},
  "decision":{"org":"` + me + `","subject":"` + me + `","action_id":"` + action + `","verdict":"ask","review_probability":1,"source":"learned/3"},
- "answers":[{"approve":true,"by":"` + me + `","at":"2026-11-01T09:00:00Z","review":true}],"added_later":1},
+ "answers":[{"approve":true,"by":"` + me + `","at":"2026-11-01T09:00:00Z","review":true,
+  "answer_ms":4200,"waited_ms":60000,"details_opened":true,"suggestion_shown":false,"surface":"prompt"}],"added_later":1},
 {"action":{"org":"` + me + `","subject":"` + me + `","action_id":"ses_2/toolu_7","kind":"tool","name":"read","effect":"read"},
  "prediction":{"verdict":"allow","approve":0.97,"uncertainty":0.2,"thresholds":{"allow_above":0.9,"block_below":0.25},"audit_rate":0.05,"source":"learned/2"},
  "decision":{"verdict":"allow","review_probability":0.05,"source":"rules/1"}}],"next_cursor":"c2"}`
@@ -59,15 +60,23 @@ func TestListCases(t *testing.T) {
 	}
 	p := first.Prediction
 	if p == nil || p.Verdict != oversight.VerdictAsk || p.Approve != 0.55 || p.AskKind != oversight.AskSplit || p.EvidenceRatio == nil || *p.EvidenceRatio != 0.8 ||
-		p.Thresholds.AllowAbove != 0.9 || p.AuditRate != 0.05 || p.Source != "learned/3" || p.Reason == "" {
+		p.Thresholds.AllowAbove != 0.9 || p.AuditRate != 0.05 || p.Source != "learned/3" || p.Reason == "" ||
+		p.Org != me || p.Subject != me || p.ActionID != action {
 		t.Errorf("prediction %+v", p)
 	}
-	if d := first.Decision; d == nil || d.Verdict != oversight.VerdictAsk || d.ReviewProbability != 1 || d.Source != "learned/3" {
+	if d := first.Decision; d == nil || d.Verdict != oversight.VerdictAsk || d.ReviewProbability != 1 || d.Source != "learned/3" ||
+		d.Org != me || d.Subject != me || d.ActionID != action {
 		t.Errorf("decision %+v", d)
 	}
 	if len(first.Answers) != 1 || !first.Answers[0].Approve || !first.Answers[0].Review || first.Answers[0].By != me ||
 		!first.Answers[0].At.Equal(time.Date(2026, 11, 1, 9, 0, 0, 0, time.UTC)) {
 		t.Errorf("answers %+v", first.Answers)
+	}
+	// The answer says how the person gave it, and leaves out what the
+	// caller did not measure.
+	if a := first.Answers[0]; a.AnswerMS == nil || *a.AnswerMS != 4200 || a.WaitedMS == nil || *a.WaitedMS != 60_000 ||
+		a.DetailsOpened == nil || !*a.DetailsOpened || a.SuggestionShown == nil || *a.SuggestionShown || a.Surface != oversight.SurfacePrompt || a.Remembered {
+		t.Errorf("how the person answered %+v", a)
 	}
 	if !strings.Contains(string(first.RawJSON()), "added_later") {
 		t.Errorf("RawJSON lost a field: %s", first.RawJSON())

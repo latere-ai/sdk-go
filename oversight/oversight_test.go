@@ -25,16 +25,17 @@ const (
 	// learned is the learned view as the API answers it, with a field the
 	// package does not model.
 	learned = `{"org":"` + me + `","subject":"` + me + `","entries":[
-{"label":"bash go test","kind":"tool","name":"bash","approved":31,"denied":0,"approve":0.96,"uncertainty":0.2,"verdict":"allow","evidence_ratio":0.9,"thresholds":{"allow_above":0.9,"block_below":0.25}},
+{"label":"bash go test","kind":"tool","name":"bash","approved":31,"denied":0,"approve":0.96,"uncertainty":0.2,"verdict":"allow","evidence_ratio":0.9,"thresholds":{"allow_above":0.9,"block_below":0.25},
+ "cover":{"covered":true,"weight":12,"sessions":5,"min_weight":3,"min_sessions":2}},
 {"label":"bash git push","kind":"tool","name":"bash","approved":2,"denied":0,"approve":0.58,"uncertainty":1.1,"verdict":"ask","evidence_ratio":0.2,"ask_kind":"unsure","thresholds":{"allow_above":0.9,"block_below":0.25}}],"model":{"source":"learned/1","answers":33},
 "recent":[{"t":10,"at":"2026-10-20T09:00:00Z","value":-0.2},{"t":40,"at":"2026-11-01T09:00:00Z","value":0.4}],"added_later":1}`
 	// explanation is an explanation of an ask the person is split on.
 	explanation = `{"org":"` + me + `","subject":"` + me + `","action_id":"` + action + `","model":{"source":"learned/1","answers":40},"predicted_by":{"source":"learned/1","answers":38},"approve":0.52,"uncertainty":0.4,
-"verdict":"ask","mean":0.07,"parts":{"action":0.05,"recent":0.1,"interaction":-0.08},"evidence_ratio":0.81,"ask_kind":"split","thresholds":{"allow_above":0.9,"block_below":0.25},
+"verdict":"ask","reason":"Your answers about steps like this do not agree.","mean":0.07,"parts":{"action":0.05,"recent":0.1,"interaction":-0.08},"evidence_ratio":0.81,"ask_kind":"split","thresholds":{"allow_above":0.9,"block_below":0.25},
 "evidence":[{"action_id":"ses_1/toolu_9","label":"bash npm install","at":"2026-10-30T10:00:00Z","approve":true,"share":0.19},
 {"action_id":"ses_2/toolu_4","label":"bash npm install","at":"2026-10-29T10:00:00Z","approve":false,"share":0.18}]}`
 	profile = `{"org":"` + me + `","costs":{"false_allow":10,"false_block":4,"ask":1},"audit_rate":0.05,"certify":{"alpha":0.01,"delta":0.05},
-"thresholds":{"allow_above":0.9,"block_below":0.25},"default":true}`
+"consent":{"min_weight":5,"min_sessions":3},"thresholds":{"allow_above":0.9,"block_below":0.25},"default":true}`
 	preview = `{"org":"` + me + `","subject":"` + me + `","from":"2026-10-25T00:00:00Z","to":"2026-11-01T00:00:00Z","costs":{"false_allow":50,"false_block":4,"ask":1},"audit_rate":0.05,
 "thresholds":{"allow_above":0.98,"block_below":0.25},"records":39,"would":{"allow":23,"ask":14,"block":2},"answered":30,"allowed_denied":1,"blocked_approved":0,"expected_asks":15.2}`
 )
@@ -130,6 +131,9 @@ func TestGetLearned(t *testing.T) {
 		got.Kinds[1].AskKind != oversight.AskUnsure || got.Kinds[0].Thresholds.AllowAbove != 0.9 || got.Model.Answers != 33 {
 		t.Errorf("kinds %+v", got.Kinds)
 	}
+	if cv := got.Kinds[0].Cover; cv == nil || !cv.Covered || cv.Weight != 12 || cv.Sessions != 5 || cv.MinWeight != 3 || cv.MinSessions != 2 || got.Kinds[1].Cover != nil {
+		t.Errorf("covers %+v %+v", got.Kinds[0].Cover, got.Kinds[1].Cover)
+	}
 	if len(got.Recent) != 2 || got.Recent[1].T != 40 || got.Recent[1].Value != 0.4 || !got.Recent[1].At.Equal(time.Date(2026, 11, 1, 9, 0, 0, 0, time.UTC)) {
 		t.Errorf("recent %+v", got.Recent)
 	}
@@ -152,6 +156,9 @@ func TestGetExplanation(t *testing.T) {
 	if got.AskKind != oversight.AskSplit || got.Parts == nil || got.Parts.Recent != 0.1 || got.EvidenceRatio != 0.81 ||
 		got.Model.Answers != 40 || got.PredictedBy == nil || got.PredictedBy.Answers != 38 || got.Thresholds.AllowAbove != 0.9 {
 		t.Errorf("explanation %+v", got)
+	}
+	if got.Reason != "Your answers about steps like this do not agree." {
+		t.Errorf("reason %q", got.Reason)
 	}
 	if len(got.Evidence) != 2 || !got.Evidence[0].Approve || got.Evidence[1].Approve || got.Evidence[1].Share != 0.18 {
 		t.Errorf("evidence %+v", got.Evidence)
@@ -181,7 +188,8 @@ func TestProfiles(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if !got.Default || got.Costs.FalseAllow != 10 || got.Thresholds.AllowAbove != 0.9 || got.Certify == nil || got.Certify.Delta != 0.05 || len(got.RawJSON()) == 0 {
+	if !got.Default || got.Costs.FalseAllow != 10 || got.Thresholds.AllowAbove != 0.9 || got.Certify == nil || got.Certify.Delta != 0.05 || len(got.RawJSON()) == 0 ||
+		got.Consent == nil || got.Consent.MinWeight != 5 || got.Consent.MinSessions != 3 {
 		t.Errorf("profile %+v", got)
 	}
 	saved, err := c.PutProfile(t.Context(), &oversight.Profile{Org: me, Costs: oversight.Costs{FalseAllow: 2.857, FalseBlock: 2.857, Ask: 1}, AuditRate: 0.05})
@@ -200,6 +208,26 @@ func TestProfiles(t *testing.T) {
 	}
 	if _, ok := cs[1].body["kind"]; ok {
 		t.Errorf("an empty kind is sent: %+v", cs[1].body)
+	}
+	if _, ok := cs[1].body["consent"]; ok {
+		t.Errorf("a profile without consent sends it: %+v", cs[1].body)
+	}
+}
+
+// A profile read and saved again keeps its settings of the cover rule.
+func TestAProfileKeepsItsConsent(t *testing.T) {
+	c, calls := fakeAPI(t, 0, func(w http.ResponseWriter, _ *http.Request, _ int) { answer(w, http.StatusOK, profile) })
+	got, err := c.GetProfile(t.Context(), oversight.Scope{Org: me})
+	if err != nil {
+		t.Fatal(err)
+	}
+	got.Costs.Ask = 2
+	if _, err := c.PutProfile(t.Context(), got); err != nil {
+		t.Fatal(err)
+	}
+	consent, _ := calls()[1].body["consent"].(map[string]any)
+	if consent["min_weight"] != 5.0 || consent["min_sessions"] != 3.0 {
+		t.Errorf("put %+v", calls()[1].body)
 	}
 }
 
@@ -224,6 +252,9 @@ func TestPreview(t *testing.T) {
 	if got.Would[oversight.VerdictAllow] != 23 || got.Would[oversight.VerdictBlock] != 2 || got.AllowedDenied != 1 || got.ExpectedAsks != 15.2 ||
 		got.Records != 39 || got.Answered != 30 || got.Thresholds.AllowAbove != 0.98 || len(got.RawJSON()) == 0 {
 		t.Errorf("preview %+v", got)
+	}
+	if got.Org != me || got.Subject != me || !got.From.Equal(from) || !got.To.Equal(to) || got.Costs.FalseAllow != 50 || got.AuditRate != 0.05 {
+		t.Errorf("the preview's request %+v", got)
 	}
 	cs := calls()
 	if len(cs) != 2 || cs[1].method != http.MethodPost || cs[1].path != "/v1/oversight/previews" || cs[1].body["from"] != "2026-10-25T00:00:00Z" {

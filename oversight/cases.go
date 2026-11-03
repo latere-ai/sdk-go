@@ -104,6 +104,10 @@ type Actor struct {
 // Prediction is the decision service's suggestion for one step, as it was
 // made.
 type Prediction struct {
+	// Org, Subject and ActionID name the step, as the case's Action does.
+	Org      string `json:"org"`
+	Subject  string `json:"subject"`
+	ActionID string `json:"action_id"`
 	// Verdict is the suggestion: VerdictAllow, VerdictAsk or VerdictBlock.
 	Verdict Verdict `json:"verdict"`
 	// Approve is the chance, from 0 to 1, that the person allows the step.
@@ -317,6 +321,10 @@ type NearestApproval struct {
 
 // Decision is what was done about a step.
 type Decision struct {
+	// Org, Subject and ActionID name the step, as the case's Action does.
+	Org      string `json:"org"`
+	Subject  string `json:"subject"`
+	ActionID string `json:"action_id"`
 	// Verdict is the verdict applied.
 	Verdict Verdict `json:"verdict"`
 	// ReviewProbability is the chance, fixed before the step ran, that the
@@ -341,6 +349,16 @@ type RecordedAnswer struct {
 	// shown, the one answer that counts toward how often the decision
 	// service is wrong.
 	Review bool `json:"review"`
+	// AnswerMS, WaitedMS, DetailsOpened, SuggestionShown, Surface and
+	// Remembered say how the person answered, as the caller that sent the
+	// answer said in AnswerParams: each is nil, empty or false where it
+	// did not say, and from a decision service that does not keep them.
+	AnswerMS        *int64  `json:"answer_ms,omitempty"`
+	WaitedMS        *int64  `json:"waited_ms,omitempty"`
+	DetailsOpened   *bool   `json:"details_opened,omitempty"`
+	SuggestionShown *bool   `json:"suggestion_shown,omitempty"`
+	Surface         Surface `json:"surface,omitempty"`
+	Remembered      bool    `json:"remembered,omitempty"`
 }
 
 // ListCases returns an iterator over the steps params keeps, oldest
@@ -381,11 +399,7 @@ func (c *Client) casesPage(ctx context.Context, params *CasesParams, cursor stri
 	if cursor != "" {
 		q.Set("cursor", cursor)
 	}
-	// The API answers a page of cases as entries, not items.
-	var page struct {
-		Entries    []*Case `json:"entries"`
-		NextCursor string  `json:"next_cursor,omitempty"`
-	}
+	var page pageOfCases
 	if err := c.do(ctx, &latere.Request{Method: http.MethodGet, Path: BasePath + "/cases", Query: q}, &page); err != nil {
 		return nil, err
 	}
@@ -393,6 +407,13 @@ func (c *Client) casesPage(ctx context.Context, params *CasesParams, cursor stri
 		page.Entries = []*Case{}
 	}
 	return &latere.Page[*Case]{Items: page.Entries, NextCursor: page.NextCursor}, nil
+}
+
+// pageOfCases is a page of cases as the API answers it: as entries, not
+// items.
+type pageOfCases struct {
+	Entries    []*Case `json:"entries"`
+	NextCursor string  `json:"next_cursor,omitempty"`
 }
 
 // The sources GetReliability reports on besides a rule set's or a

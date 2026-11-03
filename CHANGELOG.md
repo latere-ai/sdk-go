@@ -7,6 +7,8 @@ minor version may break code, and every such change is marked **Breaking**.
 
 ## [Unreleased]
 
+## [0.30.0] - 2026-11-03
+
 ### Added
 
 - `oversight.Client.GetCalibration` reads a person's calibration report

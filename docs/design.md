@@ -630,10 +630,13 @@ marks as a date-time must be a `time.Time`, and every endpoint a package
 calls must exist. Where a package holds a model to its whole schema, the
 model reads every field the schema requires or has, and a field left out
 on purpose is listed, with its reason, in the package's `spec_test.go`.
-The `agents` tests also send each request the client makes, the fullest
-and the least, and check its body against the schema of its route, and
-check that each status, stop reason and event type the package declares
-is one the document lists. The program that fetches and converts the
+The `agents` and `oversight` tests also send each request the client
+makes, the fullest and the least, and check its body against the schema of
+its route, and check that each value of a named type the package declares,
+such as a status, a stop reason, an event type or a verdict, is one the
+document lists. The oversight document is that of Limen, the decision
+service, which writes its paths under `/v1`; the API serves them under
+`/v1/oversight`. The program that fetches and converts the
 documents lives in its own module under `tools/`, so the YAML parser it
 needs never reaches the SDK's `go.mod`. A weekly workflow fetches the
 documents and fails when they changed, which is the signal to update the

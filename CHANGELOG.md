@@ -7,6 +7,15 @@ minor version may break code, and every such change is marked **Breaking**.
 
 ## [Unreleased]
 
+### Changed
+
+- The `oversight` models are held to the oversight document of Limen
+  v0.8.0, the decision service, which was private until now and is
+  vendored in `openapi/oversight.json`: each field a model reads, its JSON
+  type, each value of a named type, each request and query, each route
+  and each code with a sentinel. `make openapi` fetches it from
+  `platform.latere.ai/docs/oversight/openapi.yaml`.
+
 ### Fixed
 
 - The `oversight` models read the fields of the oversight document they

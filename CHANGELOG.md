@@ -7,6 +7,25 @@ minor version may break code, and every such change is marked **Breaking**.
 
 ## [Unreleased]
 
+### Added
+
+- `oversight.Client.GetCalibration` reads a person's calibration report
+  over a window: ten `CalibrationBin`s of the chance the decision service
+  stated, each with its `Cases`, the share `Covered`, the mean `Stated`,
+  the `Observed` rate of allowing with its 95% `Interval`, the `Reviews`
+  and `Considered` answers, and a `CalibrationState`
+  (`CalibrationCalibrated`, `CalibrationOverconfident`,
+  `CalibrationUnderconfident`, `CalibrationNotEstimable`), and the
+  report's `Error` and `Estimable`. `Stated`, `Observed` and `Error` are
+  nil where the API answers null, which is not zero. `Calibration.BinOf`
+  finds the bin of a chance.
+- `oversight.Explanation.Calibration`, the state of the bin of the
+  recorded prediction in the person's report for the last 90 days
+  (`CalibrationWindow`). A client shows the chance of allowing only for a
+  `calibrated` bin, and above the allow threshold only while the
+  certificate of `OfLearned` holds; empty from a decision service without
+  the report, where a client shows no chance.
+
 ## [0.29.0] - 2026-11-03
 
 ### Changed

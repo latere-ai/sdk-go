@@ -25,7 +25,7 @@ they share. Import the ones you use:
 | [`storage`](https://pkg.go.dev/latere.ai/x/sdk-go/storage) | Files in Latere Storage: upload a file of any size, read, list, move, delete, and link to it; what others shared with you |
 | [`account`](https://pkg.go.dev/latere.ai/x/sdk-go/account) | Your Effort levels, wallet and payment pages, preferences, pins and bookmarks, share links, projects, trigger links and addresses, and computers |
 | [`memory`](https://pkg.go.dev/latere.ai/x/sdk-go/memory) | What Latere remembers about a person across conversations: list, add, change, move, delete, restore, export and import memories, and the memory settings |
-| [`oversight`](https://pkg.go.dev/latere.ai/x/sdk-go/oversight) | What Latere learned about when to ask a person: each kind of step and what it would do now, why it suggested what it did for one step, the steps it holds with their decisions and answers, how often it was wrong, what another trust profile would have done, the person's answers, and forgetting; in an organization, an agent's own trust profile, a member's stricter one, and a weekly report that never shows one member |
+| [`oversight`](https://pkg.go.dev/latere.ai/x/sdk-go/oversight) | What Latere learned about when to ask a person: each kind of step and what it would do now, why it suggested what it did for one step, the steps it holds with their decisions and answers, how often it was wrong, how its stated chances compare with the person's checks, what another trust profile would have done, the person's answers, and forgetting; in an organization, an agent's own trust profile, a member's stricter one, and a weekly report that never shows one member |
 | [`apps`](https://pkg.go.dev/latere.ai/x/sdk-go/apps) | Apps: create, list, change, delete; their deploys, build logs, pictures, releases, visits, gallery listing and who may open them |
 | [`evals`](https://pkg.go.dev/latere.ai/x/sdk-go/evals) | Evals: the definitions, experiments, cells, trials, grids and comparisons of experiments on agents, creating one, running its external trials, and an experiment followed as it runs |
 | [`llm`](https://pkg.go.dev/latere.ai/x/sdk-go/llm) | Calling models in the Lux dialect: generate, stream, count tokens, list models |
@@ -900,6 +900,37 @@ for c, err := range ov.ListCases(ctx, &oversight.CasesParams{Org: me, Subject: m
 }
 rel, err := ov.GetReliability(ctx, &oversight.ReliabilityParams{Org: me, Subject: me, Of: oversight.OfLearned, From: from, To: to})
 // how often the suggestions went against the person in the window, and how sure that is
+cal, err := ov.GetCalibration(ctx, &oversight.CalibrationParams{Org: me, Subject: me, From: now.Add(-oversight.CalibrationWindow), To: now})
+// the chances stated and the rates the person's checks measured, in ten bins
+```
+
+`GetCalibration` reads the person's calibration report: for each of ten
+bins of the chance the decision service stated, from `[0, 0.1)` to
+`[0.9, 1]`, the steps in it, the share of them the person could be shown
+to check (`Covered`), the mean chance `Stated`, the rate of allowing their
+checks measured (`Observed`) with its 95% `Interval`, the `Reviews` and
+the `Considered` answers among them, and a `State`. A bin whose checks
+have a Kish effective size below 20 is `oversight.CalibrationNotEstimable`
+and its `Observed` is nil, which is not zero. Otherwise the bin is
+`CalibrationCalibrated` when `Stated` is in the interval, and
+`CalibrationOverconfident` or `CalibrationUnderconfident` when it is not.
+The report's `Error` and `Estimable` read the estimable bins only.
+
+A client shows a chance of allowing, as a number or in words such as
+"likely", only where the bin of the step's recorded prediction is
+calibrated in the report for the last 90 days, and, for a chance above
+the allow threshold, only while the certificate of `OfLearned` holds.
+`Explanation.Calibration` is the state of that bin, so a client does not
+read the report for each step; it is empty for a step with no recorded
+prediction and from an older decision service, and the client then shows
+no chance:
+
+```go
+show := why.Calibration == oversight.CalibrationCalibrated
+if show && why.Approve > why.Thresholds.AllowAbove {
+	rel, err := ov.GetReliability(ctx, &oversight.ReliabilityParams{Org: org, Subject: me, Of: oversight.OfLearned, From: now.Add(-oversight.CalibrationWindow), To: now})
+	show = err == nil && rel.Certificate.Holds
+}
 ```
 
 The decision service suggests allow only for a step that the person's

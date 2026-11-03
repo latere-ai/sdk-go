@@ -48,6 +48,9 @@
 //     answers, or only those waiting for the person to check them.
 //   - GetReliability reports how often the decision service, or a rule
 //     set, went against the person over a window.
+//   - GetCalibration compares the chances the decision service stated
+//     for the person's steps with the rates their checks measured, in ten
+//     bins, which say when a client may show a chance.
 //   - Answer tells the decision service what the person thinks of a step,
 //     such as one that ran on its own and was picked for them to check.
 //   - Forget removes everything the decision service holds about the
@@ -333,6 +336,13 @@ type Explanation struct {
 	// nearest approvals whose Scope the step exceeds; nil from a decision
 	// service that does not send it.
 	Cover *Cover `json:"cover,omitempty"`
+	// Calibration is the state of the bin of the recorded prediction's
+	// Approve, not of the Approve explained now, in the person's
+	// calibration report for the last CalibrationWindow. Empty for a step
+	// with no recorded prediction, and from a decision service without the
+	// report; a client then states no probability. The type Calibration
+	// says when a client may show Approve.
+	Calibration CalibrationState `json:"calibration,omitempty"`
 
 	raw json.RawMessage
 }

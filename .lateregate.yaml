@@ -1,0 +1,103 @@
+# The per-push gate configuration for sdk-go. Every check runs from
+# latere.ai/x/ci-gate, pinned in go.mod, so each one runs the same on a laptop
+# as it does on a runner.
+
+cover:
+  trim_prefix: latere.ai/x/sdk-go/
+  # No exemptions. Every package clears the floor on its own.
+  exempt: {}
+
+otel_client:
+  # The SDK reaches the standard library alone, so it cannot carry the
+  # tracing transport. Its default client is net/http's; a program that
+  # traces its calls hands the SDK an instrumented client with
+  # latere.WithHTTPClient. tools/ is the refresh command for the vendored
+  # API documents.
+  skip: [latere, signin, tools]
+
+license:
+  # The identifier every source file carries and the holder it names.
+  # `go tool lateregate license -w` writes the notice where it is missing.
+  spdx: Apache-2.0
+  holder: Latere AI
+  extensions: ['.go']
+  names: [Makefile]
+
+# The identity shape of the family: specs/infrastructure/identity.md in latere-ai/specs
+identity:
+  role: none
+  roles_only: true
+
+depcheck:
+  # The SDK reaches the standard library alone. A program that imports a
+  # package here takes on no module besides this one, and that is a promise
+  # callers build on: the browser build of mls, messaging and attachment
+  # (GOOS=js GOARCH=wasm) is part of it. The check reads what the build
+  # reaches, so the gate tool pinned in go.mod does not count.
+  platforms: [linux/amd64, darwin/arm64, windows/amd64, js/wasm]
+  packages:
+    latere.ai/x/sdk-go/account:
+      decision: sdk-go-stdlib-only
+      allow: {}
+    latere.ai/x/sdk-go/agents:
+      decision: sdk-go-stdlib-only
+      allow: {}
+    latere.ai/x/sdk-go/agents/routine:
+      decision: sdk-go-stdlib-only
+      allow: {}
+    latere.ai/x/sdk-go/apps:
+      decision: sdk-go-stdlib-only
+      allow: {}
+    latere.ai/x/sdk-go/attachment:
+      decision: sdk-go-stdlib-only
+      allow: {}
+    latere.ai/x/sdk-go/connections:
+      decision: sdk-go-stdlib-only
+      allow: {}
+    latere.ai/x/sdk-go/evals:
+      decision: sdk-go-stdlib-only
+      allow: {}
+    latere.ai/x/sdk-go/internal/ed25519key:
+      decision: sdk-go-stdlib-only
+      allow: {}
+    latere.ai/x/sdk-go/internal/sse:
+      decision: sdk-go-stdlib-only
+      allow: {}
+    latere.ai/x/sdk-go/latere:
+      decision: sdk-go-stdlib-only
+      allow: {}
+    latere.ai/x/sdk-go/llm:
+      decision: sdk-go-stdlib-only
+      allow: {}
+    latere.ai/x/sdk-go/llm/wire:
+      decision: sdk-go-stdlib-only
+      allow: {}
+    latere.ai/x/sdk-go/memory:
+      decision: sdk-go-stdlib-only
+      allow: {}
+    latere.ai/x/sdk-go/messaging:
+      decision: sdk-go-stdlib-only
+      allow: {}
+    latere.ai/x/sdk-go/mls:
+      decision: sdk-go-stdlib-only
+      allow: {}
+    latere.ai/x/sdk-go/oversight:
+      decision: sdk-go-stdlib-only
+      allow: {}
+    latere.ai/x/sdk-go/signin:
+      decision: sdk-go-stdlib-only
+      allow: {}
+    latere.ai/x/sdk-go/storage:
+      decision: sdk-go-stdlib-only
+      allow: {}
+    latere.ai/x/sdk-go/web:
+      decision: sdk-go-stdlib-only
+      allow: {}
+
+release:
+  # `lateregate release` moves the number the SDK reports to the version it
+  # cuts, in the release commit, so the number and the changelog section
+  # never disagree.
+  stamp:
+    - file: latere/config.go
+      pattern: 'const Version = "\d+\.\d+\.\d+"'

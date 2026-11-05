@@ -7,6 +7,7 @@ import (
 	"bytes"
 	"errors"
 	"fmt"
+	"maps"
 	"slices"
 	"time"
 )
@@ -583,9 +584,7 @@ func (g *Group) stageCommit(a *authenticatedContent) (*StagedCommit, error) {
 			return nil, err
 		}
 		commitSecret = cs
-		for x, k := range keys {
-			priv.keys[x] = k
-		}
+		maps.Copy(priv.keys, keys)
 	}
 	priv.prune(sp.app.tree)
 	pskSecret, err := g.pskSecret(sp.app.psks)
@@ -832,9 +831,7 @@ func (g *Group) Commit(opts CommitOptions) (*StagedCommit, error) {
 	}
 
 	priv := &privateTree{leaf: g.priv.leaf, keys: map[uint32]hpkeKey{leafNodeIndex(g.priv.leaf): ps.leafKey}}
-	for x, k := range ps.keys {
-		priv.keys[x] = k
-	}
+	maps.Copy(priv.keys, ps.keys)
 	sp := &stagedPublic{
 		app:     app,
 		next:    next,

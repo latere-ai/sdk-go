@@ -295,9 +295,7 @@ func (c *Client) putParts(ctx context.Context, u *Upload, content io.ReaderAt, s
 			wg.Wait()
 			return nil, context.Cause(ctx)
 		}
-		wg.Add(1)
-		go func() {
-			defer wg.Done()
+		wg.Go(func() {
 			defer func() { <-slots }()
 			part, err := c.PutPart(ctx, u, i+1, progress.reader(i, io.NewSectionReader(content, off, n)), n)
 			if err != nil {
@@ -305,7 +303,7 @@ func (c *Client) putParts(ctx context.Context, u *Upload, content io.ReaderAt, s
 				return
 			}
 			parts[i] = part
-		}()
+		})
 	}
 	wg.Wait()
 	if err := context.Cause(ctx); err != nil {

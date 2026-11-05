@@ -7,7 +7,6 @@ import (
 	"context"
 	"errors"
 	"fmt"
-	"log"
 	"time"
 
 	"latere.ai/x/sdk-go/agents"
@@ -34,7 +33,7 @@ func ExampleClient_CreateRoutine() {
 		return
 	}
 	if err != nil {
-		log.Fatal(err)
+		panic(err)
 	}
 	fmt.Println(r.Name, r.NextRunAt)
 }
@@ -50,7 +49,7 @@ func ExampleClient_CreateRoutine_dates() {
 	zone := "Europe/Berlin"
 	berlin, err := time.LoadLocation(zone)
 	if err != nil {
-		log.Fatal(err)
+		panic(err)
 	}
 	r, err := client().CreateRoutine(ctx, &agents.CreateRoutineParams{
 		Agent:       "latere-chat",
@@ -70,7 +69,7 @@ func ExampleClient_CreateRoutine_dates() {
 		return
 	}
 	if err != nil {
-		log.Fatal(err)
+		panic(err)
 	}
 	for _, d := range r.Dates {
 		fmt.Println(d.In(berlin).Format("Mon 2 Jan 15:04"))
@@ -82,7 +81,7 @@ func ExampleClient_ListRoutines() {
 	ctx := context.Background()
 	for r, err := range client().ListRoutines(ctx, &agents.ListRoutinesParams{Agent: "latere-chat"}) {
 		if err != nil {
-			log.Fatal(err)
+			panic(err)
 		}
 		switch {
 		case r.Paused:
@@ -106,7 +105,7 @@ func ExampleClient_ChangeRoutine() {
 		return
 	}
 	if err != nil {
-		log.Fatal(err)
+		panic(err)
 	}
 }
 
@@ -120,7 +119,7 @@ func ExampleClient_RunRoutine() {
 		return
 	}
 	if err != nil {
-		log.Fatal(err)
+		panic(err)
 	}
 	fmt.Println(f.Outcome, f.SessionID)
 }
@@ -129,7 +128,7 @@ func ExampleClient_RunRoutine() {
 func ExampleClient_DeleteRoutine() {
 	ctx := context.Background()
 	if err := client().DeleteRoutine(ctx, "latere-chat", "routine-3f2a9c1b7d4e5f60a1b2"); err != nil && !errors.Is(err, latere.ErrNotFound) {
-		log.Fatal(err)
+		panic(err)
 	}
 }
 
@@ -139,11 +138,11 @@ func ExampleRoutine() {
 	c := client()
 	r, err := c.GetRoutine(ctx, "latere-chat", "routine-3f2a9c1b7d4e5f60a1b2")
 	if err != nil {
-		log.Fatal(err)
+		panic(err)
 	}
 	for s, err := range c.ListSessions(ctx, &agents.ListSessionsParams{Trigger: r.TriggerID, Archived: agents.ArchivedIncluded}) {
 		if err != nil {
-			log.Fatal(err)
+			panic(err)
 		}
 		fmt.Println(s.CreatedAt, s.Status)
 	}

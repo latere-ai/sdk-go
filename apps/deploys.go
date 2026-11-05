@@ -14,6 +14,7 @@ import (
 	"net/http"
 	"net/url"
 	"strconv"
+	"strings"
 	"time"
 
 	"latere.ai/x/sdk-go/latere"
@@ -234,11 +235,12 @@ func (c *Client) GetDeploy(ctx context.Context, slug, id string) (*Deploy, error
 // slug, or of one of its sub-resources. The apps document serves it at
 // /v1/deploys, which the API's origin serves under /v1/apps.
 func deployPath(id string, rest ...string) string {
-	p := BasePath + "/deploys/" + url.PathEscape(id)
+	var p strings.Builder
+	p.WriteString(BasePath + "/deploys/" + url.PathEscape(id))
 	for _, r := range rest {
-		p += "/" + url.PathEscape(r)
+		p.WriteString("/" + url.PathEscape(r))
 	}
-	return p
+	return p.String()
 }
 
 // GetDeployByID returns a deploy by its ID in full, without its app's

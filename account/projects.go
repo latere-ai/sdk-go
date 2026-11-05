@@ -160,11 +160,12 @@ var errNoProject = errors.New("account: the project id is empty")
 // projectPath is the path of one of the context's projects, followed by
 // the segments in more.
 func projectPath(id string, more ...string) string {
-	p := "/v1/account/projects/" + url.PathEscape(id)
+	var p strings.Builder
+	p.WriteString("/v1/account/projects/" + url.PathEscape(id))
 	for _, m := range more {
-		p += "/" + url.PathEscape(m)
+		p.WriteString("/" + url.PathEscape(m))
 	}
-	return p
+	return p.String()
 }
 
 // ListProjectsParams narrows and pages a list of projects. A nil

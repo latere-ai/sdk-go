@@ -256,7 +256,7 @@ func (s *suite) verifyWithLabel(pub []byte, label string, content, sig []byte) e
 	}
 	pk, err := ecdsa.ParseUncompressedPublicKey(s.sigCurve, pub)
 	if err != nil {
-		return fmt.Errorf("%w: %v", errSignature, err)
+		return fmt.Errorf("%w: %w", errSignature, err)
 	}
 	h := s.sigHash.New()
 	h.Write(msg)
@@ -478,7 +478,7 @@ func NewSignatureKey(cs CipherSuite, private []byte) (*SignatureKey, error) {
 			return nil, fmt.Errorf("mls: Ed25519 private key of %d bytes, want %d", len(private), ed25519.SeedSize)
 		}
 		priv := ed25519.NewKeyFromSeed(private)
-		return &SignatureKey{suite: cs, ed: priv, pub: priv.Public().(ed25519.PublicKey)}, nil
+		return &SignatureKey{suite: cs, ed: priv, pub: priv[ed25519.SeedSize:]}, nil
 	}
 	k, err := ecdsa.ParseRawPrivateKey(s.sigCurve, s.padScalar(private))
 	if err != nil {

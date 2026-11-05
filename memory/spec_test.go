@@ -6,6 +6,7 @@ package memory_test
 import (
 	"encoding/json"
 	"errors"
+	"maps"
 	"net/http"
 	"os"
 	"reflect"
@@ -52,9 +53,7 @@ func merged(t *testing.T, schemas map[string]*schema, sch *schema) *schema {
 		if part == nil {
 			t.Fatalf("an allOf names a schema the document does not have")
 		}
-		for name, prop := range part.Properties {
-			out.Properties[name] = prop
-		}
+		maps.Copy(out.Properties, part.Properties)
 		out.Required = append(out.Required, part.Required...)
 	}
 	return out
@@ -122,13 +121,10 @@ var timeType = reflect.TypeFor[time.Time]()
 // reads them.
 func jsonFields(t reflect.Type) map[string]reflect.Type {
 	out := map[string]reflect.Type{}
-	for i := range t.NumField() {
-		f := t.Field(i)
+	for f := range t.Fields() {
 		tag := f.Tag.Get("json")
 		if f.Anonymous && tag == "" && f.Type.Kind() == reflect.Struct {
-			for name, typ := range jsonFields(f.Type) {
-				out[name] = typ
-			}
+			maps.Copy(out, jsonFields(f.Type))
 			continue
 		}
 		name, _, _ := strings.Cut(tag, ",")

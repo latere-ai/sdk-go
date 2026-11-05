@@ -533,14 +533,12 @@ func runBounded(ctx context.Context, tasks []func(context.Context) error) error 
 		if ctx.Err() != nil {
 			break
 		}
-		wg.Add(1)
-		go func() {
-			defer wg.Done()
+		wg.Go(func() {
 			defer func() { <-slots }()
 			if err := task(ctx); err != nil {
 				cancel(err)
 			}
-		}()
+		})
 	}
 	wg.Wait()
 	return context.Cause(ctx)

@@ -7,7 +7,6 @@ import (
 	"context"
 	"errors"
 	"fmt"
-	"log"
 
 	"latere.ai/x/sdk-go/account"
 	"latere.ai/x/sdk-go/latere"
@@ -21,7 +20,7 @@ func ExampleClient_CreateShare() {
 	case errors.As(err, &apiErr) && apiErr.Code == "nothing_to_share":
 		fmt.Println("there is nothing to share until the first answer is finished")
 	case err != nil:
-		log.Fatal(err)
+		panic(err)
 	default:
 		fmt.Println(s.URL)
 	}
@@ -32,7 +31,7 @@ func ExampleClient_CreateShare() {
 func ExampleClient_ListShares() {
 	for s, err := range client().ListShares(context.Background(), &account.ListSharesParams{SessionID: "ses_01M34G2JF01B91B8399CD1G6YP"}) {
 		if err != nil {
-			log.Fatal(err)
+			panic(err)
 		}
 		switch {
 		case s.State == account.ShareSuspended:
@@ -50,7 +49,7 @@ func ExampleClient_ListShares() {
 func ExampleClient_UpdateShare() {
 	s, err := client().UpdateShare(context.Background(), "shr_01JA7Q1C2D3E4F5G6H7J8K9M0N")
 	if err != nil {
-		log.Fatal(err)
+		panic(err)
 	}
 	fmt.Println(s.URL, "now shows up to", s.UpToSeq)
 }
@@ -58,6 +57,6 @@ func ExampleClient_UpdateShare() {
 // Stopping a link for everyone at once. Stopping it again succeeds too.
 func ExampleClient_DeleteShare() {
 	if err := client().DeleteShare(context.Background(), "shr_01JA7Q1C2D3E4F5G6H7J8K9M0N"); err != nil {
-		log.Fatal(err)
+		panic(err)
 	}
 }

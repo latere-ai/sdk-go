@@ -71,12 +71,12 @@ func fits(t *testing.T, d *document, where string, body map[string]any, s *schem
 func TestTheBodiesFitTheirSchemas(t *testing.T) {
 	d := loadDocument(t)
 	c, calls := capturingAPI(t, 0, func(w http.ResponseWriter, r *http.Request, n int) {
-		switch {
-		case r.URL.Path == "/v1/account/arrival":
+		switch r.URL.Path {
+		case "/v1/account/arrival":
 			w.WriteHeader(http.StatusNoContent)
-		case r.URL.Path == "/v1/account/wallet/checkout":
+		case "/v1/account/wallet/checkout":
 			answerJSON(w, http.StatusOK, `{"url":"https://pay.example/c"}`)
-		case r.URL.Path == "/v1/account/preferences":
+		case "/v1/account/preferences":
 			answerJSON(w, http.StatusOK, preferences)
 		default:
 			answerJSON(w, http.StatusOK, share)

@@ -53,9 +53,9 @@ func loadDocument(t *testing.T) *document {
 var timeType = reflect.TypeFor[time.Time]()
 
 func fieldType(t reflect.Type, name string) reflect.Type {
-	for i := range t.NumField() {
-		if n, _, _ := strings.Cut(t.Field(i).Tag.Get("json"), ","); n == name {
-			ft := t.Field(i).Type
+	for field := range t.Fields() {
+		if n, _, _ := strings.Cut(field.Tag.Get("json"), ","); n == name {
+			ft := field.Type
 			if ft.Kind() == reflect.Pointer {
 				ft = ft.Elem()
 			}
@@ -67,8 +67,8 @@ func fieldType(t reflect.Type, name string) reflect.Type {
 
 func jsonFields(t reflect.Type) []string {
 	var out []string
-	for i := range t.NumField() {
-		name, _, _ := strings.Cut(t.Field(i).Tag.Get("json"), ",")
+	for field := range t.Fields() {
+		name, _, _ := strings.Cut(field.Tag.Get("json"), ",")
 		if name != "" && name != "-" {
 			out = append(out, name)
 		}

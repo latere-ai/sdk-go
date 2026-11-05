@@ -7,7 +7,6 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
-	"log"
 	"strings"
 
 	"latere.ai/x/sdk-go/latere"
@@ -17,7 +16,7 @@ import (
 func models() *llm.Client {
 	cfg, err := latere.NewConfig() // the key in LATERE_KEY
 	if err != nil {
-		log.Fatal(err)
+		panic(err)
 	}
 	return llm.New(cfg)
 }
@@ -33,7 +32,7 @@ func ExampleClient_Generate() {
 		MaxTokens: &maxTokens,
 	})
 	if err != nil {
-		log.Fatal(err)
+		panic(err)
 	}
 	fmt.Println(res.Text())
 	if len(res.Loss) > 0 {
@@ -49,13 +48,13 @@ func ExampleClient_Stream() {
 		Messages: []llm.Message{llm.UserText("Write a haiku about rain.")},
 	})
 	if err != nil {
-		log.Fatal(err)
+		panic(err)
 	}
 	defer stream.Close()
 	var usage llm.Usage
 	for ev, err := range stream.Events() {
 		if err != nil {
-			log.Fatal(err)
+			panic(err)
 		}
 		switch ev.Type {
 		case llm.EventTextDelta:
@@ -85,7 +84,7 @@ func ExampleClient_Generate_tools() {
 	}
 	res, err := c.Generate(ctx, req)
 	if err != nil {
-		log.Fatal(err)
+		panic(err)
 	}
 	for res.StopReason == llm.StopToolUse {
 		req.Messages = append(req.Messages, llm.Message{Role: llm.RoleAssistant, Blocks: res.Blocks})
@@ -100,7 +99,7 @@ func ExampleClient_Generate_tools() {
 		}
 		req.Messages = append(req.Messages, answer)
 		if res, err = c.Generate(ctx, req); err != nil {
-			log.Fatal(err)
+			panic(err)
 		}
 	}
 	fmt.Println(res.Text())
@@ -114,7 +113,7 @@ func ExampleClient_CountTokens() {
 		Messages: []llm.Message{llm.UserText("A long document...")},
 	})
 	if err != nil {
-		log.Fatal(err)
+		panic(err)
 	}
 	if tc.Estimated {
 		fmt.Println("about", tc.InputTokens, "tokens")
@@ -128,7 +127,7 @@ func ExampleClient_ListModels() {
 	ctx := context.Background()
 	list, err := models().ListModels(ctx)
 	if err != nil {
-		log.Fatal(err)
+		panic(err)
 	}
 	for _, m := range list {
 		if m.Pricing != nil {
@@ -143,7 +142,7 @@ func ExampleClient_ListModels() {
 func ExampleWithLabels() {
 	cfg, err := latere.NewConfig()
 	if err != nil {
-		log.Fatal(err)
+		panic(err)
 	}
 	acme := llm.New(cfg, llm.WithLabels(map[string]string{"tenant": "acme"}))
 	res, err := acme.Generate(context.Background(), &llm.Request{
@@ -151,7 +150,7 @@ func ExampleWithLabels() {
 		Messages: []llm.Message{llm.UserText("Hello")},
 	})
 	if err != nil {
-		log.Fatal(err)
+		panic(err)
 	}
 	fmt.Println(res.Text())
 }

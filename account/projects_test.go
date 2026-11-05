@@ -106,13 +106,13 @@ func TestListProjects(t *testing.T) {
 
 func TestCreateProject(t *testing.T) {
 	c, got := recordingAPI(t, 3, func(w http.ResponseWriter, r *http.Request, n int) {
-		switch {
-		case n == 1:
+		switch n {
+		case 1:
 			w.WriteHeader(http.StatusCreated)
 			_, _ = io.WriteString(w, project)
-		case n == 2:
+		case 2:
 			writeError(w, http.StatusConflict, "project_limit")
-		case n == 3:
+		case 3:
 			writeError(w, http.StatusConflict, "app_not_in_context")
 		default:
 			writeError(w, http.StatusServiceUnavailable, "unavailable")

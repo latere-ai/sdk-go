@@ -7,7 +7,6 @@ import (
 	"context"
 	"errors"
 	"fmt"
-	"log"
 
 	"latere.ai/x/sdk-go/agents"
 	"latere.ai/x/sdk-go/latere"
@@ -22,7 +21,7 @@ func ExampleClient_ListWatches() {
 	c := client()
 	hold, err := c.GetTriggerHold(ctx)
 	if err != nil && !errors.Is(err, latere.ErrForbidden) {
-		log.Fatal(err)
+		panic(err)
 	}
 	if hold != nil && hold.Held {
 		fmt.Println("Everything is paused since", hold.Since.Local())
@@ -30,7 +29,7 @@ func ExampleClient_ListWatches() {
 	whys := map[string]string{}
 	for w, err := range c.ListWatches(ctx, &agents.ListWatchesParams{Agent: "latere-chat", KnownWhys: whys}) {
 		if err != nil {
-			log.Fatal(err)
+			panic(err)
 		}
 		whys[w.TriggerID] = w.Why
 		switch w.Kind {
@@ -62,7 +61,7 @@ func ExampleClient_SetTriggerAllowance() {
 	ctx := context.Background()
 	t, err := client().SetTriggerAllowance(ctx, "trg_01M34G2JF01B91B8399CD1G6YP", 2_000_000)
 	if err != nil {
-		log.Fatal(err)
+		panic(err)
 	}
 	fmt.Println(t.Metadata.DisplayName, t.Spec.Budget.PerWeekMicroUSD)
 }
@@ -73,7 +72,7 @@ func ExampleClient_SetTriggerHold() {
 	ctx := context.Background()
 	hold, err := client().SetTriggerHold(ctx, true)
 	if err != nil {
-		log.Fatal(err)
+		panic(err)
 	}
 	fmt.Println("paused since", hold.Since)
 }
@@ -88,14 +87,14 @@ func ExampleToolUse_Offer() {
 	var held *agents.Offer
 	for e, err := range c.ListEvents(ctx, id, nil) {
 		if err != nil {
-			log.Fatal(err)
+			panic(err)
 		}
 		if e.Type != agents.EventAgentToolUse {
 			continue
 		}
 		var use agents.ToolUse
 		if err := e.Decode(&use); err != nil {
-			log.Fatal(err)
+			panic(err)
 		}
 		if use.Verdict != agents.VerdictAsk {
 			continue
@@ -116,7 +115,7 @@ func ExampleToolUse_Offer() {
 	case agents.OfferChange, agents.OfferResume, agents.OfferDelete:
 		t, err := c.GetTrigger(ctx, held.TriggerID)
 		if err != nil {
-			log.Fatal(err)
+			panic(err)
 		}
 		fmt.Println(held.Action, t.Metadata.DisplayName+"?", held.Why)
 	case agents.OfferWake:
@@ -128,6 +127,6 @@ func ExampleToolUse_Offer() {
 		Note:      "Make it 8:00.",
 	})
 	if err != nil {
-		log.Fatal(err)
+		panic(err)
 	}
 }

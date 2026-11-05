@@ -8,7 +8,6 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
-	"log"
 	"os/exec"
 	"time"
 
@@ -25,7 +24,7 @@ func ExampleConfig_Browser() {
 		return exec.Command("open", url).Run() // macOS; use xdg-open on Linux
 	})
 	if err != nil {
-		log.Fatal(err)
+		panic(err)
 	}
 	session := signer.TokenSource(tok, func(ctx context.Context, t *signin.Token) error {
 		// Store t.RefreshToken in the system keychain here.
@@ -33,11 +32,11 @@ func ExampleConfig_Browser() {
 	})
 	tokens, err := latere.NewActorTokens(session)
 	if err != nil {
-		log.Fatal(err)
+		panic(err)
 	}
 	cfg, err := latere.NewConfig(latere.WithTokenSource(tokens))
 	if err != nil {
-		log.Fatal(err)
+		panic(err)
 	}
 	fmt.Println(cfg.BaseURL())
 }
@@ -50,11 +49,11 @@ func ExampleConfig_Device() {
 		return nil
 	})
 	if err != nil {
-		log.Fatal(err)
+		panic(err)
 	}
 	info, err := signer.UserInfo(context.Background(), tok.AccessToken)
 	if err != nil {
-		log.Fatal(err)
+		panic(err)
 	}
 	fmt.Println("signed in as", info.Email)
 }
@@ -68,11 +67,11 @@ func ExampleConfig_ListOrganizations() {
 		return exec.Command("open", url).Run()
 	})
 	if err != nil {
-		log.Fatal(err)
+		panic(err)
 	}
 	orgs, err := signer.ListOrganizations(ctx, tok.AccessToken)
 	if err != nil {
-		log.Fatal(err)
+		panic(err)
 	}
 	for _, org := range orgs {
 		fmt.Println(org.Name, org.Slug)
@@ -82,7 +81,7 @@ func ExampleConfig_ListOrganizations() {
 	case errors.Is(err, signin.ErrNoPerson):
 		fmt.Println("no one has that id")
 	case err != nil:
-		log.Fatal(err)
+		panic(err)
 	case handle == "":
 		fmt.Println("they have claimed no handle")
 	default:
@@ -101,7 +100,7 @@ func ExampleConfig_CreateKey() {
 		return nil
 	})
 	if err != nil {
-		log.Fatal(err)
+		panic(err)
 	}
 	key, err := signer.CreateKey(ctx, tok.AccessToken, &signin.CreateKeyParams{
 		Name:      "nightly report",
@@ -109,14 +108,14 @@ func ExampleConfig_CreateKey() {
 		ExpiresAt: time.Now().AddDate(0, 3, 0),
 	})
 	if err != nil {
-		log.Fatal(err)
+		panic(err)
 	}
 	cfg, err := latere.NewConfig(latere.WithKey(key.Value))
 	if err != nil {
-		log.Fatal(err)
+		panic(err)
 	}
 	fmt.Println(cfg.BaseURL(), key.Prefix)
 	if err := signer.RevokeKey(ctx, tok.AccessToken, key.ID); err != nil && !errors.Is(err, signin.ErrNoKey) {
-		log.Fatal(err)
+		panic(err)
 	}
 }

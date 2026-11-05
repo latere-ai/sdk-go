@@ -101,10 +101,10 @@ var (
 
 func jsonFields(t reflect.Type) map[string]reflect.Type {
 	out := map[string]reflect.Type{}
-	for i := range t.NumField() {
-		name, _, _ := strings.Cut(t.Field(i).Tag.Get("json"), ",")
+	for field := range t.Fields() {
+		name, _, _ := strings.Cut(field.Tag.Get("json"), ",")
 		if name != "" && name != "-" {
-			out[name] = t.Field(i).Type
+			out[name] = field.Type
 		}
 	}
 	return out

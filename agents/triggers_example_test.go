@@ -6,7 +6,6 @@ package agents_test
 import (
 	"context"
 	"fmt"
-	"log"
 
 	"latere.ai/x/sdk-go/agents"
 )
@@ -26,7 +25,7 @@ func ExampleClient_ApplyTrigger() {
 		},
 	})
 	if err != nil {
-		log.Fatal(err)
+		panic(err)
 	}
 	fmt.Println(t.Status.ID, t.Status.NextFireAt)
 }
@@ -36,7 +35,7 @@ func ExampleClient_ListTriggers() {
 	ctx := context.Background()
 	for t, err := range client().ListTriggers(ctx, nil) {
 		if err != nil {
-			log.Fatal(err)
+			panic(err)
 		}
 		started := int64(0)
 		if t.Status.Counts != nil {
@@ -51,7 +50,7 @@ func ExampleClient_FireTrigger() {
 	ctx := context.Background()
 	f, err := client().FireTrigger(ctx, "weekly-digest", nil)
 	if err != nil {
-		log.Fatal(err)
+		panic(err)
 	}
 	if f.Outcome == agents.FiringStarted {
 		fmt.Println("started", f.SessionID)

@@ -211,7 +211,7 @@ func (r *DeviceRecord) verify() bool {
 // names as its voucher: the device that approves it, or the recovery
 // key that recovers it.
 func (r *DeviceRecord) Sign(key ed25519.PrivateKey) error {
-	if len(key) != ed25519.PrivateKeySize || !bytes.Equal(key.Public().(ed25519.PublicKey), r.VoucherKey) {
+	if len(key) != ed25519.PrivateKeySize || !bytes.Equal(key[ed25519.SeedSize:], r.VoucherKey) {
 		return errors.New("messaging: the key is not the one the record names as its voucher's")
 	}
 	if err := r.validate(); err != nil {
@@ -251,7 +251,7 @@ func newRecord(r DeviceRecord, key ed25519.PrivateKey, voucher *DeviceRecord) (D
 	if len(key) != ed25519.PrivateKeySize {
 		return DeviceRecord{}, errors.New("messaging: a record's key is an Ed25519 key")
 	}
-	r.SignatureKey = bytes.Clone(key.Public().(ed25519.PublicKey))
+	r.SignatureKey = bytes.Clone(key[ed25519.SeedSize:])
 	if voucher == nil {
 		r.Voucher, r.VoucherKey = r.ID, bytes.Clone(r.SignatureKey)
 	} else {
@@ -755,7 +755,7 @@ func (d *Directory) RecoveryFor(k *RecoveryKey) (DeviceRecord, error) {
 	if err != nil {
 		return DeviceRecord{}, err
 	}
-	pub := key.Public().(ed25519.PublicKey)
+	pub := key[ed25519.SeedSize:]
 	for _, r := range d.records {
 		if r.Kind == RecordRecovery && bytes.Equal(r.SignatureKey, pub) {
 			return r, nil

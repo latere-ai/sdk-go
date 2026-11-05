@@ -528,7 +528,7 @@ func TestATokenErrorNamesItsCause(t *testing.T) {
 	})))
 	err := c.Do(t.Context(), &Request{Method: http.MethodGet, Path: "/v1/x"}, nil)
 	var te *TokenError
-	if !errors.As(err, &te) || te.Err != cause {
+	if !errors.As(err, &te) || !errors.Is(te.Err, cause) {
 		t.Fatalf("err = %v, want a *TokenError wrapping the issuer's refusal", err)
 	}
 	if !errors.Is(err, ErrUnauthorized) || !strings.Contains(err.Error(), "getting a token: ") {

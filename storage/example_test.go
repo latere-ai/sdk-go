@@ -9,7 +9,6 @@ import (
 	"errors"
 	"fmt"
 	"io"
-	"log"
 	"os"
 
 	"latere.ai/x/sdk-go/latere"
@@ -19,7 +18,7 @@ import (
 func client() *storage.Client {
 	cfg, err := latere.NewConfig() // the key in LATERE_KEY
 	if err != nil {
-		log.Fatal(err)
+		panic(err)
 	}
 	return storage.New(cfg)
 }
@@ -28,12 +27,12 @@ func client() *storage.Client {
 func ExampleClient_UploadFile() {
 	f, err := os.Open("talk.mp4")
 	if err != nil {
-		log.Fatal(err)
+		panic(err)
 	}
 	defer f.Close()
 	info, err := f.Stat()
 	if err != nil {
-		log.Fatal(err)
+		panic(err)
 	}
 	file, err := client().UploadFile(context.Background(), storage.Me, "files/videos/talk.mp4", f, info.Size(), &storage.UploadOptions{
 		ContentType: "video/mp4",
@@ -42,7 +41,7 @@ func ExampleClient_UploadFile() {
 		},
 	})
 	if err != nil {
-		log.Fatal(err)
+		panic(err)
 	}
 	fmt.Println("\nstored", file.Path)
 }
@@ -55,7 +54,7 @@ func ExampleClient_WriteFile() {
 		IfNoneMatch: true,
 	})
 	if err != nil {
-		log.Fatal(err)
+		panic(err)
 	}
 }
 
@@ -63,18 +62,18 @@ func ExampleClient_WriteFile() {
 func ExampleClient_ReadFile() {
 	r, err := client().ReadFile(context.Background(), storage.Me, "files/videos/talk.mp4")
 	if err != nil {
-		log.Fatal(err)
+		panic(err)
 	}
 	defer r.Close()
 	out, err := os.Create("talk.mp4")
 	if err != nil {
-		log.Fatal(err)
+		panic(err)
 	}
 	if _, err := io.Copy(out, r); err != nil {
-		log.Fatal(err)
+		panic(err)
 	}
 	if err := out.Close(); err != nil {
-		log.Fatal(err)
+		panic(err)
 	}
 }
 
@@ -82,7 +81,7 @@ func ExampleClient_ReadFile() {
 func ExampleClient_ListFiles() {
 	for f, err := range client().ListFiles(context.Background(), storage.Me, "files/notes", &storage.ListFilesParams{Query: ".md"}) {
 		if err != nil {
-			log.Fatal(err)
+			panic(err)
 		}
 		fmt.Println(f.Path, f.Size)
 	}
@@ -92,7 +91,7 @@ func ExampleClient_ListFiles() {
 func ExampleClient_GetDownloadURL() {
 	link, err := client().GetDownloadURL(context.Background(), storage.Me, "files/reports/q3.pdf", &storage.DownloadURLOptions{Attachment: true})
 	if err != nil {
-		log.Fatal(err)
+		panic(err)
 	}
 	fmt.Println(link)
 }
@@ -101,7 +100,7 @@ func ExampleClient_GetDownloadURL() {
 func ExampleClient_MoveFolder() {
 	moved, err := client().MoveFolder(context.Background(), storage.Me, "files/drafts", "files/talks/2026")
 	if err != nil {
-		log.Fatal(err)
+		panic(err)
 	}
 	fmt.Println("moved", moved.Files, "files to", moved.Path)
 }
@@ -109,7 +108,7 @@ func ExampleClient_MoveFolder() {
 // Moving a file to the trash, from which it can be restored.
 func ExampleClient_DeleteFile() {
 	if err := client().DeleteFile(context.Background(), storage.Me, "files/notes/old.md", nil); err != nil {
-		log.Fatal(err)
+		panic(err)
 	}
 }
 
@@ -119,7 +118,7 @@ func ExampleClient_ListSharedWithMe() {
 	c := client()
 	for g, err := range c.ListSharedWithMe(ctx, nil) {
 		if err != nil {
-			log.Fatal(err)
+			panic(err)
 		}
 		fmt.Println(g.Owner, g.PathPrefix, g.Permission)
 		if info, err := c.StatFile(ctx, g.Owner, g.PathPrefix); err == nil {
@@ -136,7 +135,7 @@ func ExampleClient_MoveFile() {
 		return
 	}
 	if err != nil {
-		log.Fatal(err)
+		panic(err)
 	}
 	fmt.Println("moved to", f.Path)
 }
@@ -145,6 +144,6 @@ func ExampleClient_MoveFile() {
 func ExampleClient_DeleteFolder() {
 	err := client().DeleteFolder(context.Background(), storage.Me, "files/scratch", &storage.DeleteOptions{Permanent: true})
 	if err != nil {
-		log.Fatal(err)
+		panic(err)
 	}
 }

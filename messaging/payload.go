@@ -117,7 +117,7 @@ func ParsePayload(b []byte) (Payload, error) {
 	}
 	var p Payload
 	if err := json.Unmarshal(b[5:5+n], &p); err != nil {
-		return Payload{}, fmt.Errorf("%w: %v", errFormat, err)
+		return Payload{}, fmt.Errorf("%w: %w", errFormat, err)
 	}
 	if err := p.validate(); err != nil {
 		return Payload{}, err

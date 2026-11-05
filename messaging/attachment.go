@@ -96,7 +96,7 @@ func OpenAttachmentChunk(a *Attachment, i int64, sealed []byte) ([]byte, error) 
 }
 
 func (a *Attachment) validate() error {
-	if err := a.Attachment.Validate(); err != nil {
+	if err := a.Validate(); err != nil {
 		return err
 	}
 	if len(a.Key) != StreamKeySize {

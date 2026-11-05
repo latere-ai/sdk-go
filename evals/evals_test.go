@@ -156,7 +156,7 @@ func TestEachKindReadsItsFields(t *testing.T) {
 		t.Errorf("program candidate %+v, %v", p, err)
 	}
 	e, err := c.GetCandidate(ctx, "theirs")
-	if err != nil || e.External == nil || e.External.Harness != "bench" || e.External.Version != "2.1" || e.External.Flags["fast"] != "1" || e.Version.Name != "theirs" {
+	if err != nil || e.External == nil || e.External.Harness != "bench" || e.External.Version != "2.1" || e.External.Flags["fast"] != "1" || e.Name != "theirs" {
 		t.Errorf("external candidate %+v, %v", e, err)
 	}
 }

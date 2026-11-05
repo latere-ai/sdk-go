@@ -8,6 +8,7 @@ import (
 	"go/ast"
 	"go/parser"
 	"go/token"
+	"maps"
 	"net/http"
 	"net/http/httptest"
 	"net/url"
@@ -124,9 +125,7 @@ func (d *document) at(t *testing.T, name string) *schema {
 func union(parts ...*schema) *schema {
 	out := &schema{Properties: map[string]*schema{}}
 	for _, p := range parts {
-		for k, v := range p.Properties {
-			out.Properties[k] = v
-		}
+		maps.Copy(out.Properties, p.Properties)
 		out.Required = append(out.Required, p.Required...)
 	}
 	return out
@@ -141,8 +140,7 @@ type field struct {
 
 func fieldsOf(t reflect.Type) []field {
 	var out []field
-	for i := range t.NumField() {
-		f := t.Field(i)
+	for f := range t.Fields() {
 		if f.Anonymous && f.Type.Kind() == reflect.Struct {
 			out = append(out, fieldsOf(f.Type)...)
 			continue

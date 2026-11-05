@@ -7,7 +7,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
-	"log"
+	"log/slog"
 	"net/http"
 	"os"
 	"slices"
@@ -25,10 +25,10 @@ func ExampleNewConfig() {
 		latere.WithTimeout(30*time.Second),
 	)
 	if errors.Is(err, latere.ErrNoCredentials) {
-		log.Fatal("create a key under Keys in the console and set LATERE_KEY")
+		panic("create a key under Keys in the console and set LATERE_KEY")
 	}
 	if err != nil {
-		log.Fatal(err)
+		panic(err)
 	}
 	fmt.Println(cfg.BaseURL())
 }
@@ -37,7 +37,7 @@ func ExampleNewConfig() {
 func ExampleWithKey() {
 	cfg, err := latere.NewConfig(latere.WithKey(os.Getenv("MY_APP_LATERE_KEY")))
 	if err != nil {
-		log.Fatal(err)
+		panic(err)
 	}
 	fmt.Println(cfg.BaseURL())
 }
@@ -52,22 +52,25 @@ func ExampleNewActorTokens() {
 		return nil
 	})
 	if err != nil {
-		log.Fatal(err)
+		panic(err)
 	}
 	tokens, err := latere.NewActorTokens(signer.TokenSource(tok, nil))
 	if err != nil {
-		log.Fatal(err)
+		panic(err)
 	}
 	cfg, err := latere.NewConfig(latere.WithTokenSource(tokens))
 	if err != nil {
-		log.Fatal(err)
+		panic(err)
 	}
 	fmt.Println(cfg.BaseURL())
 }
 
+// anyCall stands for a call of any capability package.
+func anyCall() error { return errors.New("example") }
+
 // Telling the common errors apart, and reading the API's code.
 func ExampleError() {
-	var err error // returned by any call
+	err := anyCall() // the error any call returns
 	switch {
 	case errors.Is(err, latere.ErrNotFound):
 		fmt.Println("no such session")
@@ -88,12 +91,12 @@ func ExampleError() {
 func ExampleConfig_Do() {
 	cfg, err := latere.NewConfig()
 	if err != nil {
-		log.Fatal(err)
+		panic(err)
 	}
 	var out map[string]any
 	err = cfg.Do(context.Background(), &latere.Request{Method: http.MethodGet, Path: "/v1/account/data"}, &out)
 	if err != nil {
-		log.Fatal(err)
+		panic(err)
 	}
 	fmt.Println(out)
 }
@@ -103,14 +106,14 @@ func ExampleWithHooks() {
 	cfg, err := latere.NewConfig(latere.WithHooks(latere.Hooks{
 		AfterResponse: func(req *http.Request, resp *http.Response, err error, took time.Duration) {
 			if err != nil {
-				log.Printf("%s %s failed after %v: %v", req.Method, req.URL.Path, took, err)
+				slog.ErrorContext(req.Context(), "request failed", "method", req.Method, "path", req.URL.Path, "took", took, "err", err)
 				return
 			}
-			log.Printf("%s %s %d in %v", req.Method, req.URL.Path, resp.StatusCode, took)
+			slog.InfoContext(req.Context(), "request", "method", req.Method, "path", req.URL.Path, "status", resp.StatusCode, "took", took)
 		},
 	}))
 	if err != nil {
-		log.Fatal(err)
+		panic(err)
 	}
 	_ = cfg
 }
@@ -119,7 +122,7 @@ func ExampleWithHooks() {
 func ExampleItems() {
 	cfg, err := latere.NewConfig()
 	if err != nil {
-		log.Fatal(err)
+		panic(err)
 	}
 	ctx := context.Background()
 	type trigger struct {
@@ -135,7 +138,7 @@ func ExampleItems() {
 	}
 	for tr, err := range latere.Items(ctx, fetch) {
 		if err != nil {
-			log.Fatal(err)
+			panic(err)
 		}
 		fmt.Println(tr.ID)
 	}
@@ -150,13 +153,13 @@ func ExampleReadUnverifiedClaims() {
 	handed := os.Getenv("MY_APP_HANDED_TOKEN")
 	claims, err := latere.ReadUnverifiedClaims(handed)
 	if err != nil {
-		log.Fatal(err)
+		panic(err)
 	}
 	if !slices.Contains(claims.Audiences, latere.DefaultAudience) {
-		log.Fatal("the token is not addressed to the API")
+		panic("the token is not addressed to the API")
 	}
 	if claims.OrgID != "" {
-		log.Fatal("a computer is connected in the person's own context, not an organization's")
+		panic("a computer is connected in the person's own context, not an organization's")
 	}
 	fmt.Println(claims.Subject, "until", claims.Expiry.Format(time.RFC3339))
 }
@@ -167,7 +170,7 @@ func ExampleReadUnverifiedClaims() {
 func ExampleWithoutCredentials() {
 	cfg, err := latere.NewConfig(latere.WithoutCredentials())
 	if err != nil {
-		log.Fatal(err)
+		panic(err)
 	}
 	fmt.Println(cfg.BaseURL())
 }

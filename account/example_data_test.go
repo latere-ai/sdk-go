@@ -6,7 +6,6 @@ package account_test
 import (
 	"context"
 	"fmt"
-	"log"
 
 	"latere.ai/x/sdk-go/account"
 )
@@ -16,7 +15,7 @@ import (
 func ExampleClient_GetDataPlaces() {
 	d, err := client().GetDataPlaces(context.Background())
 	if err != nil {
-		log.Fatal(err)
+		panic(err)
 	}
 	if d.Sessions == nil {
 		fmt.Println("where sessions are kept is not stated")
@@ -30,7 +29,7 @@ func ExampleClient_GetDataPlaces() {
 func ExampleClient_GetModelDataTerms() {
 	terms, err := client().GetModelDataTerms(context.Background(), "anthropic/claude-sonnet-5.5")
 	if err != nil {
-		log.Fatal(err)
+		panic(err)
 	}
 	for _, m := range terms.Models {
 		name := m.DisplayName
@@ -57,7 +56,7 @@ func ExampleClient_StartCheckout() {
 		CancelURL:      "https://chat.latere.ai/",
 	})
 	if err != nil {
-		log.Fatal(err)
+		panic(err)
 	}
 	fmt.Println("send the person to", page.URL)
 }
@@ -70,6 +69,6 @@ func ExampleClient_RecordArrival() {
 		LandingPath: "/blog/why-latere",
 	})
 	if err != nil {
-		log.Fatal(err)
+		panic(err)
 	}
 }

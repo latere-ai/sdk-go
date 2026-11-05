@@ -161,7 +161,7 @@ func (c *Client) ReadSharedBlob(ctx context.Context, token, digest string) (*Fil
 	if algorithm, sum, ok := strings.Cut(digest, ":"); !ok || algorithm == "" || sum == "" {
 		return nil, fmt.Errorf("agents: ReadSharedBlob: %q is not a digest, such as a KeptFile's Blob", digest)
 	}
-	resp, err := c.cfg.Open(ctx, &latere.Request{Method: http.MethodGet, Path: sharePath(token, "/blobs/"+url.PathEscape(digest)), Header: acceptAny()})
+	resp, err := c.cfg.Open(ctx, &latere.Request{Method: http.MethodGet, Path: sharePath(token, "/blobs/"+url.PathEscape(digest)), Header: acceptAny()}) //nolint:bodyclose // the body belongs to the reader returned, which the caller closes
 	if err != nil {
 		return nil, err
 	}

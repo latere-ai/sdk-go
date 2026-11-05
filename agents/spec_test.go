@@ -96,9 +96,7 @@ func (d *document) resolve(s *schema) *schema {
 			if r == nil {
 				continue
 			}
-			for k, v := range r.Properties {
-				joined.Properties[k] = v
-			}
+			maps.Copy(joined.Properties, r.Properties)
 			joined.Required = append(joined.Required, r.Required...)
 		}
 		return joined
@@ -324,9 +322,7 @@ func TestModelsMatchTheSchemas(t *testing.T) {
 				t.Errorf("%s: the document has no payload schema", typ)
 				continue
 			}
-			for k, v := range payload.Properties {
-				union.Properties[k] = v
-			}
+			maps.Copy(union.Properties, payload.Properties)
 		}
 		d.checkModel(t, strings.Join(p.types, "|"), p.model, union, false)
 	}

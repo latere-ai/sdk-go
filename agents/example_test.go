@@ -8,7 +8,6 @@ import (
 	"errors"
 	"fmt"
 	"io"
-	"log"
 	"os"
 	"path/filepath"
 	"strings"
@@ -21,7 +20,7 @@ import (
 func client() *agents.Client {
 	cfg, err := latere.NewConfig() // the key in LATERE_KEY
 	if err != nil {
-		log.Fatal(err)
+		panic(err)
 	}
 	return agents.New(cfg)
 }
@@ -32,7 +31,7 @@ func ExampleClient_ListSessions() {
 	params := &agents.ListSessionsParams{Agent: "release-notes", Status: agents.StatusIdle}
 	for s, err := range client().ListSessions(ctx, params) {
 		if err != nil {
-			log.Fatal(err)
+			panic(err)
 		}
 		if s.StopReason == agents.StopQuestion || s.StopReason == agents.StopToolConfirmation {
 			fmt.Println(s.ID, s.Title)
@@ -48,7 +47,7 @@ func ExampleClient_ListSessionsPage() {
 	for {
 		page, err := ag.ListSessionsPage(ctx, params)
 		if err != nil {
-			log.Fatal(err)
+			panic(err)
 		}
 		for _, s := range page.Items {
 			fmt.Println(s.ID)
@@ -68,7 +67,7 @@ func ExampleClient_CreateSession() {
 		Attended: true,
 	})
 	if err != nil {
-		log.Fatal(err)
+		panic(err)
 	}
 	fmt.Println(s.ID, s.Status)
 }
@@ -78,7 +77,7 @@ func ExampleClient_StreamEvents() {
 	ctx := context.Background()
 	for item, err := range client().StreamEvents(ctx, "ses_01M34G2JF01B91B8399CD1G6YP", &agents.StreamEventsParams{Deltas: true}) {
 		if err != nil {
-			log.Fatal(err)
+			panic(err)
 		}
 		switch {
 		case item.Delta != nil && item.Delta.Kind == agents.DeltaText:
@@ -86,7 +85,7 @@ func ExampleClient_StreamEvents() {
 		case item.Event != nil && item.Event.Type == agents.EventSessionStatus:
 			var st agents.SessionStatus
 			if err := item.Event.Decode(&st); err != nil {
-				log.Fatal(err)
+				panic(err)
 			}
 			fmt.Println("\nstatus:", st.Status, st.StopReason)
 		}
@@ -98,14 +97,14 @@ func ExampleAgentMessage() {
 	ctx := context.Background()
 	for e, err := range client().ListEvents(ctx, "ses_01M34G2JF01B91B8399CD1G6YP", nil) {
 		if err != nil {
-			log.Fatal(err)
+			panic(err)
 		}
 		if e.Type != agents.EventAgentMessage {
 			continue
 		}
 		var m agents.AgentMessage
 		if err := e.Decode(&m); err != nil {
-			log.Fatal(err)
+			panic(err)
 		}
 		fmt.Println(m.Text())
 	}
@@ -117,7 +116,7 @@ func ExampleClient_SendMessage() {
 		Content: []agents.ContentBlock{agents.Text("Add a section for the breaking changes.")},
 	})
 	if err != nil {
-		log.Fatal(err)
+		panic(err)
 	}
 }
 
@@ -129,12 +128,12 @@ func ExampleClient_AnswerQuestion() {
 	var call *agents.ToolUse
 	for e, err := range ag.ListEvents(ctx, id, nil) {
 		if err != nil {
-			log.Fatal(err)
+			panic(err)
 		}
 		if e.Type == agents.EventAgentToolUse {
 			var tu agents.ToolUse
 			if err := e.Decode(&tu); err != nil {
-				log.Fatal(err)
+				panic(err)
 			}
 			if tu.Name == "question" {
 				call = &tu
@@ -146,14 +145,14 @@ func ExampleClient_AnswerQuestion() {
 	}
 	questions, err := call.Questions()
 	if err != nil {
-		log.Fatal(err)
+		panic(err)
 	}
 	answers := make([]agents.Answer, len(questions))
 	for i, q := range questions {
 		answers[i] = agents.Answer{Selected: []string{q.Options[0].Label}}
 	}
 	if _, err := ag.AnswerQuestion(ctx, id, &agents.AnswerQuestionParams{ToolUseID: call.ToolUseID, Answers: answers}); err != nil {
-		log.Fatal(err)
+		panic(err)
 	}
 }
 
@@ -164,7 +163,7 @@ func ExampleClient_ConfirmTool() {
 		Decision:  agents.DecisionAllow,
 	})
 	if err != nil {
-		log.Fatal(err)
+		panic(err)
 	}
 }
 
@@ -175,14 +174,14 @@ func ExampleClient_SendToolResult() {
 	id := "ses_01M34G2JF01B91B8399CD1G6YP"
 	for item, err := range ag.StreamEvents(ctx, id, nil) {
 		if err != nil {
-			log.Fatal(err)
+			panic(err)
 		}
 		if item.Event == nil || item.Event.Type != agents.EventAgentToolUse {
 			continue
 		}
 		var call agents.ToolUse
 		if err := item.Event.Decode(&call); err != nil {
-			log.Fatal(err)
+			panic(err)
 		}
 		if !call.Client {
 			continue
@@ -193,7 +192,7 @@ func ExampleClient_SendToolResult() {
 			Content:   []agents.ContentBlock{agents.Text(result)},
 		})
 		if err != nil {
-			log.Fatal(err)
+			panic(err)
 		}
 	}
 }
@@ -202,7 +201,7 @@ func ExampleClient_SendToolResult() {
 func ExampleClient_EndSession() {
 	s, err := client().EndSession(context.Background(), "ses_01M34G2JF01B91B8399CD1G6YP", agents.StopCompleted)
 	if err != nil {
-		log.Fatal(err)
+		panic(err)
 	}
 	fmt.Println(s.Status, s.StopReason)
 }
@@ -213,7 +212,7 @@ func ExampleClient_UpdateSession() {
 		Model: &agents.ModelChange{Name: "tier/thorough"},
 	})
 	if err != nil {
-		log.Fatal(err)
+		panic(err)
 	}
 }
 
@@ -225,12 +224,12 @@ func ExampleModelChange() {
 	if _, err := client().UpdateSession(ctx, id, &agents.UpdateSessionParams{
 		Model: &agents.ModelChange{Reasoning: agents.ReasoningHigh},
 	}); err != nil {
-		log.Fatal(err)
+		panic(err)
 	}
 	if _, err := client().UpdateSession(ctx, id, &agents.UpdateSessionParams{
 		Model: &agents.ModelChange{AgentReasoning: true},
 	}); err != nil {
-		log.Fatal(err)
+		panic(err)
 	}
 }
 
@@ -241,20 +240,20 @@ func ExampleClient_SendMessage_files() {
 	ctx := context.Background()
 	cfg, err := latere.NewConfig()
 	if err != nil {
-		log.Fatal(err)
+		panic(err)
 	}
 	f, err := os.Open("talk.mp4")
 	if err != nil {
-		log.Fatal(err)
+		panic(err)
 	}
 	defer f.Close()
 	info, err := f.Stat()
 	if err != nil {
-		log.Fatal(err)
+		panic(err)
 	}
 	file, err := storage.New(cfg).UploadFile(ctx, storage.Me, "files/Uploads/talk.mp4", f, info.Size(), &storage.UploadOptions{ContentType: "video/mp4"})
 	if err != nil {
-		log.Fatal(err)
+		panic(err)
 	}
 	_, err = agents.New(cfg).SendMessage(ctx, "ses_01M34G2JF01B91B8399CD1G6YP", &agents.SendMessageParams{
 		Content: []agents.ContentBlock{agents.Text("Write up the talk's three points.")},
@@ -264,7 +263,7 @@ func ExampleClient_SendMessage_files() {
 		},
 	})
 	if err != nil {
-		log.Fatal(err)
+		panic(err)
 	}
 }
 
@@ -276,31 +275,31 @@ func ExampleClient_ReadBlob() {
 	id := "ses_01M34G2JF01B91B8399CD1G6YP"
 	for e, err := range ag.ListEvents(ctx, id, nil) {
 		if err != nil {
-			log.Fatal(err)
+			panic(err)
 		}
 		if e.Type != agents.EventFilesKept {
 			continue
 		}
 		var kept agents.FilesKept
 		if err := e.Decode(&kept); err != nil {
-			log.Fatal(err)
+			panic(err)
 		}
 		for _, f := range kept.Files {
 			r, err := ag.ReadBlob(ctx, id, f.Blob)
 			if err != nil {
-				log.Fatal(err)
+				panic(err)
 			}
 			out, err := os.Create(filepath.Base(f.Path))
 			if err != nil {
-				log.Fatal(err)
+				panic(err)
 			}
 			_, err = io.Copy(out, r)
 			_ = r.Close() // the bytes are copied; closing releases the connection
 			if err != nil {
-				log.Fatal(err)
+				panic(err)
 			}
 			if err := out.Close(); err != nil {
-				log.Fatal(err)
+				panic(err)
 			}
 			fmt.Println("saved", f.Path, f.MediaType, f.Size, "bytes")
 		}
@@ -322,11 +321,11 @@ func ExampleClient_ReadSessionFile() {
 		fmt.Println("there is no such file")
 		return
 	case err != nil:
-		log.Fatal(err)
+		panic(err)
 	}
 	defer r.Close()
 	if _, err := io.Copy(os.Stdout, r); err != nil {
-		log.Fatal(err)
+		panic(err)
 	}
 }
 
@@ -338,19 +337,19 @@ func ExampleToolMeta() {
 	workdir := ""
 	for e, err := range client().ListEvents(ctx, "ses_01M34G2JF01B91B8399CD1G6YP", nil) {
 		if err != nil {
-			log.Fatal(err)
+			panic(err)
 		}
 		switch e.Type {
 		case agents.EventSessionMachine:
 			var m agents.SessionMachine
 			if err := e.Decode(&m); err != nil {
-				log.Fatal(err)
+				panic(err)
 			}
 			workdir = m.Machine.Workdir
 		case agents.EventToolResult:
 			var r agents.ToolResult
 			if err := e.Decode(&r); err != nil {
-				log.Fatal(err)
+				panic(err)
 			}
 			if r.Meta == nil {
 				continue
@@ -372,13 +371,13 @@ func ExampleFolder() {
 	ctx := context.Background()
 	cfg, err := latere.NewConfig() // the key in LATERE_KEY
 	if err != nil {
-		log.Fatal(err)
+		panic(err)
 	}
 	ag, st := agents.New(cfg), storage.New(cfg)
 	id := "ses_01M34G2JF01B91B8399CD1G6YP"
 	s, err := ag.GetSession(ctx, id)
 	if err != nil {
-		log.Fatal(err)
+		panic(err)
 	}
 	if s.Folder == nil {
 		fmt.Println("the session keeps its files as blobs, which ReadBlob reads")
@@ -386,14 +385,14 @@ func ExampleFolder() {
 	}
 	for e, err := range ag.ListEvents(ctx, id, nil) {
 		if err != nil {
-			log.Fatal(err)
+			panic(err)
 		}
 		if e.Type != agents.EventFilesKept {
 			continue
 		}
 		var kept agents.FilesKept
 		if err := e.Decode(&kept); err != nil {
-			log.Fatal(err)
+			panic(err)
 		}
 		for _, f := range kept.Files {
 			if f.Ref == "" {
@@ -402,7 +401,7 @@ func ExampleFolder() {
 			path := s.Folder.Path + "/" + f.Ref
 			info, err := st.StatFile(ctx, s.Folder.Owner, path)
 			if err != nil {
-				log.Fatal(err)
+				panic(err)
 			}
 			fmt.Println(f.Path, "is", path, "in Storage,", info.ContentType, info.Size, "bytes")
 		}
@@ -419,12 +418,12 @@ func ExampleEvent_CostMicroUSD() {
 	id := "ses_01M34G2JF01B91B8399CD1G6YP"
 	s, err := ag.GetSession(ctx, id)
 	if err != nil {
-		log.Fatal(err)
+		panic(err)
 	}
 	spent := s.Budget.OwnMicroUSD()
 	for item, err := range ag.StreamEvents(ctx, id, &agents.StreamEventsParams{FromSeq: s.LastSeq + 1}) {
 		if err != nil {
-			log.Fatal(err)
+			panic(err)
 		}
 		e := item.Event
 		spent += e.CostMicroUSD()
@@ -433,7 +432,7 @@ func ExampleEvent_CostMicroUSD() {
 		}
 		var r agents.ToolResult
 		if err := e.Decode(&r); err != nil {
-			log.Fatal(err)
+			panic(err)
 		}
 		if r.Meta == nil || r.Meta.Todos == nil {
 			continue

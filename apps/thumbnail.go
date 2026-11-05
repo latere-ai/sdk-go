@@ -135,7 +135,7 @@ func (c *Client) ReadThumbnail(ctx context.Context, slug, deployID string, width
 		// all the same.
 		Header: http.Header{"Accept": {"*/*"}},
 	}
-	resp, err := c.cfg.Open(ctx, req)
+	resp, err := c.cfg.Open(ctx, req) //nolint:bodyclose // the body belongs to the reader returned, which the caller closes
 	if err != nil {
 		return nil, withSentinel(err, thumbnailCodes)
 	}

@@ -48,8 +48,8 @@ func loadDocument(t *testing.T) *document {
 
 func jsonFields(t reflect.Type) []string {
 	var out []string
-	for i := range t.NumField() {
-		name, _, _ := strings.Cut(t.Field(i).Tag.Get("json"), ",")
+	for field := range t.Fields() {
+		name, _, _ := strings.Cut(field.Tag.Get("json"), ",")
 		if name != "" && name != "-" {
 			out = append(out, name)
 		}

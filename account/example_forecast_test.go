@@ -6,7 +6,6 @@ package account_test
 import (
 	"context"
 	"fmt"
-	"log"
 
 	"latere.ai/x/sdk-go/account"
 	"latere.ai/x/sdk-go/latere"
@@ -18,11 +17,11 @@ import (
 func ExampleClient_GetForecast() {
 	cfg, err := latere.NewConfig()
 	if err != nil {
-		log.Fatal(err)
+		panic(err)
 	}
 	f, err := account.New(cfg).GetForecast(context.Background(), &account.GetForecastParams{TimeZone: "Europe/Berlin"})
 	if err != nil {
-		log.Fatal(err)
+		panic(err)
 	}
 	var own, always int64
 	for _, d := range f.Days {

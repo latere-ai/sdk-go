@@ -117,8 +117,8 @@ func TestTheDocumentedFieldsAreCarried(t *testing.T) {
 
 func jsonNames(t reflect.Type) []string {
 	var out []string
-	for i := range t.NumField() {
-		name, _, _ := strings.Cut(t.Field(i).Tag.Get("json"), ",")
+	for field := range t.Fields() {
+		name, _, _ := strings.Cut(field.Tag.Get("json"), ",")
 		out = append(out, name)
 	}
 	return out

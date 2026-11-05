@@ -8,7 +8,7 @@ import (
 	"errors"
 	"fmt"
 	"io"
-	"log"
+	"log/slog"
 	"net/http"
 	"strconv"
 
@@ -19,7 +19,7 @@ import (
 func client() *apps.Client {
 	cfg, err := latere.NewConfig() // the key in LATERE_KEY
 	if err != nil {
-		log.Fatal(err)
+		panic(err)
 	}
 	return apps.New(cfg)
 }
@@ -29,7 +29,7 @@ func client() *apps.Client {
 func ExampleClient_CreateApp() {
 	a, err := client().CreateApp(context.Background(), &apps.CreateAppParams{Name: "Tide tables"})
 	if err != nil {
-		log.Fatal(err)
+		panic(err)
 	}
 	fmt.Println("git remote add latere", a.Repository.PushURL)
 	fmt.Println("git tag v1.0.0 && git push latere v1.0.0")
@@ -40,7 +40,7 @@ func ExampleClient_CreateApp() {
 func ExampleClient_ListApps() {
 	for a, err := range client().ListApps(context.Background(), &apps.ListAppsParams{Order: apps.OrderPublished}) {
 		if err != nil {
-			log.Fatal(err)
+			panic(err)
 		}
 		fmt.Println(a.Slug, a.State, a.URL)
 	}
@@ -52,7 +52,7 @@ func ExampleClient_FollowDeployLog() {
 	c := client()
 	deploys, err := c.ListDeploys(ctx, "tide-tables")
 	if err != nil {
-		log.Fatal(err)
+		panic(err)
 	}
 	if len(deploys) == 0 {
 		fmt.Println("nothing was pushed yet")
@@ -60,7 +60,7 @@ func ExampleClient_FollowDeployLog() {
 	}
 	for ev, err := range c.FollowDeployLog(ctx, "tide-tables", deploys[0].ID, nil) {
 		if err != nil {
-			log.Fatal(err)
+			panic(err)
 		}
 		switch {
 		case ev.Line != nil:
@@ -79,11 +79,11 @@ func ExampleClient_Invite() {
 	c := client()
 	a, err := c.UpdateApp(ctx, "tide-tables", &apps.UpdateAppParams{Visibility: apps.VisibilityPrivate})
 	if err != nil {
-		log.Fatal(err)
+		panic(err)
 	}
 	invites, err := c.Invite(ctx, a.ID, &apps.InviteParams{Emails: []string{"pilot@harbor.example"}})
 	if err != nil {
-		log.Fatal(err)
+		panic(err)
 	}
 	for _, p := range invites.People {
 		fmt.Println("invited", p.Email)
@@ -95,7 +95,7 @@ func ExampleClient_Invite() {
 func ExampleClient_ListAppSessions() {
 	for s, err := range client().ListAppSessions(context.Background(), "tide-tables", nil) {
 		if err != nil {
-			log.Fatal(err)
+			panic(err)
 		}
 		fmt.Println(s.ID, s.Deploys, "previews, released:", s.Released)
 	}
@@ -105,7 +105,7 @@ func ExampleClient_ListAppSessions() {
 func ExampleClient_GetAppVisits() {
 	v, err := client().GetAppVisits(context.Background(), "tide-tables", 7)
 	if err != nil {
-		log.Fatal(err)
+		panic(err)
 	}
 	fmt.Println(v.Totals.Last7Days.Visits, "page loads by", v.Totals.Last7Days.Visitors, "visitors")
 	for _, d := range v.Days {
@@ -117,7 +117,7 @@ func ExampleClient_GetAppVisits() {
 func ExampleClient_GetDeployByID() {
 	d, err := client().GetDeployByID(context.Background(), "9f2c6a1e-2b7d-4c4f-9e0a-5d1b7f3c8a21")
 	if err != nil {
-		log.Fatal(err)
+		panic(err)
 	}
 	fmt.Println(d.Seq, d.Status, d.PreviewURL)
 }
@@ -126,7 +126,7 @@ func ExampleClient_GetDeployByID() {
 func ExampleClient_GetDeployApp() {
 	a, err := client().GetDeployApp(context.Background(), "9f2c6a1e-2b7d-4c4f-9e0a-5d1b7f3c8a21")
 	if err != nil {
-		log.Fatal(err)
+		panic(err)
 	}
 	fmt.Println(a.Name, "is at", a.URL)
 }
@@ -144,18 +144,14 @@ func ExampleClient_ReadThumbnail() {
 			http.Error(w, "the picture could not be read", http.StatusBadGateway)
 			return
 		}
-		defer func() {
-			if err := pic.Close(); err != nil {
-				log.Print(err)
-			}
-		}()
+		defer pic.Close()
 		w.Header().Set("Content-Type", pic.MediaType())
 		w.Header().Set("Cache-Control", pic.CacheControl())
 		if pic.Size() >= 0 {
 			w.Header().Set("Content-Length", strconv.FormatInt(pic.Size(), 10))
 		}
 		if _, err := io.Copy(w, pic); err != nil {
-			log.Print(err)
+			slog.ErrorContext(r.Context(), "copy the picture", "err", err)
 		}
 	})
 }
@@ -169,7 +165,7 @@ func ExampleClient_CreateFramePass() {
 		return
 	}
 	if err != nil {
-		log.Fatal(err)
+		panic(err)
 	}
 	fmt.Printf("<iframe src=%q></iframe>\n", pass.URL)
 }
@@ -178,7 +174,7 @@ func ExampleClient_CreateFramePass() {
 // that framed them.
 func ExampleClient_EndGateSessions() {
 	if err := client().EndGateSessions(context.Background()); err != nil {
-		log.Print("the sign-ins at private apps were not ended: ", err)
+		slog.Error("the sign-ins at private apps were not ended", "err", err)
 	}
 }
 
@@ -186,7 +182,7 @@ func ExampleClient_EndGateSessions() {
 func ExampleClient_GetListing() {
 	l, err := client().GetListing(context.Background(), "tide-tables")
 	if err != nil {
-		log.Fatal(err)
+		panic(err)
 	}
 	if l.Blocked != "" {
 		fmt.Println("cannot ask now:", l.Blocked)
@@ -205,7 +201,7 @@ func ExampleClient_RequestListing() {
 		Summary:  "High and low water for the harbors of the North Sea.",
 	})
 	if err != nil {
-		log.Fatal(err)
+		panic(err)
 	}
 	fmt.Println(l.State)
 }
@@ -213,6 +209,6 @@ func ExampleClient_RequestListing() {
 // Taking an app out of the gallery.
 func ExampleClient_WithdrawListing() {
 	if err := client().WithdrawListing(context.Background(), "tide-tables"); err != nil {
-		log.Fatal(err)
+		panic(err)
 	}
 }

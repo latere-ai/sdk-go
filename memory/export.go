@@ -116,7 +116,7 @@ func exportName(h http.Header) string {
 // arrive, reading them is the caller's, for as long as ctx allows.
 func (c *Client) ExportMemory(ctx context.Context) (*Export, error) {
 	req := &latere.Request{Method: http.MethodGet, Path: basePath + "/export", Header: http.Header{"Accept": {"application/zip"}}}
-	resp, err := c.cfg.Open(ctx, req)
+	resp, err := c.cfg.Open(ctx, req) //nolint:bodyclose // the body belongs to the reader returned, which the caller closes
 	if err != nil {
 		return nil, withSentinel(err)
 	}

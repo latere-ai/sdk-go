@@ -8,6 +8,7 @@ import (
 	"crypto/ed25519"
 	"errors"
 	"fmt"
+	"maps"
 	"slices"
 
 	"latere.ai/x/sdk-go/mls"
@@ -215,9 +216,7 @@ func (p *Policy) CheckCommit(g Group, c mls.Changes) (*Change, error) {
 	// The leaves after the commit.
 	groupID := g.GroupID()
 	next := make(map[uint32]leaf, len(leaves))
-	for i, l := range leaves {
-		next[i] = l
-	}
+	maps.Copy(next, leaves)
 	for _, m := range c.Removed {
 		delete(next, m.Leaf)
 	}
@@ -551,7 +550,7 @@ func (p *Policy) checkLeaf(groupID []byte, id Identity, m mls.Member) error {
 	}
 	if id.Latere() {
 		if err := CheckLatere(p.Installation, groupID, m); err != nil {
-			return fmt.Errorf("%w: %v", ErrRefused, err)
+			return fmt.Errorf("%w: %w", ErrRefused, err)
 		}
 		return nil
 	}
@@ -563,7 +562,7 @@ func (p *Policy) checkLeaf(groupID []byte, id Identity, m mls.Member) error {
 		return err
 	}
 	if err := d.CheckMember(m); err != nil {
-		return fmt.Errorf("%w: %v", ErrRefused, err)
+		return fmt.Errorf("%w: %w", ErrRefused, err)
 	}
 	return nil
 }

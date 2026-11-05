@@ -223,7 +223,7 @@ func (b *BackupKey) SealTo(device DeviceRecord, key ed25519.PrivateKey) ([]byte,
 	if device.Kind != RecordDevice || device.Root() {
 		return nil, errors.New("messaging: a backup key is sealed to a device another device approved")
 	}
-	if len(key) != ed25519.PrivateKeySize || !bytes.Equal(key.Public().(ed25519.PublicKey), device.VoucherKey) {
+	if len(key) != ed25519.PrivateKeySize || !bytes.Equal(key[ed25519.SeedSize:], device.VoucherKey) {
 		return nil, errors.New("messaging: the backup key is sealed by the device that approved the device")
 	}
 	pub, err := ecdh.X25519().NewPublicKey(device.EncryptionKey)

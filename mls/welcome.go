@@ -7,6 +7,7 @@ import (
 	"bytes"
 	"errors"
 	"fmt"
+	"maps"
 )
 
 // signedGroupInfo returns the group info of the current epoch as an
@@ -273,9 +274,7 @@ func JoinGroup(welcomeMessage []byte, kp *KeyPackage, secrets *KeyPackageSecrets
 		if err != nil {
 			return nil, err
 		}
-		for x, k := range keys {
-			g.priv.keys[x] = k
-		}
+		maps.Copy(g.priv.keys, keys)
 	}
 	ctx := g.ctx.bytes()
 	_, g.es = s.epochFromJoiner(gs.joinerSecret, pskSecret, ctx)

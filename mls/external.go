@@ -7,6 +7,7 @@ import (
 	"bytes"
 	"errors"
 	"fmt"
+	"maps"
 )
 
 // ExternalJoinOptions sets what JoinExternal puts in its commit.
@@ -136,9 +137,7 @@ func JoinExternal(groupInfoMessage []byte, signer *SignatureKey, cred Credential
 	msg := encode((&mlsMessage{wireFormat: WireFormatPublicMessage, public: &publicMessage{content: a.content, auth: a.auth}}).marshal)
 
 	priv := &privateTree{leaf: leaf, keys: map[uint32]hpkeKey{leafNodeIndex(leaf): ps.leafKey}}
-	for x, k := range ps.keys {
-		priv.keys[x] = k
-	}
+	maps.Copy(priv.keys, ps.keys)
 	g.priv = priv
 	sp := &stagedPublic{app: app, next: next, interim: s.interimTranscriptHash(next.confirmedTranscriptHash, a.auth.confirmationTag)}
 	joined := g.nextEpoch(sp, priv, es, a.auth.confirmationTag)

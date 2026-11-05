@@ -6,7 +6,6 @@ package account_test
 import (
 	"context"
 	"fmt"
-	"log"
 
 	"latere.ai/x/sdk-go/account"
 )
@@ -17,7 +16,7 @@ func ExampleClient_UpdatePreferences() {
 	callMe, none := "Mara", ""
 	p, err := client().UpdatePreferences(context.Background(), &account.UpdatePreferencesParams{CallMe: &callMe, Work: &none})
 	if err != nil {
-		log.Fatal(err)
+		panic(err)
 	}
 	fmt.Println("sessions call the person", p.Profile.CallMe)
 }
@@ -27,7 +26,7 @@ func ExampleClient_UpdatePreferences() {
 func ExampleClient_AddSite() {
 	n, err := client().AddSite(context.Background(), "*.wikipedia.org")
 	if err != nil {
-		log.Fatal(err)
+		panic(err)
 	}
 	fmt.Println(len(n.Domains), "of", n.MaxDomains, "sites")
 }
@@ -35,7 +34,7 @@ func ExampleClient_AddSite() {
 // Taking a site off the context's list.
 func ExampleClient_RemoveSite() {
 	if err := client().RemoveSite(context.Background(), "*.wikipedia.org"); err != nil {
-		log.Fatal(err)
+		panic(err)
 	}
 }
 
@@ -43,7 +42,7 @@ func ExampleClient_RemoveSite() {
 func ExampleClient_BookmarkTurn() {
 	b, err := client().BookmarkTurn(context.Background(), "ses_01M34G2JF01B91B8399CD1G6YP", 87)
 	if err != nil {
-		log.Fatal(err)
+		panic(err)
 	}
 	fmt.Println(b.Sessions["ses_01M34G2JF01B91B8399CD1G6YP"])
 }
@@ -51,7 +50,7 @@ func ExampleClient_BookmarkTurn() {
 // Removing a bookmark.
 func ExampleClient_UnbookmarkTurn() {
 	if err := client().UnbookmarkTurn(context.Background(), "ses_01M34G2JF01B91B8399CD1G6YP", 87); err != nil {
-		log.Fatal(err)
+		panic(err)
 	}
 }
 
@@ -59,7 +58,7 @@ func ExampleClient_UnbookmarkTurn() {
 func ExampleClient_PinApp() {
 	pins, err := client().PinApp(context.Background(), "5c1e7a2b-3d4f-4a6b-8c9d-0e1f2a3b4c5d")
 	if err != nil {
-		log.Fatal(err)
+		panic(err)
 	}
 	fmt.Println(len(pins.Apps), "of", pins.MaxApps, "apps pinned")
 }
@@ -67,7 +66,7 @@ func ExampleClient_PinApp() {
 // Unpinning an app.
 func ExampleClient_UnpinApp() {
 	if err := client().UnpinApp(context.Background(), "5c1e7a2b-3d4f-4a6b-8c9d-0e1f2a3b4c5d"); err != nil {
-		log.Fatal(err)
+		panic(err)
 	}
 }
 
@@ -75,7 +74,7 @@ func ExampleClient_UnpinApp() {
 func ExampleClient_PinProject() {
 	pins, err := client().PinProject(context.Background(), "prj_01JA4Q0Z8X3K5V7M9N1P2R4T6W")
 	if err != nil {
-		log.Fatal(err)
+		panic(err)
 	}
 	fmt.Println(len(pins.Projects), "of", pins.MaxProjects, "projects pinned")
 }
@@ -83,6 +82,6 @@ func ExampleClient_PinProject() {
 // Unpinning a project.
 func ExampleClient_UnpinProject() {
 	if err := client().UnpinProject(context.Background(), "prj_01JA4Q0Z8X3K5V7M9N1P2R4T6W"); err != nil {
-		log.Fatal(err)
+		panic(err)
 	}
 }

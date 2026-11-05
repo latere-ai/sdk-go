@@ -6,7 +6,6 @@ package agents_test
 import (
 	"context"
 	"fmt"
-	"log"
 )
 
 // Showing how full a conversation's context is, and what fills it.
@@ -14,7 +13,7 @@ func ExampleContextReport_UsedFraction() {
 	ctx := context.Background()
 	s, err := client().GetSession(ctx, "ses_01M34G2JF01B91B8399CD1G6YP")
 	if err != nil {
-		log.Fatal(err)
+		panic(err)
 	}
 	r := s.ContextReport
 	full, ok := r.UsedFraction()

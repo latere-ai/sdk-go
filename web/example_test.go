@@ -8,7 +8,7 @@ import (
 	"errors"
 	"fmt"
 	"io"
-	"log"
+	"log/slog"
 	"net/http"
 	"net/url"
 	"strconv"
@@ -24,11 +24,11 @@ func ExampleClient_GetIcon() {
 	ctx := context.Background()
 	cfg, err := latere.NewConfig()
 	if err != nil {
-		log.Fatal(err)
+		panic(err)
 	}
 	link, err := url.Parse("https://www.techcrunch.com/2026/10/20/seed-rounds/")
 	if err != nil {
-		log.Fatal(err)
+		panic(err)
 	}
 	// The site is the link's host, without "www.", as Latere Chat names it.
 	site := strings.TrimPrefix(link.Hostname(), "www.")
@@ -37,7 +37,7 @@ func ExampleClient_GetIcon() {
 	case errors.Is(err, web.ErrInvalidHost):
 		fmt.Println(site, "has no icon the platform reads")
 	case err != nil:
-		log.Fatal(err)
+		panic(err)
 	case icon == nil:
 		fmt.Println(site, "has no icon")
 	default:
@@ -50,7 +50,7 @@ func ExampleClient_GetIcon() {
 func ExampleClient_ReadImage() {
 	cfg, err := latere.NewConfig()
 	if err != nil {
-		log.Fatal(err)
+		panic(err)
 	}
 	client := web.New(cfg)
 	http.HandleFunc("GET /pictures", func(w http.ResponseWriter, r *http.Request) {
@@ -70,7 +70,7 @@ func ExampleClient_ReadImage() {
 			w.Header().Set("Content-Length", strconv.FormatInt(img.Size(), 10))
 		}
 		if _, err := io.Copy(w, img); err != nil {
-			log.Print("the picture's answer was cut off: ", err)
+			slog.ErrorContext(r.Context(), "the picture's answer was cut off", "err", err)
 		}
 	})
 }
@@ -80,7 +80,7 @@ func ExampleClient_ReadImage() {
 func ExampleClient_ReadSharedImage() {
 	cfg, err := latere.NewConfig(latere.WithoutCredentials())
 	if err != nil {
-		log.Fatal(err)
+		panic(err)
 	}
 	client := web.New(cfg)
 	http.HandleFunc("GET /share/{token}/pictures", func(w http.ResponseWriter, r *http.Request) {
@@ -97,7 +97,7 @@ func ExampleClient_ReadSharedImage() {
 		w.Header().Set("Content-Type", img.MediaType())
 		w.Header().Set("Cache-Control", img.CacheControl())
 		if _, err := io.Copy(w, img); err != nil {
-			log.Print("the picture's answer was cut off: ", err)
+			slog.ErrorContext(r.Context(), "the picture's answer was cut off", "err", err)
 		}
 	})
 }

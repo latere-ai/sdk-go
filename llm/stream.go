@@ -131,7 +131,7 @@ func (c *Client) Stream(ctx context.Context, req *Request) (*Stream, error) {
 		r.Header = http.Header{}
 	}
 	r.Header.Set("Accept", "text/event-stream")
-	resp, err := c.cfg.Open(ctx, r)
+	resp, err := c.cfg.Open(ctx, r) //nolint:bodyclose // the body belongs to the stream returned, which the caller closes
 	if err != nil {
 		return nil, err
 	}

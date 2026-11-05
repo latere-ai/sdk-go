@@ -8,7 +8,6 @@ import (
 	"errors"
 	"fmt"
 	"io"
-	"log"
 
 	"latere.ai/x/sdk-go/agents"
 	"latere.ai/x/sdk-go/latere"
@@ -20,7 +19,7 @@ func ExampleClient_SearchSessions() {
 	ctx := context.Background()
 	for found, err := range client().SearchSessions(ctx, &agents.SearchSessionsParams{Query: "release notes", Agent: "latere-chat"}) {
 		if err != nil {
-			log.Fatal(err)
+			panic(err)
 		}
 		fmt.Println(found.Session.Title)
 		for _, m := range found.Matches {
@@ -42,7 +41,7 @@ func ExampleClient_GetSessionSummary() {
 	ctx := context.Background()
 	s, err := client().GetSessionSummary(ctx, &agents.SessionSummaryParams{Agent: "latere-chat"})
 	if err != nil {
-		log.Fatal(err)
+		panic(err)
 	}
 	fmt.Printf("%d running, %d waiting for approval, %d idle\n", s.Sessions.Running, s.Sessions.WaitingForApproval, s.Sessions.Idle)
 }
@@ -52,18 +51,18 @@ func ExampleClient_GetSessionSummary() {
 func ExampleClient_GetSharedPage() {
 	cfg, err := latere.NewConfig(latere.WithoutCredentials())
 	if err != nil {
-		log.Fatal(err)
+		panic(err)
 	}
 	page, err := agents.New(cfg).GetSharedPage(context.Background(), "the link's token", nil)
 	if err != nil {
-		log.Fatal(err)
+		panic(err)
 	}
 	fmt.Println(page.Share.Title)
 	for _, e := range page.Events {
 		if e.Type == agents.EventAgentMessage {
 			var m agents.AgentMessage
 			if err := e.Decode(&m); err != nil {
-				log.Fatal(err)
+				panic(err)
 			}
 			fmt.Println(m.Text())
 		}
@@ -74,18 +73,18 @@ func ExampleClient_GetSharedPage() {
 func ExampleClient_ListSharedEvents() {
 	cfg, err := latere.NewConfig(latere.WithoutCredentials())
 	if err != nil {
-		log.Fatal(err)
+		panic(err)
 	}
 	for e, err := range agents.New(cfg).ListSharedEvents(context.Background(), "the link's token") {
 		if err != nil {
-			log.Fatal(err)
+			panic(err)
 		}
 		if e.Type != agents.EventAgentMessage {
 			continue
 		}
 		var m agents.AgentMessage
 		if err := e.Decode(&m); err != nil {
-			log.Fatal(err)
+			panic(err)
 		}
 		fmt.Println(m.Text())
 	}
@@ -97,29 +96,29 @@ func ExampleClient_ReadSharedBlob() {
 	ctx := context.Background()
 	cfg, err := latere.NewConfig(latere.WithoutCredentials())
 	if err != nil {
-		log.Fatal(err)
+		panic(err)
 	}
 	ag := agents.New(cfg)
 	const token = "the link's token"
 	for e, err := range ag.ListSharedEvents(ctx, token) {
 		if err != nil {
-			log.Fatal(err)
+			panic(err)
 		}
 		if e.Type != agents.EventFilesKept {
 			continue
 		}
 		var kept agents.FilesKept
 		if err := e.Decode(&kept); err != nil {
-			log.Fatal(err)
+			panic(err)
 		}
 		for _, f := range kept.Files {
 			r, err := ag.ReadSharedBlob(ctx, token, f.Blob)
 			if err != nil {
-				log.Fatal(err)
+				panic(err)
 			}
 			n, err := io.Copy(io.Discard, r)
 			if err := errors.Join(err, r.Close()); err != nil {
-				log.Fatal(err)
+				panic(err)
 			}
 			fmt.Println(f.MediaType, n, "bytes")
 		}

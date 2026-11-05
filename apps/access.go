@@ -9,6 +9,7 @@ import (
 	"errors"
 	"net/http"
 	"net/url"
+	"strings"
 	"time"
 
 	"latere.ai/x/sdk-go/latere"
@@ -22,11 +23,12 @@ var errNoAppID = errors.New("apps: the app's id is empty")
 
 // accessPath is the path of an app's access, or of one part of it.
 func accessPath(appID string, rest ...string) string {
-	p := accessBase + "/" + url.PathEscape(appID) + "/access"
+	var p strings.Builder
+	p.WriteString(accessBase + "/" + url.PathEscape(appID) + "/access")
 	for _, r := range rest {
-		p += "/" + url.PathEscape(r)
+		p.WriteString("/" + url.PathEscape(r))
 	}
-	return p
+	return p.String()
 }
 
 // AccessAction is a change to who may open an app that the caller may

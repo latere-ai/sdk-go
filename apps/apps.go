@@ -11,6 +11,7 @@ import (
 	"net/http"
 	"net/url"
 	"strconv"
+	"strings"
 	"time"
 
 	"latere.ai/x/sdk-go/latere"
@@ -34,11 +35,12 @@ var errNoSlug = errors.New("apps: the app's slug is empty")
 // appPath is the path of an app, or of one of its sub-resources: rest is
 // the segments after the app's, each escaped.
 func appPath(slug string, rest ...string) string {
-	p := appsPath + "/" + url.PathEscape(slug)
+	var p strings.Builder
+	p.WriteString(appsPath + "/" + url.PathEscape(slug))
 	for _, r := range rest {
-		p += "/" + url.PathEscape(r)
+		p.WriteString("/" + url.PathEscape(r))
 	}
-	return p
+	return p.String()
 }
 
 // Client reaches the apps part of the Latere API. It is safe for

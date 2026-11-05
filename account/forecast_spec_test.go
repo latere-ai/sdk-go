@@ -43,8 +43,8 @@ func TestTheForecastReadsItsSchemas(t *testing.T) {
 		}
 		var fields []string
 		ty := reflect.TypeOf(model)
-		for i := range ty.NumField() {
-			if n, _, _ := strings.Cut(ty.Field(i).Tag.Get("json"), ","); n != "" {
+		for field := range ty.Fields() {
+			if n, _, _ := strings.Cut(field.Tag.Get("json"), ","); n != "" {
 				fields = append(fields, n)
 			}
 		}

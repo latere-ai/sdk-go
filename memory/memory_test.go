@@ -251,12 +251,12 @@ func TestAddMemory(t *testing.T) {
 
 func TestUpdateMemory(t *testing.T) {
 	c, calls := fakeAPI(t, 2, func(w http.ResponseWriter, r *http.Request, n int) {
-		switch {
-		case n == 0:
+		switch n {
+		case 0:
 			answer(w, http.StatusOK, one)
-		case n == 1:
+		case 1:
 			refuse(w, http.StatusPreconditionFailed, "memory_changed")
-		case n == 2:
+		case 2:
 			refuse(w, http.StatusRequestEntityTooLarge, "memory_too_large")
 		default:
 			refuse(w, http.StatusServiceUnavailable, "storage_unavailable")
@@ -555,7 +555,8 @@ func TestTheTokensMemoryRefuses(t *testing.T) {
 	}
 	// A code with no sentinel is the API's error as it is.
 	err := refusedWith(t, http.StatusBadRequest, "bad_request")
-	if _, ok := err.(*latere.Error); !ok || errors.Is(err, memory.ErrInvalidField) {
+	var apiErr *latere.Error
+	if !errors.As(err, &apiErr) || errors.Is(err, memory.ErrInvalidField) {
 		t.Errorf("bad_request: %T %v", err, err)
 	}
 }

@@ -10,6 +10,7 @@ import (
 	"go/parser"
 	"go/token"
 	"io"
+	"maps"
 	"net/http"
 	"net/http/httptest"
 	"net/url"
@@ -170,9 +171,7 @@ func documentPath(path string) string {
 func union(parts ...*schema) *schema {
 	out := &schema{Properties: map[string]*schema{}}
 	for _, p := range parts {
-		for k, v := range p.Properties {
-			out.Properties[k] = v
-		}
+		maps.Copy(out.Properties, p.Properties)
 		out.Required = append(out.Required, p.Required...)
 	}
 	return out

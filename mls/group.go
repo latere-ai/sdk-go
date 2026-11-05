@@ -321,7 +321,7 @@ func memberOf(i uint32, l *leafNode) Member {
 }
 
 // Members returns the group's members in leaf order.
-func (g *Group) Members() []Member { return g.publicState.members() }
+func (g *Group) Members() []Member { return g.members() }
 
 func (p *publicState) members() []Member {
 	var out []Member

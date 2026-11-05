@@ -8,7 +8,7 @@ import (
 	"errors"
 	"fmt"
 	"io"
-	"log"
+	"log/slog"
 	"os"
 
 	"latere.ai/x/sdk-go/latere"
@@ -18,7 +18,7 @@ import (
 func client() *memory.Client {
 	cfg, err := latere.NewConfig() // the key in LATERE_KEY
 	if err != nil {
-		log.Fatal(err)
+		panic(err)
 	}
 	return memory.New(cfg)
 }
@@ -28,7 +28,7 @@ func client() *memory.Client {
 func ExampleClient_ListMemories() {
 	list, err := client().ListMemories(context.Background())
 	if err != nil {
-		log.Fatal(err)
+		panic(err)
 	}
 	scopes := []memory.Ref{{Scope: memory.ScopeYou}}
 	names := map[string]string{"": "You"}
@@ -61,7 +61,7 @@ func ExampleClient_AddMemory() {
 		Description: "Uses the harbor's own tide tables, not the national ones.",
 	})
 	if err != nil {
-		log.Fatal(err)
+		panic(err)
 	}
 	fmt.Println("saved as", m.ID)
 }
@@ -74,7 +74,7 @@ func ExampleClient_UpdateMemory() {
 	ref := memory.Ref{Scope: memory.ScopeYou, ID: "short-lists"}
 	m, err := mem.GetMemory(ctx, ref)
 	if err != nil {
-		log.Fatal(err)
+		panic(err)
 	}
 	description := "Keep lists under four things."
 	_, err = mem.UpdateMemory(ctx, ref, &memory.UpdateMemoryParams{Description: &description, IfMatch: m.Checksum})
@@ -82,7 +82,7 @@ func ExampleClient_UpdateMemory() {
 	case errors.Is(err, memory.ErrChanged):
 		fmt.Println("The memory changed since it was opened; open it again.")
 	case err != nil:
-		log.Fatal(err)
+		panic(err)
 	}
 }
 
@@ -94,7 +94,7 @@ func ExampleClient_UpdateMemory_move() {
 		Project: "prj_01JA4Q0Z8X3K5V7M9N1P2R4T6W",
 	})
 	if err != nil {
-		log.Fatal(err)
+		panic(err)
 	}
 	fmt.Println("now", m.Project, m.ID)
 }
@@ -105,7 +105,7 @@ func ExampleClient_UpdateSettings() {
 	off := false
 	s, err := client().UpdateSettings(context.Background(), &memory.UpdateSettingsParams{Sensitive: &off})
 	if err != nil {
-		log.Fatal(err)
+		panic(err)
 	}
 	fmt.Println("deleted", s.DeletedSensitive, "sensitive memories")
 }
@@ -116,7 +116,7 @@ func ExampleClient_RestoreMemory() {
 	mem := client()
 	forgotten, err := mem.ListForgotten(ctx)
 	if err != nil {
-		log.Fatal(err)
+		panic(err)
 	}
 	for _, f := range forgotten.Forgotten {
 		m, err := mem.RestoreMemory(ctx, f.Ref())
@@ -125,7 +125,7 @@ func ExampleClient_RestoreMemory() {
 			continue
 		}
 		if err != nil {
-			log.Fatal(err)
+			panic(err)
 		}
 		fmt.Println("restored", m.Name)
 	}
@@ -136,11 +136,11 @@ func ExampleClient_RestoreMemory() {
 func ExampleClient_ExportMemory() {
 	e, err := client().ExportMemory(context.Background())
 	if err != nil {
-		log.Fatal(err)
+		panic(err)
 	}
 	defer func() {
 		if err := e.Close(); err != nil {
-			log.Print(err)
+			slog.Error("close the export", "err", err)
 		}
 	}()
 	name := e.FileName()
@@ -149,7 +149,7 @@ func ExampleClient_ExportMemory() {
 	}
 	f, err := os.Create(name)
 	if err != nil {
-		log.Fatal(err)
+		panic(err)
 	}
 	_, err = io.Copy(f, e)
 	if closeErr := f.Close(); err == nil {
@@ -157,12 +157,12 @@ func ExampleClient_ExportMemory() {
 	}
 	if err != nil {
 		if removeErr := os.Remove(name); removeErr != nil {
-			log.Print(removeErr)
+			slog.Error("remove the partial file", "err", removeErr)
 		}
 		if errors.Is(err, memory.ErrExportIncomplete) {
-			log.Fatal("the export did not finish; try again")
+			panic("the export did not finish; try again")
 		}
-		log.Fatal(err)
+		panic(err)
 	}
 	fmt.Println("wrote", name)
 }
@@ -174,13 +174,13 @@ func ExampleClient_ImportMemory() {
 	mem := client()
 	list, err := mem.ListMemories(ctx)
 	if err != nil {
-		log.Fatal(err)
+		panic(err)
 	}
 	fmt.Println("Ask your other assistant:", list.ImportPrompt)
 	answer := "Preference: Keep lists under five things.\nPerson: Mia is my sister."
 	im, err := mem.ImportMemory(ctx, &memory.ImportMemoryParams{Text: answer})
 	if err != nil {
-		log.Fatal(err)
+		panic(err)
 	}
 	fmt.Println("saved", len(im.Added), "memories;", im.Skipped, "were remembered already")
 }
@@ -190,7 +190,7 @@ func ExampleClient_ImportMemory() {
 func ExampleClient_UpdateSettings_askFirst() {
 	s, err := client().UpdateSettings(context.Background(), &memory.UpdateSettingsParams{Review: memory.ReviewAsk})
 	if err != nil {
-		log.Fatal(err)
+		panic(err)
 	}
 	fmt.Println("review:", s.Review)
 }
@@ -199,7 +199,7 @@ func ExampleClient_UpdateSettings_askFirst() {
 func ExampleClient_ListRuns() {
 	runs, err := client().ListRuns(context.Background())
 	if err != nil {
-		log.Fatal(err)
+		panic(err)
 	}
 	for _, r := range runs.Runs {
 		if r.State == memory.RunRunning {
@@ -217,7 +217,7 @@ func ExampleClient_ListRuns() {
 func ExampleClient_GetRun() {
 	r, err := client().GetRun(context.Background(), "ses_01JA5C2M8Q4R6T8V0W2X4Y6Z8A")
 	if err != nil {
-		log.Fatal(err)
+		panic(err)
 	}
 	for _, ch := range r.Changes {
 		fmt.Printf("%s %s (%s)\n", ch.Kind, ch.Name, ch.State)
@@ -241,7 +241,7 @@ func ExampleClient_ApplyRun() {
 		return
 	case err != nil:
 		if r, err = mem.GetRun(ctx, run); err != nil {
-			log.Fatal(err)
+			panic(err)
 		}
 	}
 	fmt.Println("the run is", r.State)
@@ -255,7 +255,7 @@ func ExampleClient_DeclineRun() {
 		return
 	}
 	if err != nil {
-		log.Fatal(err)
+		panic(err)
 	}
 	fmt.Println("the run is", r.State)
 }
@@ -265,7 +265,7 @@ func ExampleClient_DeclineRun() {
 func ExampleClient_UndoRun() {
 	u, err := client().UndoRun(context.Background(), "ses_01JA5C2M8Q4R6T8V0W2X4Y6Z8A", nil)
 	if err != nil {
-		log.Fatal(err)
+		panic(err)
 	}
 	fmt.Println("the run is", u.State)
 	for _, id := range u.MovedOn {

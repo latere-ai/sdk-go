@@ -290,7 +290,7 @@ func (c *Client) link(resp *http.Response, path string, followed bool) (string, 
 		return "", fmt.Errorf("storage: the link the API answered for %s is not an address", path)
 	}
 	u = base.ResolveReference(u)
-	if followed && u.Scheme != "https" && !(u.Scheme == "http" && base.Scheme == "http") {
+	if followed && u.Scheme != "https" && (u.Scheme != "http" || base.Scheme != "http") {
 		return "", fmt.Errorf("storage: the link the API answered for %s is not an https address", path)
 	}
 	return u.String(), nil

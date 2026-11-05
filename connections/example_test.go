@@ -6,7 +6,6 @@ package connections_test
 import (
 	"context"
 	"fmt"
-	"log"
 
 	"latere.ai/x/sdk-go/connections"
 	"latere.ai/x/sdk-go/latere"
@@ -15,7 +14,7 @@ import (
 func client() *connections.Client {
 	cfg, err := latere.NewConfig() // the key in LATERE_KEY
 	if err != nil {
-		log.Fatal(err)
+		panic(err)
 	}
 	return connections.New(cfg)
 }
@@ -29,7 +28,7 @@ func ExampleClient_CreateConnection() {
 		ReturnTo:  "https://platform.latere.ai/console/connections",
 	})
 	if err != nil {
-		log.Fatal(err)
+		panic(err)
 	}
 	if r.AuthorizationURL == "" {
 		fmt.Println("connected:", r.Connection.Name)
@@ -44,7 +43,7 @@ func ExampleClient_ConfirmConnection() {
 	code := "the code from the return page's query"
 	c, err := client().ConfirmConnection(context.Background(), "con_01M34G2JF01B91B8399CD1G6YP", code)
 	if err != nil {
-		log.Fatal(err)
+		panic(err)
 	}
 	fmt.Println(c.Name, c.State)
 }
@@ -56,7 +55,7 @@ func ExampleClient_CreateConnection_key() {
 		Credential: &connections.Credential{Value: "the key the service issued"},
 	})
 	if err != nil {
-		log.Fatal(err)
+		panic(err)
 	}
 	fmt.Println(r.Connection.Name, r.Connection.State)
 }
@@ -67,7 +66,7 @@ func ExampleClient_ListConnections() {
 	params := &connections.ListConnectionsParams{State: connections.StateNeedsReconnect}
 	for c, err := range client().ListConnections(ctx, params) {
 		if err != nil {
-			log.Fatal(err)
+			panic(err)
 		}
 		fmt.Println(c.Name, c.Reason)
 	}
@@ -85,7 +84,7 @@ func ExampleClient_CreateConnector() {
 		},
 	})
 	if err != nil {
-		log.Fatal(err)
+		panic(err)
 	}
 	fmt.Println(s.Name, s.ID)
 }

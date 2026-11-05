@@ -6,7 +6,6 @@ package account_test
 import (
 	"context"
 	"fmt"
-	"log"
 	"maps"
 
 	"latere.ai/x/sdk-go/account"
@@ -16,7 +15,7 @@ import (
 func client() *account.Client {
 	cfg, err := latere.NewConfig() // the key in LATERE_KEY
 	if err != nil {
-		log.Fatal(err)
+		panic(err)
 	}
 	return account.New(cfg)
 }
@@ -26,7 +25,7 @@ func client() *account.Client {
 func ExampleClient_GetWallet() {
 	w, err := client().GetWallet(context.Background())
 	if err != nil {
-		log.Fatal(err)
+		panic(err)
 	}
 	switch {
 	case w.State == account.WalletExhausted && !w.LimitResetsAt.IsZero():
@@ -44,7 +43,7 @@ func ExampleClient_GetWallet() {
 func ExampleClient_GetEffortLevels() {
 	levels, err := client().GetEffortLevels(context.Background())
 	if err != nil {
-		log.Fatal(err)
+		panic(err)
 	}
 	for _, l := range levels.Levels {
 		if l.Available {
@@ -59,7 +58,7 @@ func ExampleClient_GetEffortLevels() {
 func ExampleClient_ListDevices() {
 	devices, err := client().ListDevices(context.Background())
 	if err != nil {
-		log.Fatal(err)
+		panic(err)
 	}
 	for _, d := range devices.Items {
 		if d.Status == account.DeviceOnline {
@@ -75,7 +74,7 @@ func ExampleClient_ApplyManagedAgent() {
 	applied, err := client().ApplyManagedAgent(context.Background(), "latere-chat",
 		&account.ApplyManagedAgentParams{TimeZone: "Europe/Berlin"})
 	if err != nil {
-		log.Fatal(err)
+		panic(err)
 	}
 	fmt.Println(applied.ID, applied.Version)
 }
@@ -84,7 +83,7 @@ func ExampleClient_ApplyManagedAgent() {
 func ExampleClient_RenameDevice() {
 	d, err := client().RenameDevice(context.Background(), "dev-q7v3k9m2abcdefgh", "Work laptop")
 	if err != nil {
-		log.Fatal(err)
+		panic(err)
 	}
 	fmt.Println(d.ID, "is now", d.Name)
 }
@@ -93,7 +92,7 @@ func ExampleClient_RenameDevice() {
 // after another program removed it, succeeds too.
 func ExampleClient_RemoveDevice() {
 	if err := client().RemoveDevice(context.Background(), "dev-q7v3k9m2abcdefgh"); err != nil {
-		log.Fatal(err)
+		panic(err)
 	}
 }
 
@@ -103,7 +102,7 @@ func ExampleClient_RemoveDevice() {
 func ExampleClient_GetEnvironmentsContext() {
 	where, err := client().GetEnvironmentsContext(context.Background())
 	if err != nil {
-		log.Fatal(err)
+		panic(err)
 	}
 	labels := map[string]string{account.LabelKind: account.KindDevice}
 	maps.Copy(labels, where.Tenant.Labels)

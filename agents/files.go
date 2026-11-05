@@ -162,7 +162,7 @@ func (c *Client) ReadBlob(ctx context.Context, sessionID, digest string) (*FileR
 		return nil, fmt.Errorf("agents: ReadBlob: %q is not a digest, such as an Attachment's Blob", digest)
 	}
 	req := &latere.Request{Method: http.MethodGet, Path: sessionPath(sessionID, "/blobs/"+url.PathEscape(digest)), Header: acceptAny()}
-	resp, err := c.cfg.Open(ctx, req)
+	resp, err := c.cfg.Open(ctx, req) //nolint:bodyclose // the body belongs to the reader returned, which the caller closes
 	if err != nil {
 		return nil, err
 	}
@@ -194,7 +194,7 @@ func (c *Client) ReadSessionFile(ctx context.Context, sessionID, path string) (*
 		return nil, errors.New("agents: ReadSessionFile: the path is empty")
 	}
 	req := &latere.Request{Method: http.MethodGet, Path: sessionPath(sessionID, "/files"), Query: url.Values{"path": {path}}, Header: acceptAny()}
-	resp, err := c.cfg.Open(ctx, req)
+	resp, err := c.cfg.Open(ctx, req) //nolint:bodyclose // the body belongs to the reader returned, which the caller closes
 	if err != nil {
 		return nil, withSentinel(err, fileCodes)
 	}

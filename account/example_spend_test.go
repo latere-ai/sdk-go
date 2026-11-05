@@ -6,7 +6,6 @@ package account_test
 import (
 	"context"
 	"fmt"
-	"log"
 
 	"latere.ai/x/sdk-go/account"
 	"latere.ai/x/sdk-go/latere"
@@ -17,11 +16,11 @@ import (
 func ExampleClient_GetSpend() {
 	cfg, err := latere.NewConfig()
 	if err != nil {
-		log.Fatal(err)
+		panic(err)
 	}
 	s, err := account.New(cfg).GetSpend(context.Background(), &account.GetSpendParams{Days: 7})
 	if err != nil {
-		log.Fatal(err)
+		panic(err)
 	}
 	for _, d := range s.Days {
 		fmt.Printf("%s  you $%.2f  routines $%.2f\n", d.Date.Format("Mon 2 Jan"), float64(d.PersonLedMicroUSD)/1e6, float64(d.ProactiveMicroUSD)/1e6)

@@ -8,6 +8,7 @@ import (
 	"crypto/rand"
 	"fmt"
 	"maps"
+	"slices"
 )
 
 // hpkeKey is an HPKE key pair, the private key as SerializePrivateKey
@@ -68,8 +69,8 @@ func (s *suite) nodeKey(pathSecret []byte) (hpkeKey, error) {
 func (t *ratchetTree) setPathParentHashes(s *suite, leaf uint32, fdp []uint32) []byte {
 	x := leafNodeIndex(leaf)
 	var ph []byte
-	for i := len(fdp) - 1; i >= 0; i-- {
-		p := fdp[i]
+	for _, p := range slices.Backward(fdp) {
+
 		pn := t.nodes[p].parent
 		pn.parentHash = ph
 		ph = s.parentHash(pn, t.hashSubtree(s, copathChild(p, x), nil, nil))

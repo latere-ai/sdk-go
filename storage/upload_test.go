@@ -331,11 +331,11 @@ func TestUploadFileRefusesPartsThatDoNotFitTheFile(t *testing.T) {
 	var aborted, parts atomic.Int32
 	var srv *httptest.Server
 	srv = httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		switch {
-		case r.Method == http.MethodPost:
+		switch r.Method {
+		case http.MethodPost:
 			w.WriteHeader(http.StatusCreated)
 			fmt.Fprintf(w, `{"id":"up_1","part_size":1024,"part_count":1,"part_urls":["%s/part/1"]}`, srv.URL)
-		case r.Method == http.MethodDelete:
+		case http.MethodDelete:
 			aborted.Add(1)
 			w.WriteHeader(http.StatusNoContent)
 		default:

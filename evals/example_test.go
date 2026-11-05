@@ -7,7 +7,6 @@ import (
 	"context"
 	"errors"
 	"fmt"
-	"log"
 
 	"latere.ai/x/sdk-go/evals"
 	"latere.ai/x/sdk-go/latere"
@@ -16,7 +15,7 @@ import (
 func client() *evals.Client {
 	cfg, err := latere.NewConfig() // the key in LATERE_KEY
 	if err != nil {
-		log.Fatal(err)
+		panic(err)
 	}
 	return evals.New(cfg)
 }
@@ -26,7 +25,7 @@ func client() *evals.Client {
 func ExampleClient_ListSuites() {
 	for s, err := range client().ListSuites(context.Background(), nil) {
 		if err != nil {
-			log.Fatal(err)
+			panic(err)
 		}
 		fmt.Println(s.Ref(), len(s.Tasks), "tasks")
 	}
@@ -39,12 +38,12 @@ func ExampleClient_GetSuite() {
 	ev := client()
 	s, err := ev.GetSuite(ctx, "fix-flaky-tests")
 	if err != nil {
-		log.Fatal(err)
+		panic(err)
 	}
 	for _, digest := range s.Metrics {
 		m, err := ev.GetMetric(ctx, digest)
 		if err != nil {
-			log.Fatal(err)
+			panic(err)
 		}
 		fmt.Println(m.Name, m.Type, m.Direction, digest == s.PrimaryMetric)
 	}
@@ -54,7 +53,7 @@ func ExampleClient_GetSuite() {
 func ExampleClient_ListSuiteVersions() {
 	for s, err := range client().ListSuiteVersions(context.Background(), "fix-flaky-tests", nil) {
 		if err != nil {
-			log.Fatal(err)
+			panic(err)
 		}
 		fmt.Println(s.Digest, s.CreatedAt.Format("2006-01-02"), s.Current)
 	}
@@ -65,7 +64,7 @@ func ExampleClient_ListMetrics() {
 	params := &evals.ListMetricsParams{Type: evals.MetricScore, AllVersions: true}
 	for m, err := range client().ListMetrics(context.Background(), params) {
 		if err != nil {
-			log.Fatal(err)
+			panic(err)
 		}
 		fmt.Println(m.Ref(), m.Range, m.Unit)
 	}
@@ -79,7 +78,7 @@ func ExampleClient_GetMetric() {
 		return
 	}
 	if err != nil {
-		log.Fatal(err)
+		panic(err)
 	}
 	fmt.Println(m.Name, m.Description)
 }
@@ -88,7 +87,7 @@ func ExampleClient_GetMetric() {
 func ExampleClient_ListGraders() {
 	for g, err := range client().ListGraders(context.Background(), &evals.ListGradersParams{Kind: evals.GraderModelJudge}) {
 		if err != nil {
-			log.Fatal(err)
+			panic(err)
 		}
 		fmt.Println(g.Name, g.ModelJudge.Model)
 	}
@@ -100,11 +99,11 @@ func ExampleClient_ListTasks() {
 	ev := client()
 	s, err := ev.GetSuite(ctx, "fix-flaky-tests")
 	if err != nil {
-		log.Fatal(err)
+		panic(err)
 	}
 	for task, err := range ev.ListTasks(ctx, &evals.ListTasksParams{Suite: s.Digest}) {
 		if err != nil {
-			log.Fatal(err)
+			panic(err)
 		}
 		fmt.Println(task.Name, task.Timeout, len(task.Checks), "checks")
 	}
@@ -114,7 +113,7 @@ func ExampleClient_ListTasks() {
 func ExampleClient_GetTask() {
 	task, err := client().GetTask(context.Background(), "fix_flaky_login")
 	if err != nil {
-		log.Fatal(err)
+		panic(err)
 	}
 	if w := task.Workspace; w != nil && w.Kind == evals.WorkspaceRepository {
 		fmt.Println("starts from", w.Repository, "at", w.Commit)
@@ -126,7 +125,7 @@ func ExampleClient_GetTask() {
 func ExampleClient_ListCandidates() {
 	for c, err := range client().ListCandidates(context.Background(), &evals.ListCandidatesParams{Kind: evals.CandidateAgent}) {
 		if err != nil {
-			log.Fatal(err)
+			panic(err)
 		}
 		fmt.Println(c.Name, c.Agent.Model)
 	}
@@ -136,7 +135,7 @@ func ExampleClient_ListCandidates() {
 func ExampleClient_GetCandidate() {
 	c, err := client().GetCandidate(context.Background(), "acme-harness-1-4")
 	if err != nil {
-		log.Fatal(err)
+		panic(err)
 	}
 	switch c.Kind {
 	case evals.CandidateAgent:
@@ -153,7 +152,7 @@ func ExampleClient_ListExperiments() {
 	params := &evals.ListExperimentsParams{State: evals.ExperimentRunning}
 	for e, err := range client().ListExperiments(context.Background(), params) {
 		if err != nil {
-			log.Fatal(err)
+			panic(err)
 		}
 		all := 0
 		for _, n := range e.Progress.Trials {
@@ -169,7 +168,7 @@ func ExampleClient_ListExperimentsPage() {
 	params := &evals.ListExperimentsParams{Suite: "fix-flaky-tests", Limit: 20}
 	page, err := client().ListExperimentsPage(context.Background(), params)
 	if err != nil {
-		log.Fatal(err)
+		panic(err)
 	}
 	for _, e := range page.Items {
 		fmt.Println(e.ID, e.State)
@@ -183,7 +182,7 @@ func ExampleClient_ListExperimentsPage() {
 func ExampleClient_GetExperiment() {
 	e, err := client().GetExperiment(context.Background(), "exp_01jb2c3d4e5f6g7h8j9k0m1n2p")
 	if err != nil {
-		log.Fatal(err)
+		panic(err)
 	}
 	fmt.Println(e.State, e.Progress.Cells)
 	if b := e.Budget; b.SpentMicroUSD != nil && b.CapMicroUSD != nil {
@@ -197,7 +196,7 @@ func ExampleClient_ListCells() {
 	for _, state := range []evals.CellState{evals.CellBlocked, evals.CellOverBudget} {
 		for cell, err := range client().ListCells(ctx, "exp_01jb2c3d4e5f6g7h8j9k0m1n2p", &evals.ListCellsParams{State: state}) {
 			if err != nil {
-				log.Fatal(err)
+				panic(err)
 			}
 			fmt.Println(cell.Task, cell.Candidate, cell.State, cell.ParkedReason)
 		}
@@ -210,7 +209,7 @@ func ExampleClient_ListExperimentComparisons() {
 	params := &evals.ListExperimentComparisonsParams{Final: &final}
 	for c, err := range client().ListExperimentComparisons(context.Background(), "exp_01jb2c3d4e5f6g7h8j9k0m1n2p", params) {
 		if err != nil {
-			log.Fatal(err)
+			panic(err)
 		}
 		fmt.Println(c.Candidate, "against", c.ReferenceCandidate+c.Baseline, "confounds:", c.Confounds)
 	}
@@ -222,22 +221,22 @@ func ExampleClient_StreamEvents() {
 	for ev, err := range client().StreamEvents(context.Background(), "exp_01jb2c3d4e5f6g7h8j9k0m1n2p", nil) {
 		var refused *evals.StreamError
 		if errors.As(err, &refused) && refused.Retryable() {
-			log.Fatal("the stream ended for now; open it again later: ", err)
+			panic(fmt.Sprint("the stream ended for now; open it again later: ", err))
 		}
 		if err != nil {
-			log.Fatal(err)
+			panic(err)
 		}
 		switch ev.Type {
 		case evals.EventCell:
 			var cell evals.CellChange
 			if err := ev.Decode(&cell); err != nil {
-				log.Fatal(err)
+				panic(err)
 			}
 			fmt.Println("cell", cell.ID, cell.State, cell.ParkedReason)
 		case evals.EventComparison:
 			var c evals.ComparisonChange
 			if err := ev.Decode(&c); err != nil {
-				log.Fatal(err)
+				panic(err)
 			}
 			if c.Final {
 				fmt.Println("comparison", c.ID, "is final")
@@ -263,7 +262,7 @@ func ExampleClient_GetGrader() {
 		return
 	}
 	if err != nil {
-		log.Fatal(err)
+		panic(err)
 	}
 	fmt.Println(g.Ref(), g.Kind, g.Produces)
 }
@@ -272,7 +271,7 @@ func ExampleClient_GetGrader() {
 func ExampleClient_ListMetricVersions() {
 	for m, err := range client().ListMetricVersions(context.Background(), "pass_rate", nil) {
 		if err != nil {
-			log.Fatal(err)
+			panic(err)
 		}
 		fmt.Println(m.Ref(), m.Current)
 	}
@@ -282,7 +281,7 @@ func ExampleClient_ListMetricVersions() {
 func ExampleClient_ListGraderVersions() {
 	for g, err := range client().ListGraderVersions(context.Background(), "tests-pass", nil) {
 		if err != nil {
-			log.Fatal(err)
+			panic(err)
 		}
 		fmt.Println(g.Ref(), g.Kind, g.Current)
 	}
@@ -292,7 +291,7 @@ func ExampleClient_ListGraderVersions() {
 func ExampleClient_ListTaskVersions() {
 	for task, err := range client().ListTaskVersions(context.Background(), "fix-the-flaky-test", nil) {
 		if err != nil {
-			log.Fatal(err)
+			panic(err)
 		}
 		fmt.Println(task.Ref(), task.CreatedAt.Format("2006-01-02"))
 	}
@@ -302,7 +301,7 @@ func ExampleClient_ListTaskVersions() {
 func ExampleClient_ListCandidateVersions() {
 	for c, err := range client().ListCandidateVersions(context.Background(), "harness", &evals.ListVersionsParams{Limit: 10}) {
 		if err != nil {
-			log.Fatal(err)
+			panic(err)
 		}
 		fmt.Println(c.Ref(), c.Kind)
 	}

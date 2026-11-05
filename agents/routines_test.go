@@ -90,8 +90,8 @@ func (tp *topos) manifest(name string) map[string]any {
 	tp.t.Helper()
 	tp.mu.Lock()
 	defer tp.mu.Unlock()
-	for i := len(tp.calls) - 1; i >= 0; i-- {
-		if c := tp.calls[i]; c.Method == http.MethodPut && c.Path == triggersPath+"/"+name {
+	for _, c := range slices.Backward(tp.calls) {
+		if c.Method == http.MethodPut && c.Path == triggersPath+"/"+name {
 			var m map[string]any
 			if err := json.Unmarshal(c.Body, &m); err != nil {
 				tp.t.Fatal(err)

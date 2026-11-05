@@ -4,7 +4,8 @@
 package evals_test
 
 import (
-	"encoding/json"
+	"encoding/json/jsontext"
+	"encoding/json/v2"
 	"errors"
 	"io"
 	"net/http"
@@ -412,8 +413,8 @@ func TestEveryListIterates(t *testing.T) {
 	}
 	c, f := newClient(t, answers)
 	ctx := t.Context()
-	raws := map[string]json.RawMessage{}
-	count := func(name string, raw json.RawMessage, err error) {
+	raws := map[string]jsontext.Value{}
+	count := func(name string, raw jsontext.Value, err error) {
 		if err != nil {
 			t.Errorf("%s: %v", name, err)
 		}

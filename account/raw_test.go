@@ -4,7 +4,8 @@
 package account_test
 
 import (
-	"encoding/json"
+	"encoding/json/jsontext"
+	"encoding/json/v2"
 	"testing"
 
 	"latere.ai/x/sdk-go/account"
@@ -14,7 +15,7 @@ import (
 // field the package does not model included.
 func TestEveryResourceKeepsItsJSON(t *testing.T) {
 	for name, v := range map[string]interface {
-		RawJSON() json.RawMessage
+		RawJSON() jsontext.Value
 	}{
 		"applied agent": &account.AppliedAgent{},
 		"effort levels": &account.EffortLevels{},
@@ -61,7 +62,7 @@ func TestTheWalletKeepsTheJSONTheAPIAnswered(t *testing.T) {
 // JSON of the wrong shape is refused, and nothing is kept.
 func TestAResourceRefusesJSONOfTheWrongShape(t *testing.T) {
 	for _, v := range []interface {
-		RawJSON() json.RawMessage
+		RawJSON() jsontext.Value
 	}{
 		&account.AppliedAgent{},
 		&account.EffortLevels{},

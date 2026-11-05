@@ -5,7 +5,8 @@ package agents
 
 import (
 	"context"
-	"encoding/json"
+	"encoding/json/jsontext"
+	"encoding/json/v2"
 	"net/http"
 	"net/url"
 
@@ -66,13 +67,13 @@ type SessionSummary struct {
 	// Agents is how many distinct agents the counted sessions belong to.
 	Agents int `json:"agents"`
 
-	raw json.RawMessage
+	raw jsontext.Value
 }
 
 // RawJSON returns the JSON the API answered for the summary, with every
 // field, including those this package does not model; nil for a
 // SessionSummary the program built itself.
-func (s *SessionSummary) RawJSON() json.RawMessage { return s.raw }
+func (s *SessionSummary) RawJSON() jsontext.Value { return s.raw }
 
 // UnmarshalJSON decodes the summary and keeps the JSON for RawJSON.
 func (s *SessionSummary) UnmarshalJSON(b []byte) error {

@@ -4,7 +4,7 @@
 package account_test
 
 import (
-	"encoding/json"
+	"encoding/json/v2"
 	"errors"
 	"io"
 	"net/http"
@@ -46,7 +46,7 @@ func TestRenameDevice(t *testing.T) {
 	c := deviceAPI(t, 0, func(w http.ResponseWriter, r *http.Request) {
 		method, path = r.Method, r.URL.EscapedPath()
 		body = nil
-		if err := json.NewDecoder(r.Body).Decode(&body); err != nil {
+		if err := json.UnmarshalRead(r.Body, &body); err != nil {
 			t.Error(err)
 		}
 		switch body["name"] {

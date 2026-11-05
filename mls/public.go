@@ -77,7 +77,7 @@ func NewPublicGroup(groupInfoMessage []byte, opts JoinOptions, cfg Config) (*Pub
 	if gi.context.version != protocolVersionMLS10 {
 		return nil, errors.New("mls: group info is for another protocol version")
 	}
-	p := &PublicGroup{cfg: cfg, publicState: publicState{s: s, ctx: gi.context}}
+	p := &PublicGroup{cfg: cfg, s: s, ctx: gi.context}
 	tree, err := p.joinTree(&cfg, gi, opts.RatchetTree)
 	if err != nil {
 		return nil, err

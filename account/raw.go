@@ -3,9 +3,11 @@
 
 package account
 
-import "encoding/json"
+import (
+	"encoding/json/jsontext"
+)
 
 // keep returns a copy of b, which a decoder may reuse after it returns.
-func keep(b []byte) json.RawMessage {
-	return append(json.RawMessage(nil), b...)
+func keep(b []byte) jsontext.Value {
+	return append(jsontext.Value(nil), b...)
 }

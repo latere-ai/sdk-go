@@ -4,7 +4,8 @@
 package agents
 
 import (
-	"encoding/json"
+	"encoding/json/jsontext"
+	"encoding/json/v2"
 	"time"
 )
 
@@ -101,21 +102,21 @@ type Session struct {
 	// LastSeq is the sequence of the newest event in the session's log.
 	LastSeq int64 `json:"last_seq"`
 	// Model is the model the next turn runs on, when the session names one.
-	Model *Model `json:"model,omitempty"`
+	Model *Model `json:"model,omitzero"`
 	// Machine is where the session's commands run, when it has a machine.
-	Machine *Machine `json:"machine,omitempty"`
+	Machine *Machine `json:"machine,omitzero"`
 	// Attended reports whether a person follows the session, so it may stop
 	// to ask them things.
-	Attended bool `json:"attended,omitempty"`
+	Attended bool `json:"attended,omitzero"`
 	// Policy is the session's approval policy: its mode, and the lists and
 	// thresholds its tool calls are decided by. Nil for a session that
 	// leaves them to the agent, as one on a person's own computer does.
-	Policy *Policy `json:"policy,omitempty"`
+	Policy *Policy `json:"policy,omitzero"`
 	// Metadata holds the caller's own labels, set at creation.
 	Metadata map[string]string `json:"metadata,omitempty"`
 	// Parent is the session and sequence this one was forked from; nil for
 	// a session no fork made.
-	Parent *Parent `json:"parent,omitempty"`
+	Parent *Parent `json:"parent,omitzero"`
 	// Root is the id of the session at the top of this one's fork tree;
 	// empty for a session no fork made.
 	Root string `json:"root,omitempty"`
@@ -124,25 +125,25 @@ type Session struct {
 	// Wake is the session's pending wake: when its agent will look again,
 	// and what for. Nil when it has none; a session has at most one, and
 	// loses it when the wake fires or is canceled, or the session ends.
-	Wake *PendingWake `json:"wake,omitempty"`
+	Wake *PendingWake `json:"wake,omitzero"`
 	// Outcome is whether the latest turn a trigger or a wake began brought
 	// anything to the person; empty before the first such turn ends.
 	Outcome TurnOutcome `json:"outcome,omitempty"`
 	// Notice is what the agent last brought to the person with its notify
 	// tool; nil before its first call.
-	Notice *Notice `json:"notice,omitempty"`
+	Notice *Notice `json:"notice,omitzero"`
 	// Budget is what the session has spent.
-	Budget *Budget `json:"budget,omitempty"`
+	Budget *Budget `json:"budget,omitzero"`
 	// ContextReport is how full the session's context is, and what fills
 	// it: the Context of the latest model request of the session's own
 	// conversation that records one. Nil before any. A subagent's
 	// requests and a title's leave it as it was.
-	ContextReport *ContextReport `json:"context_report,omitempty"`
+	ContextReport *ContextReport `json:"context_report,omitzero"`
 	// Folder is the session's folder of files in Storage, where it keeps
 	// the files its messages carried and those its answers showed or
 	// linked, each at the Ref its record names. Nil for a session that
 	// keeps them as blobs alone, and until it stored its first file there.
-	Folder *Folder `json:"folder,omitempty"`
+	Folder *Folder `json:"folder,omitzero"`
 	// CreatedAt is when the session was created.
 	CreatedAt time.Time `json:"created_at"`
 	// UpdatedAt is when the session last changed.
@@ -152,13 +153,13 @@ type Session struct {
 	// ArchivedAt is when the session was archived; nil when it is not.
 	ArchivedAt *time.Time `json:"archived_at,omitempty"`
 
-	raw json.RawMessage
+	raw jsontext.Value
 }
 
 // RawJSON returns the JSON the API answered for the session, with every
 // field, including those this package does not model; nil for a Session the
 // program built itself.
-func (s *Session) RawJSON() json.RawMessage { return s.raw }
+func (s *Session) RawJSON() jsontext.Value { return s.raw }
 
 // UnmarshalJSON decodes the session and keeps the JSON for RawJSON.
 func (s *Session) UnmarshalJSON(b []byte) error {
@@ -387,7 +388,7 @@ type Budget struct {
 	// CarriedMicroUSD is the part of SpentMicroUSD a fork copied from the
 	// session it was forked from, fixed when it was forked; zero for a
 	// session no fork made.
-	CarriedMicroUSD int64 `json:"carried_cost_usd_micro,omitempty"`
+	CarriedMicroUSD int64 `json:"carried_cost_usd_micro,omitzero"`
 }
 
 // OwnMicroUSD returns what the session's own work has cost, in

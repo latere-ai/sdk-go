@@ -5,7 +5,8 @@ package storage
 
 import (
 	"context"
-	"encoding/json"
+	"encoding/json/jsontext"
+	"encoding/json/v2"
 	"errors"
 	"fmt"
 	"io"
@@ -39,12 +40,12 @@ type Upload struct {
 	// opened.
 	ExpiresAt time.Time `json:"expires_at"`
 
-	raw json.RawMessage
+	raw jsontext.Value
 }
 
 // RawJSON returns the JSON the API answered for the upload, including any
 // field Upload does not model.
-func (u *Upload) RawJSON() json.RawMessage { return u.raw }
+func (u *Upload) RawJSON() jsontext.Value { return u.raw }
 
 // UnmarshalJSON decodes the upload and keeps the JSON for RawJSON.
 func (u *Upload) UnmarshalJSON(b []byte) error {

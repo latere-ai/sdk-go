@@ -4,7 +4,8 @@
 package apps_test
 
 import (
-	"encoding/json"
+	"encoding/json/jsontext"
+	"encoding/json/v2"
 	"errors"
 	"fmt"
 	"io"
@@ -429,7 +430,7 @@ func TestMalformedAnswersAreErrors(t *testing.T) {
 // Every model keeps the JSON it was decoded from, and a model a program
 // builds has none.
 func TestRawJSON(t *testing.T) {
-	for name, m := range map[string]interface{ RawJSON() json.RawMessage }{
+	for name, m := range map[string]interface{ RawJSON() jsontext.Value }{
 		"App": &apps.App{}, "Deploy": &apps.Deploy{}, "LogLine": &apps.LogLine{}, "LogEnd": &apps.LogEnd{},
 		"Release": &apps.Release{}, "ReleaseDetail": &apps.ReleaseDetail{}, "Access": &apps.Access{}, "Invites": &apps.Invites{},
 	} {

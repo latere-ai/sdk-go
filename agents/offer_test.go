@@ -4,7 +4,7 @@
 package agents_test
 
 import (
-	"encoding/json"
+	"encoding/json/jsontext"
 	"reflect"
 	"testing"
 	"time"
@@ -17,7 +17,7 @@ import (
 // a schedule of another shape reads as none; a list, another tool and an
 // input that does not decode read as no offer.
 func TestAnOfferIsReadFromItsCall(t *testing.T) {
-	use := &agents.ToolUse{ToolUseID: "toolu_1", Name: agents.ToolTrigger, Verdict: agents.VerdictAsk, Input: json.RawMessage(
+	use := &agents.ToolUse{ToolUseID: "toolu_1", Name: agents.ToolTrigger, Verdict: agents.VerdictAsk, Input: jsontext.Value(
 		`{"action":"propose","name":"Weekly sign-ups","ask":"Count the sign-ups.","why":"Every Monday at 9:00, Berlin time, I count them.","schedule":"0 9 * * 1","timeZone":"Europe/Berlin"}`)}
 	o, err := use.Offer()
 	if err != nil {
@@ -28,15 +28,15 @@ func TestAnOfferIsReadFromItsCall(t *testing.T) {
 	if !reflect.DeepEqual(o, want) {
 		t.Fatalf("the offer is %+v, want %+v", o, want)
 	}
-	use.Input = json.RawMessage(`{"action":"propose","name":"Often","ask":"Look.","why":"Often.","schedule":"*/5 * * * *","timeZone":"UTC"}`)
+	use.Input = jsontext.Value(`{"action":"propose","name":"Often","ask":"Look.","why":"Often.","schedule":"*/5 * * * *","timeZone":"UTC"}`)
 	if o, err := use.Offer(); err != nil || o.Schedule != nil {
 		t.Fatalf("a schedule no routine runs on read as %+v, %v", o, err)
 	}
 	for name, u := range map[string]*agents.ToolUse{
-		"a list":         {ToolUseID: "toolu_2", Name: agents.ToolTrigger, Input: json.RawMessage(`{"action":"list"}`)},
-		"a pause":        {ToolUseID: "toolu_5", Name: agents.ToolTrigger, Verdict: agents.VerdictAllow, Input: json.RawMessage(`{"action":"pause","id":"trg_1","why":"It reached 79 EUR."}`)},
-		"another tool":   {ToolUseID: "toolu_3", Name: "question", Input: json.RawMessage(`{}`)},
-		"no JSON object": {ToolUseID: "toolu_4", Name: agents.ToolTrigger, Input: json.RawMessage(`[]`)},
+		"a list":         {ToolUseID: "toolu_2", Name: agents.ToolTrigger, Input: jsontext.Value(`{"action":"list"}`)},
+		"a pause":        {ToolUseID: "toolu_5", Name: agents.ToolTrigger, Verdict: agents.VerdictAllow, Input: jsontext.Value(`{"action":"pause","id":"trg_1","why":"It reached 79 EUR."}`)},
+		"another tool":   {ToolUseID: "toolu_3", Name: "question", Input: jsontext.Value(`{}`)},
+		"no JSON object": {ToolUseID: "toolu_4", Name: agents.ToolTrigger, Input: jsontext.Value(`[]`)},
 	} {
 		if o, err := u.Offer(); err == nil {
 			t.Errorf("%s read as the offer %+v", name, o)
@@ -80,7 +80,7 @@ func TestEveryHeldCallReadsAsItsOffer(t *testing.T) {
 			agents.Offer{Action: agents.OfferDelete, TriggerID: "trg_1"},
 		},
 	} {
-		use := &agents.ToolUse{ToolUseID: "toolu_1", Name: agents.ToolTrigger, Verdict: agents.VerdictAsk, Input: json.RawMessage(c.input)}
+		use := &agents.ToolUse{ToolUseID: "toolu_1", Name: agents.ToolTrigger, Verdict: agents.VerdictAsk, Input: jsontext.Value(c.input)}
 		got, err := use.Offer()
 		if err != nil {
 			t.Errorf("%s: %v", name, err)
@@ -98,7 +98,7 @@ func TestEveryHeldCallReadsAsItsOffer(t *testing.T) {
 // does not wait, a cancel, and an input whose time does not parse read as
 // none.
 func TestAHeldWakeIsAnOffer(t *testing.T) {
-	use := &agents.ToolUse{ToolUseID: "toolu_9", Name: agents.ToolWake, Verdict: agents.VerdictAsk, Input: json.RawMessage(
+	use := &agents.ToolUse{ToolUseID: "toolu_9", Name: agents.ToolWake, Verdict: agents.VerdictAsk, Input: jsontext.Value(
 		`{"action":"set","at":"2026-10-24T09:00:00+02:00","title":"Whether the refund arrived","note":"Look for the refund in the inbox."}`)}
 	o, err := use.Offer()
 	if err != nil {
@@ -109,17 +109,17 @@ func TestAHeldWakeIsAnOffer(t *testing.T) {
 		o.Name != "Whether the refund arrived" || o.Note != "Look for the refund in the inbox." || o.TriggerID != "" {
 		t.Errorf("read the wake as %+v", o)
 	}
-	use.Input = json.RawMessage(`{"action":"set","after":"36h","title":"Whether the refund arrived","note":"Look again."}`)
+	use.Input = jsontext.Value(`{"action":"set","after":"36h","title":"Whether the refund arrived","note":"Look again."}`)
 	if o, err := use.Offer(); err != nil || o.At != nil || o.After != 36*time.Hour {
 		t.Errorf("a wake after a while read as %+v, %v", o, err)
 	}
 	for name, u := range map[string]*agents.ToolUse{
-		"a wake that runs at once": {ToolUseID: "toolu_2", Name: agents.ToolWake, Verdict: agents.VerdictAllow, Input: json.RawMessage(`{"action":"set","after":"2h","title":"t","note":"n"}`)},
-		"a cancel":                 {ToolUseID: "toolu_3", Name: agents.ToolWake, Verdict: agents.VerdictAsk, Input: json.RawMessage(`{"action":"cancel"}`)},
-		"a time that is none":      {ToolUseID: "toolu_4", Name: agents.ToolWake, Verdict: agents.VerdictAsk, Input: json.RawMessage(`{"action":"set","at":"tomorrow","title":"t","note":"n"}`)},
-		"a while that is none":     {ToolUseID: "toolu_5", Name: agents.ToolWake, Verdict: agents.VerdictAsk, Input: json.RawMessage(`{"action":"set","after":"a day","title":"t","note":"n"}`)},
-		"no JSON object":           {ToolUseID: "toolu_6", Name: agents.ToolWake, Verdict: agents.VerdictAsk, Input: json.RawMessage(`"set"`)},
-		"the notify tool":          {ToolUseID: "toolu_7", Name: agents.ToolNotify, Verdict: agents.VerdictAllow, Input: json.RawMessage(`{"title":"The refund arrived."}`)},
+		"a wake that runs at once": {ToolUseID: "toolu_2", Name: agents.ToolWake, Verdict: agents.VerdictAllow, Input: jsontext.Value(`{"action":"set","after":"2h","title":"t","note":"n"}`)},
+		"a cancel":                 {ToolUseID: "toolu_3", Name: agents.ToolWake, Verdict: agents.VerdictAsk, Input: jsontext.Value(`{"action":"cancel"}`)},
+		"a time that is none":      {ToolUseID: "toolu_4", Name: agents.ToolWake, Verdict: agents.VerdictAsk, Input: jsontext.Value(`{"action":"set","at":"tomorrow","title":"t","note":"n"}`)},
+		"a while that is none":     {ToolUseID: "toolu_5", Name: agents.ToolWake, Verdict: agents.VerdictAsk, Input: jsontext.Value(`{"action":"set","after":"a day","title":"t","note":"n"}`)},
+		"no JSON object":           {ToolUseID: "toolu_6", Name: agents.ToolWake, Verdict: agents.VerdictAsk, Input: jsontext.Value(`"set"`)},
+		"the notify tool":          {ToolUseID: "toolu_7", Name: agents.ToolNotify, Verdict: agents.VerdictAllow, Input: jsontext.Value(`{"title":"The refund arrived."}`)},
 	} {
 		if o, err := u.Offer(); err == nil {
 			t.Errorf("%s read as the offer %+v", name, o)

@@ -39,7 +39,8 @@ package connections
 
 import (
 	"context"
-	"encoding/json"
+	"encoding/json/jsontext"
+	"encoding/json/v2"
 	"errors"
 	"iter"
 	"net/http"
@@ -112,13 +113,13 @@ type Connection struct {
 	// before the first.
 	LastUsedAt *time.Time `json:"last_used_at,omitempty"`
 
-	raw json.RawMessage
+	raw jsontext.Value
 }
 
 // RawJSON returns the JSON the API answered for the connection, with every
 // field, including those this package does not model; nil for a Connection
 // the program built itself.
-func (c *Connection) RawJSON() json.RawMessage { return c.raw }
+func (c *Connection) RawJSON() jsontext.Value { return c.raw }
 
 // UnmarshalJSON decodes the connection and keeps the JSON for RawJSON.
 func (c *Connection) UnmarshalJSON(b []byte) error {
@@ -216,20 +217,20 @@ type Connector struct {
 	Owner string `json:"owner,omitempty"`
 	// Vouched is true for an added server an organization's owner or
 	// admin, or Latere, added.
-	Vouched bool `json:"vouched,omitempty"`
+	Vouched bool `json:"vouched,omitzero"`
 	// Disabled is true for an added server that was turned off.
-	Disabled bool `json:"disabled,omitempty"`
+	Disabled bool `json:"disabled,omitzero"`
 	// Connections is how many connections use an added server, answered
 	// to a caller who may change it.
-	Connections int `json:"connections,omitempty"`
+	Connections int `json:"connections,omitzero"`
 
-	raw json.RawMessage
+	raw jsontext.Value
 }
 
 // RawJSON returns the JSON the API answered for the connector, with every
 // field, including those this package does not model; nil for a Connector
 // the program built itself.
-func (c *Connector) RawJSON() json.RawMessage { return c.raw }
+func (c *Connector) RawJSON() jsontext.Value { return c.raw }
 
 // UnmarshalJSON decodes the connector and keeps the JSON for RawJSON.
 func (c *Connector) UnmarshalJSON(b []byte) error {
@@ -251,7 +252,7 @@ type ConnectorAuth struct {
 	Hint string `json:"hint,omitempty"`
 	// Inject is where a key goes, for a service that takes it in a header
 	// of its own.
-	Inject *Inject `json:"inject,omitempty"`
+	Inject *Inject `json:"inject,omitzero"`
 	// Client is how Latere identifies itself where an added server signs
 	// people in.
 	Client ClientKind `json:"client,omitempty"`
@@ -401,13 +402,13 @@ type Connected struct {
 	// Client.ConfirmConnection.
 	AuthorizationURL string
 
-	raw json.RawMessage
+	raw jsontext.Value
 }
 
 // RawJSON returns the JSON the API answered, with every field, including
 // those this package does not model; nil for a Connected the program built
 // itself.
-func (c *Connected) RawJSON() json.RawMessage { return c.raw }
+func (c *Connected) RawJSON() jsontext.Value { return c.raw }
 
 // started is the API's answer when a connection waits for a sign-in.
 type started struct {
@@ -417,7 +418,7 @@ type started struct {
 
 // decodeConnected reads the answer of a connect or a reconnect, which is
 // either the connection or a sign-in to finish.
-func decodeConnected(raw json.RawMessage) (*Connected, error) {
+func decodeConnected(raw jsontext.Value) (*Connected, error) {
 	var s started
 	if err := json.Unmarshal(raw, &s); err != nil {
 		return nil, err
@@ -456,7 +457,7 @@ func (c *Client) CreateConnection(ctx context.Context, params *CreateConnectionP
 	if key == "" {
 		key = latere.NewIdempotencyKey()
 	}
-	var raw json.RawMessage
+	var raw jsontext.Value
 	req := &latere.Request{Method: http.MethodPost, Path: basePath + "/connections", Body: body, IdempotencyKey: key}
 	if err := c.cfg.Do(ctx, req, &raw); err != nil {
 		return nil, err
@@ -544,7 +545,7 @@ func (c *Client) ReconnectConnection(ctx context.Context, id string, params *Rec
 	if len(params.Scopes) > 0 {
 		body["scopes"] = params.Scopes
 	}
-	var raw json.RawMessage
+	var raw jsontext.Value
 	req := &latere.Request{Method: http.MethodPost, Path: connectionPath(id, "/reconnect"), Body: body, Retry: latere.RetryNever}
 	if err := c.cfg.Do(ctx, req, &raw); err != nil {
 		return nil, err
@@ -572,15 +573,15 @@ type Tool struct {
 	// marks.
 	Effect Effect `json:"effect"`
 	// Hidden is true when a hidden mark names the tool.
-	Hidden bool `json:"hidden,omitempty"`
+	Hidden bool `json:"hidden,omitzero"`
 
-	raw json.RawMessage
+	raw jsontext.Value
 }
 
 // RawJSON returns the JSON the API answered for the tool, with every field,
 // including those this package does not model; nil for a Tool the program
 // built itself.
-func (t *Tool) RawJSON() json.RawMessage { return t.raw }
+func (t *Tool) RawJSON() jsontext.Value { return t.raw }
 
 // UnmarshalJSON decodes the tool and keeps the JSON for RawJSON.
 func (t *Tool) UnmarshalJSON(b []byte) error {
@@ -649,21 +650,21 @@ type Call struct {
 	Outcome Outcome `json:"outcome"`
 	// Status is the service's HTTP status; 0 when the request never
 	// reached it.
-	Status int `json:"status,omitempty"`
+	Status int `json:"status,omitzero"`
 	// BytesIn is how many bytes the request sent to the service.
 	BytesIn int64 `json:"bytes_in"`
 	// BytesOut is how many bytes the service answered.
 	BytesOut int64 `json:"bytes_out"`
 	// Refs is how many branches and tags a git push named.
-	Refs int `json:"refs,omitempty"`
+	Refs int `json:"refs,omitzero"`
 
-	raw json.RawMessage
+	raw jsontext.Value
 }
 
 // RawJSON returns the JSON the API answered for the call, with every field,
 // including those this package does not model; nil for a Call the program
 // built itself.
-func (c *Call) RawJSON() json.RawMessage { return c.raw }
+func (c *Call) RawJSON() jsontext.Value { return c.raw }
 
 // UnmarshalJSON decodes the call and keeps the JSON for RawJSON.
 func (c *Call) UnmarshalJSON(b []byte) error {
@@ -859,11 +860,11 @@ type NewConnectorAuth struct {
 	Hint string `json:"hint,omitempty"`
 	// Inject is where a key goes, for a server that takes it in a header
 	// of its own; Authorization: Bearer when nil.
-	Inject *Inject `json:"inject,omitempty"`
+	Inject *Inject `json:"inject,omitzero"`
 	// Client is a sign-in client registered at the server, taken only from
 	// an organization's owner or admin. Its secret is kept sealed and
 	// never answered.
-	Client *ConnectorClient `json:"client,omitempty"`
+	Client *ConnectorClient `json:"client,omitzero"`
 }
 
 // ConnectorClient is a sign-in client registered at an added server.

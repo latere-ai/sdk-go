@@ -5,7 +5,8 @@ package account
 
 import (
 	"context"
-	"encoding/json"
+	"encoding/json/jsontext"
+	"encoding/json/v2"
 	"errors"
 	"fmt"
 	"net/http"
@@ -20,17 +21,17 @@ import (
 type DataPlaces struct {
 	// Sessions is where sessions are kept; nil when the operator has not
 	// stated it, which a program says rather than guess one.
-	Sessions *Place `json:"sessions,omitempty"`
+	Sessions *Place `json:"sessions,omitzero"`
 	// Machines is where a session's machine runs; nil when not stated.
-	Machines *Place `json:"machines,omitempty"`
+	Machines *Place `json:"machines,omitzero"`
 
-	raw json.RawMessage
+	raw jsontext.Value
 }
 
 // RawJSON returns the JSON the API answered for the places, with every
 // field, including those this package does not model; nil for a DataPlaces
 // the program built itself.
-func (d *DataPlaces) RawJSON() json.RawMessage { return d.raw }
+func (d *DataPlaces) RawJSON() jsontext.Value { return d.raw }
 
 // UnmarshalJSON decodes the places and keeps the JSON for RawJSON.
 func (d *DataPlaces) UnmarshalJSON(b []byte) error {
@@ -69,13 +70,13 @@ type ModelDataTerms struct {
 	// Models are the terms, one for each name asked.
 	Models []ModelTerms `json:"models"`
 
-	raw json.RawMessage
+	raw jsontext.Value
 }
 
 // RawJSON returns the JSON the API answered for the terms, with every
 // field, including those this package does not model; nil for a
 // ModelDataTerms the program built itself.
-func (m *ModelDataTerms) RawJSON() json.RawMessage { return m.raw }
+func (m *ModelDataTerms) RawJSON() jsontext.Value { return m.raw }
 
 // UnmarshalJSON decodes the terms and keeps the JSON for RawJSON.
 func (m *ModelDataTerms) UnmarshalJSON(b []byte) error {
@@ -107,10 +108,10 @@ type ModelTerms struct {
 	ServedBy []ServingProvider `json:"served_by,omitempty"`
 	// Omitted is how many serving providers ServedBy leaves out, present
 	// with Retention.
-	Omitted int `json:"omitted,omitempty"`
+	Omitted int `json:"omitted,omitzero"`
 	// Price is what a request to the model is charged at; nil when the
 	// catalog does not hold the model or it carries no price.
-	Price *Price `json:"price,omitempty"`
+	Price *Price `json:"price,omitzero"`
 }
 
 // A ServingProvider is a provider that serves a model.

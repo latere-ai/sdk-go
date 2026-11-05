@@ -5,7 +5,8 @@ package account
 
 import (
 	"context"
-	"encoding/json"
+	"encoding/json/jsontext"
+	"encoding/json/v2"
 	"errors"
 	"iter"
 	"net/http"
@@ -37,7 +38,7 @@ type Share struct {
 	// SessionLastSeq is the sequence of the session's last event now, so a
 	// program can say the link shows less than the conversation and offer
 	// UpdateShare; zero when the session cannot be read now.
-	SessionLastSeq int64 `json:"session_last_seq,omitempty"`
+	SessionLastSeq int64 `json:"session_last_seq,omitzero"`
 	// Title is the session's title at the last event the link shows. A
 	// session's title follows what its conversation is about, so a link
 	// keeps the title of the part it shares.
@@ -53,13 +54,13 @@ type Share struct {
 	// UpdatedAt is when it last moved to a later turn.
 	UpdatedAt time.Time `json:"updated_at"`
 
-	raw json.RawMessage
+	raw jsontext.Value
 }
 
 // RawJSON returns the JSON the API answered for the share, with every
 // field, including those this package does not model; nil for a Share the
 // program built itself.
-func (s *Share) RawJSON() json.RawMessage { return s.raw }
+func (s *Share) RawJSON() jsontext.Value { return s.raw }
 
 // UnmarshalJSON decodes the share and keeps the JSON for RawJSON.
 func (s *Share) UnmarshalJSON(b []byte) error {

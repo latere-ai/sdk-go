@@ -5,7 +5,8 @@ package agents
 
 import (
 	"context"
-	"encoding/json"
+	"encoding/json/jsontext"
+	"encoding/json/v2"
 	"errors"
 	"iter"
 	"net/http"
@@ -29,12 +30,12 @@ type Agent struct {
 	// Status is the API's record of the agent.
 	Status AgentStatus `json:"status,omitzero"`
 
-	raw json.RawMessage
+	raw jsontext.Value
 }
 
 // RawJSON returns the JSON the API answered for the agent, with every
 // field, its spec included.
-func (a *Agent) RawJSON() json.RawMessage { return a.raw }
+func (a *Agent) RawJSON() jsontext.Value { return a.raw }
 
 // UnmarshalJSON decodes the agent and keeps the JSON for RawJSON.
 func (a *Agent) UnmarshalJSON(b []byte) error {
@@ -64,7 +65,7 @@ type AgentStatus struct {
 	ID string `json:"id,omitempty"`
 	// Version counts the distinct specs the agent has had; Digest
 	// identifies the latest.
-	Version int    `json:"version,omitempty"`
+	Version int    `json:"version,omitzero"`
 	Digest  string `json:"digest,omitempty"`
 	// CreatedAt is when the agent was first applied.
 	CreatedAt time.Time `json:"createdAt,omitzero"`
@@ -105,12 +106,12 @@ type AgentVersion struct {
 	// CreatedAt is when the version was applied.
 	CreatedAt time.Time `json:"created_at"`
 
-	raw json.RawMessage
+	raw jsontext.Value
 }
 
 // RawJSON returns the JSON the API answered for the version, with every
 // field.
-func (v *AgentVersion) RawJSON() json.RawMessage { return v.raw }
+func (v *AgentVersion) RawJSON() jsontext.Value { return v.raw }
 
 // UnmarshalJSON decodes the version and keeps the JSON for RawJSON.
 func (v *AgentVersion) UnmarshalJSON(b []byte) error {

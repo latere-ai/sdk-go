@@ -121,14 +121,14 @@ func TestDefinitionsAreApplied(t *testing.T) {
 func TestApplyRefusesWhatNeedsNoRequest(t *testing.T) {
 	c, r := newRecorder(t, map[string]reply{"PUT /v1/evals/metrics/n": {body: `{"name":"n","digest":"sha256:aa"}`}})
 	ctx := context.Background()
-	m := &evals.Metric{Version: evals.Version{Name: "n"}, Type: evals.MetricCount, Direction: evals.DirectionNone}
+	m := &evals.Metric{Name: "n", Type: evals.MetricCount, Direction: evals.DirectionNone}
 	if _, err := c.ApplyMetric(ctx, nil, nil); err == nil {
 		t.Error("a nil metric was sent")
 	}
 	if _, err := c.ApplyMetric(ctx, &evals.Metric{}, nil); err == nil {
 		t.Error("a metric with no name was sent")
 	}
-	if _, err := c.ApplyMetric(ctx, &evals.Metric{Version: evals.Version{Name: ".."}}, nil); err == nil {
+	if _, err := c.ApplyMetric(ctx, &evals.Metric{Name: ".."}, nil); err == nil {
 		t.Error("the name .. was sent")
 	}
 	if _, err := c.ApplyMetric(ctx, m, &evals.ApplyParams{IfMatch: "sha256:a", OnlyNew: true}); err == nil {

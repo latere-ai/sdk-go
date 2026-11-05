@@ -4,7 +4,8 @@
 package routine_test
 
 import (
-	"encoding/json"
+	"encoding/json/jsontext"
+	"encoding/json/v2"
 	"errors"
 	"go/build"
 	"reflect"
@@ -19,7 +20,7 @@ import (
 var monday = routine.Schedule{Days: []time.Weekday{time.Monday}, Hour: 9, Minute: 0, Zone: "Europe/Berlin"}
 
 // decode reads a manifest as a JSON object.
-func decode(t *testing.T, b json.RawMessage) map[string]any {
+func decode(t *testing.T, b jsontext.Value) map[string]any {
 	t.Helper()
 	var m map[string]any
 	if err := json.Unmarshal(b, &m); err != nil {
@@ -122,7 +123,7 @@ func TestARoutineReadsBackAsWritten(t *testing.T) {
 				Suspend            bool
 			}
 		}
-		if err := json.Unmarshal(b, &doc); err != nil {
+		if err := json.Unmarshal(b, &doc, json.MatchCaseInsensitiveNames(true)); err != nil {
 			t.Fatal(err)
 		}
 		tr := routine.Trigger{Name: doc.Metadata.Name, DisplayName: doc.Metadata.DisplayName, Labels: doc.Metadata.Labels,
@@ -148,7 +149,7 @@ func TestARoutineReadsBackAsWritten(t *testing.T) {
 // fields and a large number as written, drops the status, and keeps a
 // schedule set elsewhere when the fields name none.
 func TestAChangeKeepsWhatTheRoutineDoesNotOwn(t *testing.T) {
-	stored := json.RawMessage(`{"apiVersion":"topos.latere.ai/v1","kind":"Trigger",
+	stored := jsontext.Value(`{"apiVersion":"topos.latere.ai/v1","kind":"Trigger",
 		"metadata":{"name":"routine-0123456789abcdef0123","labels":{"team":"growth"},"annotations":{"note":"kept"}},
 		"spec":{"agent":"latere-chat","schedule":"*/30 * * * *","timeZone":"UTC","maxActive":12345678901234567890,"session":{"message":"old","policy":"continue"}},
 		"status":{"id":"trg_1"}}`)
@@ -168,10 +169,10 @@ func TestAChangeKeepsWhatTheRoutineDoesNotOwn(t *testing.T) {
 	if spec["schedule"] != "*/30 * * * *" || spec["session"].(map[string]any)["policy"] != "continue" {
 		t.Errorf("the spec is %v", spec)
 	}
-	if _, err := routine.Manifest("latere-chat", "routine-0123456789abcdef0123", json.RawMessage(`[]`), f); err == nil {
+	if _, err := routine.Manifest("latere-chat", "routine-0123456789abcdef0123", jsontext.Value(`[]`), f); err == nil {
 		t.Error("a stored trigger that is no object was written over")
 	}
-	if _, err := routine.Manifest("latere-chat", "routine-0123456789abcdef0123", json.RawMessage(`{"spec":[]}`), f); err == nil {
+	if _, err := routine.Manifest("latere-chat", "routine-0123456789abcdef0123", jsontext.Value(`{"spec":[]}`), f); err == nil {
 		t.Error("a stored spec that is no object was written over")
 	}
 }
@@ -255,7 +256,7 @@ func TestTheAllowanceIsWrittenAndKept(t *testing.T) {
 		t.Errorf("a trigger with no allowance reads as one of %d", *read.PerWeekMicroUSD)
 	}
 
-	stored := json.RawMessage(`{"apiVersion":"topos.latere.ai/v1","kind":"Trigger","metadata":{"name":"` + name + `"},
+	stored := jsontext.Value(`{"apiVersion":"topos.latere.ai/v1","kind":"Trigger","metadata":{"name":"` + name + `"},
 "spec":{"agent":"latere-chat","schedule":"0 9 * * 1","timeZone":"Europe/Berlin","budget":{"perWeek":9007199254740993,"later":"kept"},
 "session":{"message":"Look at the inbox.","title":"Inbox"}}}`)
 	kept, err := routine.Manifest("latere-chat", name, stored, routine.Fields{Title: "Inbox", Instruction: "Look at the inbox.", Starts: routine.OnSchedule})
@@ -273,11 +274,11 @@ func TestTheAllowanceIsWrittenAndKept(t *testing.T) {
 	if budget := decode(t, off)["spec"].(map[string]any)["budget"].(map[string]any); budget["perWeek"] != nil || budget["later"] != "kept" {
 		t.Errorf("taking the allowance off left the budget %v", budget)
 	}
-	only := json.RawMessage(`{"spec":{"agent":"latere-chat","budget":{"perWeek":1},"session":{"message":"m"}}}`)
+	only := jsontext.Value(`{"spec":{"agent":"latere-chat","budget":{"perWeek":1},"session":{"message":"m"}}}`)
 	if b, err := routine.Manifest("latere-chat", name, only, routine.Fields{Title: "Inbox", Instruction: "m", PerWeekMicroUSD: &zero}); err != nil || strings.Contains(string(b), "budget") {
 		t.Errorf("taking the only allowance off wrote %s, %v", b, err)
 	}
-	if _, err := routine.Manifest("latere-chat", name, json.RawMessage(`{"spec":{"budget":"none"}}`), routine.Fields{Title: "Inbox", Instruction: "m", PerWeekMicroUSD: &perWeek}); err == nil {
+	if _, err := routine.Manifest("latere-chat", name, jsontext.Value(`{"spec":{"budget":"none"}}`), routine.Fields{Title: "Inbox", Instruction: "m", PerWeekMicroUSD: &perWeek}); err == nil {
 		t.Error("an allowance was written into a budget that is no object")
 	}
 
@@ -326,7 +327,7 @@ func utc(dates []time.Time) []any {
 }
 
 // readBack reads a manifest as package agents reads the trigger it makes.
-func readBack(t *testing.T, b json.RawMessage) routine.Trigger {
+func readBack(t *testing.T, b jsontext.Value) routine.Trigger {
 	t.Helper()
 	var doc struct {
 		Metadata struct {
@@ -344,7 +345,7 @@ func readBack(t *testing.T, b json.RawMessage) routine.Trigger {
 			Suspend bool
 		}
 	}
-	if err := json.Unmarshal(b, &doc); err != nil {
+	if err := json.Unmarshal(b, &doc, json.MatchCaseInsensitiveNames(true)); err != nil {
 		t.Fatal(err)
 	}
 	tr := routine.Trigger{Name: doc.Metadata.Name, DisplayName: doc.Metadata.DisplayName, Labels: doc.Metadata.Labels, Schedule: doc.Spec.Schedule,
@@ -490,7 +491,7 @@ func TestTheDatesAreCheckedBeforeTheyAreWritten(t *testing.T) {
 func TestARoutineMovesBetweenSchedulesDatesAndLinks(t *testing.T) {
 	name := routine.Name("key-moves")
 	dates := days(2, 4)
-	scheduled := json.RawMessage(`{"metadata":{"name":"` + name + `"},"spec":{"agent":"latere-chat","schedule":"0 9 * * 1","timeZone":"Europe/Berlin",
+	scheduled := jsontext.Value(`{"metadata":{"name":"` + name + `"},"spec":{"agent":"latere-chat","schedule":"0 9 * * 1","timeZone":"Europe/Berlin",
 "on":{"product":"github","verbs":["push"]},"at":"2026-10-24T07:00:00Z","session":{"message":"m","title":"t","key":"kept"}}}`)
 	b, err := routine.Manifest("latere-chat", name, scheduled, routine.Fields{Title: "t", Instruction: "m", Starts: routine.OnDates, Dates: dates, DatesZone: "Asia/Shanghai"})
 	if err != nil {
@@ -559,7 +560,7 @@ func TestTheModelIsWrittenAndKept(t *testing.T) {
 		t.Errorf("a trigger with no model reads as one of %q", *got.Model)
 	}
 
-	stored := json.RawMessage(`{"metadata":{"name":"` + name + `"},"spec":{"agent":"latere-chat","schedule":"0 9 * * 1","timeZone":"Europe/Berlin",
+	stored := jsontext.Value(`{"metadata":{"name":"` + name + `"},"spec":{"agent":"latere-chat","schedule":"0 9 * * 1","timeZone":"Europe/Berlin",
 "session":{"message":"m","model":{"name":"tier/thorough","reasoning":"high"}}}}`)
 	model := func(f routine.Fields) any {
 		t.Helper()
@@ -581,7 +582,7 @@ func TestTheModelIsWrittenAndKept(t *testing.T) {
 	if got := model(base); got != nil {
 		t.Errorf("taking the model off wrote %v", got)
 	}
-	if _, err := routine.Manifest("latere-chat", name, json.RawMessage(`{"spec":{"session":{"message":"m","model":"tier/quick"}}}`),
+	if _, err := routine.Manifest("latere-chat", name, jsontext.Value(`{"spec":{"session":{"message":"m","model":"tier/quick"}}}`),
 		routine.Fields{Title: "t", Instruction: "m", Model: &quick}); err == nil {
 		t.Error("a model was written into one that is no object")
 	}
@@ -623,5 +624,33 @@ func TestNotifyIsWrittenAndKept(t *testing.T) {
 		if err := routine.CheckNotify(n); err != nil {
 			t.Errorf("%s: %v", n, err)
 		}
+	}
+}
+
+// A manifest is written with its keys in order and every number as it was
+// stored, so the same trigger always applies as the same bytes.
+func TestManifestKeysAreInOrderAndNumbersAreKept(t *testing.T) {
+	stored := jsontext.Value(`{"kind":"Trigger","metadata":{"name":"x","labels":{"zz":"1","aa":"2"}},"spec":{"maxActive":123456789012345678,"ratio":1.50,"list":[1,2.0,"a",true,null,{"b":1,"a":2}],"agent":"old"}}`)
+	f := routine.Fields{Title: "Weekly", Instruction: "Count.", Starts: routine.OnSchedule, Schedule: &monday}
+	var first jsontext.Value
+	for range 8 {
+		b, err := routine.Manifest("latere-chat", "x", stored, f)
+		if err != nil {
+			t.Fatal(err)
+		}
+		if first == nil {
+			first = b
+		}
+		if string(b) != string(first) {
+			t.Fatalf("the same manifest was written as\n%s\nand\n%s", first, b)
+		}
+	}
+	for _, want := range []string{`"maxActive":123456789012345678`, `"ratio":1.50`, `"list":[1,2.0,"a",true,null,{"a":2,"b":1}]`} {
+		if !strings.Contains(string(first), want) {
+			t.Errorf("the manifest lacks %s: %s", want, first)
+		}
+	}
+	if strings.Index(string(first), `"apiVersion"`) > strings.Index(string(first), `"kind"`) {
+		t.Errorf("the keys are not in order: %s", first)
 	}
 }

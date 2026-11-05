@@ -5,7 +5,8 @@ package agents
 
 import (
 	"encoding/base64"
-	"encoding/json"
+	"encoding/json/jsontext"
+	"encoding/json/v2"
 	"fmt"
 	"strings"
 	"time"
@@ -92,28 +93,28 @@ type Event struct {
 	// Time is when the event was appended.
 	Time time.Time `json:"time"`
 	// Turn is the turn the event belongs to; zero before the first turn.
-	Turn int `json:"turn,omitempty"`
+	Turn int `json:"turn,omitzero"`
 	// Step is the step of the turn the event belongs to, when it has one.
-	Step int `json:"step,omitempty"`
+	Step int `json:"step,omitzero"`
 	// Subagent names the subagent whose conversation the event belongs to;
 	// empty for the session's own conversation.
 	Subagent string `json:"subagent,omitempty"`
 	// Payload is the event's content, whose shape depends on Type; read it
 	// with Decode.
-	Payload json.RawMessage `json:"payload"`
+	Payload jsontext.Value `json:"payload"`
 
-	raw json.RawMessage
+	raw jsontext.Value
 }
 
 // RawJSON returns the JSON the API answered for the event, with every field,
 // including those this package does not model; nil for an Event the program
 // built itself.
-func (e *Event) RawJSON() json.RawMessage { return e.raw }
+func (e *Event) RawJSON() jsontext.Value { return e.raw }
 
 // UnmarshalJSON decodes the event and keeps the JSON for RawJSON.
 func (e *Event) UnmarshalJSON(b []byte) error {
 	type plain Event
-	if err := json.Unmarshal(b, (*plain)(e)); err != nil {
+	if err := json.Unmarshal(b, (*plain)(e), foreignJSON); err != nil {
 		return err
 	}
 	e.raw = keep(b)
@@ -123,7 +124,7 @@ func (e *Event) UnmarshalJSON(b []byte) error {
 // Decode unmarshals the event's payload into v, such as a *SessionStatus
 // for an event of type EventSessionStatus.
 func (e *Event) Decode(v any) error {
-	if err := json.Unmarshal(e.Payload, v); err != nil {
+	if err := json.Unmarshal(e.Payload, v, foreignJSON); err != nil {
 		return fmt.Errorf("agents: decoding the %s payload of %s: %w", e.Type, e.ID, err)
 	}
 	return nil
@@ -152,7 +153,7 @@ type ContentBlock struct {
 	// Text is the text of a BlockText or BlockThinking block.
 	Text string `json:"text,omitempty"`
 	// Image is the picture of a BlockImage block.
-	Image *Image `json:"image,omitempty"`
+	Image *Image `json:"image,omitzero"`
 }
 
 // An Image is the picture of a BlockImage block. A message sends it as
@@ -235,22 +236,22 @@ type ToolResult struct {
 	// Content is the result the agent read.
 	Content []ContentBlock `json:"content"`
 	// IsError reports that the call failed.
-	IsError bool `json:"is_error,omitempty"`
+	IsError bool `json:"is_error,omitzero"`
 	// Outcome sums the result up; empty when the tool says nothing more
 	// than IsError.
 	Outcome ToolOutcome `json:"outcome,omitempty"`
 	// Sender is who sent an EventUserToolResult; nil for a result the
 	// platform recorded.
-	Sender *Sender `json:"sender,omitempty"`
+	Sender *Sender `json:"sender,omitzero"`
 	// Meta is what the tool recorded beside the result, such as the file a
 	// write left or what a publish put up; nil for a result that records
 	// nothing, such as every EventUserToolResult.
-	Meta *ToolMeta `json:"meta,omitempty"`
+	Meta *ToolMeta `json:"meta,omitzero"`
 	// CostMicroUSD is what a service the call reached charged for it, in
 	// millionths of a US dollar, such as a web search's or the parsing of
 	// a PDF a read took as text; the session's Budget counts it as it
 	// counts a model request's. Nil for a call that cost nothing.
-	CostMicroUSD *int64 `json:"cost_usd_micro,omitempty"`
+	CostMicroUSD *int64 `json:"cost_usd_micro,omitzero"`
 }
 
 // Text returns the result's text, its text blocks joined.
@@ -276,7 +277,7 @@ func (e *Event) CostMicroUSD() int64 {
 	var p struct {
 		CostMicroUSD *int64 `json:"cost_usd_micro"`
 	}
-	if json.Unmarshal(e.Payload, &p) != nil || p.CostMicroUSD == nil {
+	if json.Unmarshal(e.Payload, &p, foreignJSON) != nil || p.CostMicroUSD == nil {
 		return 0
 	}
 	return *p.CostMicroUSD
@@ -302,10 +303,10 @@ type ToolMeta struct {
 	// Only a write or an edit that succeeded sets it, so a result with
 	// Size set names a file the agent made or changed, and one with Path
 	// and no Size a file it read.
-	Size *int64 `json:"size,omitempty"`
+	Size *int64 `json:"size,omitzero"`
 	// Publish is what a publish call recorded; nil on the results of other
 	// tools.
-	Publish *PublishRecord `json:"publish,omitempty"`
+	Publish *PublishRecord `json:"publish,omitzero"`
 	// Todos is the to-do list a todo call left, its items in the agent's
 	// order. Each call replaces the whole list, so the latest Todos of a
 	// conversation, the session's own or a subagent's as the event's
@@ -314,7 +315,7 @@ type ToolMeta struct {
 	// Todos of no items, not nil; nil on the results of other tools.
 	Todos []Todo `json:"todos,omitzero"`
 
-	raw json.RawMessage
+	raw jsontext.Value
 }
 
 // A Todo is one item of an agent's to-do list, as a todo call left it.
@@ -343,12 +344,12 @@ const (
 // RawJSON returns the JSON the result recorded as its meta, with every
 // field, including those this package does not model; nil for a ToolMeta
 // the program built itself.
-func (m *ToolMeta) RawJSON() json.RawMessage { return m.raw }
+func (m *ToolMeta) RawJSON() jsontext.Value { return m.raw }
 
 // UnmarshalJSON decodes the meta and keeps the JSON for RawJSON.
 func (m *ToolMeta) UnmarshalJSON(b []byte) error {
 	type plain ToolMeta
-	if err := json.Unmarshal(b, (*plain)(m)); err != nil {
+	if err := json.Unmarshal(b, (*plain)(m), foreignJSON); err != nil {
 		return err
 	}
 	m.raw = keep(b)
@@ -396,7 +397,7 @@ type PublishRecord struct {
 	// Error is the reason the app refused the call: a build or a release
 	// that failed, was canceled or was refused, or a change of who can
 	// open the app that was refused. Nil otherwise.
-	Error *PublishError `json:"error,omitempty"`
+	Error *PublishError `json:"error,omitzero"`
 }
 
 // PublishStatus is where the version a publish call put up stands.
@@ -445,7 +446,7 @@ type SessionError struct {
 	// Message says what happened, in words for a person.
 	Message string `json:"message"`
 	// Retryable reports that sending the message again may succeed.
-	Retryable bool `json:"retryable,omitempty"`
+	Retryable bool `json:"retryable,omitzero"`
 	// Detail adds what a developer needs, when there is more to say.
 	Detail string `json:"detail,omitempty"`
 }
@@ -523,15 +524,15 @@ type UserMessage struct {
 	FiringID string `json:"firing_id,omitempty"`
 	// Wake is the wake that sent the message, whose content is the note
 	// the agent wrote to itself; nil for any other message.
-	Wake *WakeFiring `json:"wake,omitempty"`
+	Wake *WakeFiring `json:"wake,omitzero"`
 	// Spend is the week of the trigger the turn the message begins counts
 	// toward, as the firing found it, which the model read before the
 	// message: for a trigger's message, the trigger's; for a wake's, the
 	// trigger's that started the session. Nil for a person's message, and
 	// for a wake's in a session a person started.
-	Spend *FiringSpend `json:"spend,omitempty"`
+	Spend *FiringSpend `json:"spend,omitzero"`
 	// SendNow is set on a message sent with SendMessageParams.SendNow.
-	SendNow bool `json:"send_now,omitempty"`
+	SendNow bool `json:"send_now,omitzero"`
 }
 
 // A WakeFiring is the wake a message came from.
@@ -560,10 +561,10 @@ type Attachment struct {
 	Path string `json:"path"`
 	// Source is the file of the sender's Storage the bytes were read
 	// from, for a file the message named by its source; nil otherwise.
-	Source *AttachmentSource `json:"source,omitempty"`
+	Source *AttachmentSource `json:"source,omitzero"`
 	// Inline reports a short text file the model reads in its request,
 	// beside the line that names it.
-	Inline bool `json:"inline,omitempty"`
+	Inline bool `json:"inline,omitzero"`
 }
 
 // FilesKept is the payload of an EventFilesKept event: the files of the
@@ -659,7 +660,7 @@ type AttachmentSource struct {
 	Path string `json:"path"`
 	// Version is the version of the file to read, counting from 1; zero
 	// reads the file as it stands.
-	Version int `json:"version,omitempty"`
+	Version int `json:"version,omitzero"`
 }
 
 // Question is a question an agent asked, the input of an EventAgentToolUse
@@ -672,7 +673,7 @@ type Question struct {
 	// Options are the choices, in the order they are shown.
 	Options []QuestionOption `json:"options"`
 	// Multiple lets the person choose several options.
-	Multiple bool `json:"multiple,omitempty"`
+	Multiple bool `json:"multiple,omitzero"`
 }
 
 // QuestionOption is one choice of a Question.
@@ -682,7 +683,7 @@ type QuestionOption struct {
 	// Description says what choosing the option means.
 	Description string `json:"description"`
 	// Recommended marks the option the agent would take.
-	Recommended bool `json:"recommended,omitempty"`
+	Recommended bool `json:"recommended,omitzero"`
 }
 
 // ToolUse is the payload of an EventAgentToolUse event.
@@ -693,11 +694,11 @@ type ToolUse struct {
 	Name string `json:"name"`
 	// Input is the call's input, whose shape depends on the tool; read the
 	// questions of a "question" call with Questions.
-	Input json.RawMessage `json:"input"`
+	Input jsontext.Value `json:"input"`
 	// Client reports a call of a tool the agent declares for its client
 	// to run: your program runs it, and the session waits with
 	// StopToolResult until Client.SendToolResult answers it.
-	Client bool `json:"client,omitempty"`
+	Client bool `json:"client,omitzero"`
 	// Verdict is what the session's approval policy decided about the
 	// call. VerdictAsk means the session waits with StopToolConfirmation
 	// until Client.ConfirmTool answers the call.
@@ -708,10 +709,10 @@ type ToolUse struct {
 	// a turn a trigger's or a wake's message began, which nobody watches,
 	// and for a subagent's call in such a turn. Nil on a call recorded
 	// before the API wrote it.
-	Attended *bool `json:"attended,omitempty"`
+	Attended *bool `json:"attended,omitzero"`
 	// Risk is the score the session's rules gave the call, with the rule
 	// set that scored it; nil when the call was not scored.
-	Risk *Risk `json:"risk,omitempty"`
+	Risk *Risk `json:"risk,omitzero"`
 	// Mode is the approval mode the call was decided under: "plan",
 	// "confirm" or "progressive". A call on a person's own computer is
 	// decided as "confirm" whatever the session's mode, and records it.
@@ -720,10 +721,10 @@ type ToolUse struct {
 	// that a person sees it: 1 for a call that waits for a person, the
 	// audit rate for an automatic verdict picked at random for review.
 	// Nil on a call recorded before the API wrote it.
-	ReviewProbability *float64 `json:"review_probability,omitempty"`
+	ReviewProbability *float64 `json:"review_probability,omitzero"`
 	// Suggestion is the decision service's suggestion for the call, when
 	// the session asked one.
-	Suggestion *Suggestion `json:"suggestion,omitempty"`
+	Suggestion *Suggestion `json:"suggestion,omitzero"`
 	// DecidedBy is the layer that decided the call, one of the Layer
 	// constants; empty on a call recorded before the API wrote it. A
 	// client shows a value it does not know by the call's Reason alone.
@@ -745,7 +746,7 @@ type ToolUse struct {
 	// Scope is what the call reaches, as it was decided on, recorded
 	// before the call waits for a person, so a client can show it beside
 	// the call. Nil on a call recorded before the API wrote it.
-	Scope *CallScope `json:"scope,omitempty"`
+	Scope *CallScope `json:"scope,omitzero"`
 }
 
 // CallScope is what a tool call reaches: whether it can be undone, the
@@ -760,7 +761,7 @@ type CallScope struct {
 	Undo Undo `json:"undo,omitempty"`
 	// Crosses is the boundaries the call crosses, as far as they are
 	// known; nil when none is known.
-	Crosses *Crosses `json:"crosses,omitempty"`
+	Crosses *Crosses `json:"crosses,omitzero"`
 	// TargetClass is the class of what the call changes; empty when not
 	// known.
 	TargetClass TargetClass `json:"target_class,omitempty"`
@@ -790,15 +791,15 @@ func (s *CallScope) Known() bool {
 // crosses it, false when it does not, and nil when it is not known.
 type Crosses struct {
 	// Machine is the machine outside the session's working directory.
-	Machine *bool `json:"machine,omitempty"`
+	Machine *bool `json:"machine,omitzero"`
 	// Remote is a system other than the session's machine.
-	Remote *bool `json:"remote,omitempty"`
+	Remote *bool `json:"remote,omitzero"`
 	// Network is a host outside the session's network.
-	Network *bool `json:"network,omitempty"`
+	Network *bool `json:"network,omitzero"`
 	// Organization is a party that the organization does not own.
-	Organization *bool `json:"organization,omitempty"`
+	Organization *bool `json:"organization,omitzero"`
 	// Public makes something readable by anyone.
-	Public *bool `json:"public,omitempty"`
+	Public *bool `json:"public,omitzero"`
 }
 
 // Known reports whether c knows at least one boundary.
@@ -898,7 +899,7 @@ type Suggestion struct {
 	// call the person's answers settle, from 0 to 1. Nil from a service
 	// that does not send it, and on a call recorded before the API wrote
 	// it.
-	EvidenceRatio *float64 `json:"evidence_ratio,omitempty"`
+	EvidenceRatio *float64 `json:"evidence_ratio,omitzero"`
 	// AskKind says why the service suggests asking, one of the AskKind
 	// constants. Empty for a suggestion that does not ask, from a service
 	// that does not send it, and on a call recorded before the API wrote
@@ -1037,11 +1038,11 @@ type ApprovalRequested struct {
 	Verdict Verdict `json:"verdict"`
 	// More counts further connections to the same host the request
 	// stands for.
-	More int `json:"more,omitempty"`
+	More int `json:"more,omitzero"`
 	// Attended reports whether a person began the turn the request was
 	// raised in, as ToolUse.Attended does; nil on a request recorded
 	// before the API wrote it.
-	Attended *bool `json:"attended,omitempty"`
+	Attended *bool `json:"attended,omitzero"`
 }
 
 // ModelRequest is the payload of an EventModelRequest event: one request
@@ -1054,23 +1055,23 @@ type ModelRequest struct {
 	Model string `json:"model"`
 	// Usage is the tokens the response counted; nil for a request that
 	// got no response.
-	Usage *Usage `json:"usage,omitempty"`
+	Usage *Usage `json:"usage,omitzero"`
 	// CostMicroUSD is what the request cost, in millionths of a US
 	// dollar; nil when it was not priced.
-	CostMicroUSD *int64 `json:"cost_usd_micro,omitempty"`
+	CostMicroUSD *int64 `json:"cost_usd_micro,omitzero"`
 	// Context is how full the request left the model's input window, and
 	// what filled it, for a step of the session's own conversation or of
 	// a subagent's, and for a compaction; nil for a request beside the
 	// conversation, such as one for the session's title, and on a request
 	// recorded before the API wrote it.
-	Context *ContextReport `json:"context,omitempty"`
+	Context *ContextReport `json:"context,omitzero"`
 	// FoldSeq is the log's last sequence when the request was built.
-	FoldSeq int64 `json:"fold_seq,omitempty"`
+	FoldSeq int64 `json:"fold_seq,omitzero"`
 	// NamesReads is set on a request whose reads of waiting messages an
 	// EventMessagesRead before it names. A request without it, recorded
 	// before the API wrote that event, read every waiting message up to
 	// its FoldSeq.
-	NamesReads bool `json:"names_reads,omitempty"`
+	NamesReads bool `json:"names_reads,omitzero"`
 	// Purpose is what a request beside the conversation was for, such as
 	// "title"; empty for a step of a conversation and for a compaction.
 	Purpose string `json:"purpose,omitempty"`
@@ -1084,11 +1085,11 @@ type Usage struct {
 	OutputTokens int64 `json:"output_tokens"`
 	// CacheReadInputTokens and CacheWriteInputTokens are the input tokens
 	// read from and written to the provider's prompt cache.
-	CacheReadInputTokens  int64 `json:"cache_read_input_tokens,omitempty"`
-	CacheWriteInputTokens int64 `json:"cache_write_input_tokens,omitempty"`
+	CacheReadInputTokens  int64 `json:"cache_read_input_tokens,omitzero"`
+	CacheWriteInputTokens int64 `json:"cache_write_input_tokens,omitzero"`
 	// ReasoningTokens are the output tokens the model reasoned with, when
 	// the provider counts them apart.
-	ReasoningTokens int64 `json:"reasoning_tokens,omitempty"`
+	ReasoningTokens int64 `json:"reasoning_tokens,omitzero"`
 }
 
 // Destination is a host a session tried to reach.
@@ -1096,7 +1097,7 @@ type Destination struct {
 	// Host is the host name or address.
 	Host string `json:"host"`
 	// Port is the port, when the request names one.
-	Port int `json:"port,omitempty"`
+	Port int `json:"port,omitzero"`
 }
 
 // ToolConfirmation is the payload of an EventUserToolConfirmation event: a
@@ -1119,15 +1120,15 @@ type ToolConfirmation struct {
 	// AnswerMS is the milliseconds the question was visible to the person
 	// on the client that answered, up to the answer; nil where the client
 	// did not measure it.
-	AnswerMS *int64 `json:"answer_ms,omitempty"`
+	AnswerMS *int64 `json:"answer_ms,omitzero"`
 	// DetailsOpened is whether the person opened the call's details, such
 	// as the full command, the diff or the target, before answering; nil
 	// where the client offered none.
-	DetailsOpened *bool `json:"details_opened,omitempty"`
+	DetailsOpened *bool `json:"details_opened,omitzero"`
 	// SuggestionShown is whether the client showed any part of the
 	// decision service's suggestion before the person answered; nil where
 	// the client did not say.
-	SuggestionShown *bool `json:"suggestion_shown,omitempty"`
+	SuggestionShown *bool `json:"suggestion_shown,omitzero"`
 	// Surface is where the person answered; empty where the client did
 	// not say.
 	Surface Surface `json:"surface,omitempty"`
@@ -1206,7 +1207,7 @@ type ApprovalDecided struct {
 	// Decision is DecisionAllow or DecisionDeny.
 	Decision Decision `json:"decision"`
 	// By is who answered, when a person did.
-	By *Sender `json:"by,omitempty"`
+	By *Sender `json:"by,omitzero"`
 	// Note is the answer's note, when it has one.
 	Note string `json:"note,omitempty"`
 }
@@ -1220,7 +1221,7 @@ func (t *ToolUse) Questions() ([]Question, error) {
 	var in struct {
 		Questions []Question `json:"questions"`
 	}
-	if err := json.Unmarshal(t.Input, &in); err != nil {
+	if err := json.Unmarshal(t.Input, &in, foreignJSON); err != nil {
 		return nil, fmt.Errorf("agents: decoding the questions of %s: %w", t.ToolUseID, err)
 	}
 	return in.Questions, nil

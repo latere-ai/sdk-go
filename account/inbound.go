@@ -5,7 +5,8 @@ package account
 
 import (
 	"context"
-	"encoding/json"
+	"encoding/json/jsontext"
+	"encoding/json/v2"
 	"errors"
 	"net/http"
 	"net/url"
@@ -35,13 +36,13 @@ type TriggerInbound struct {
 	// Items are the caller's links and addresses, oldest first.
 	Items []TriggerInlet `json:"items"`
 
-	raw json.RawMessage
+	raw jsontext.Value
 }
 
 // RawJSON returns the JSON the API answered for the links and addresses,
 // with every field, including those this package does not model; nil for
 // a TriggerInbound the program built itself.
-func (t *TriggerInbound) RawJSON() json.RawMessage { return t.raw }
+func (t *TriggerInbound) RawJSON() jsontext.Value { return t.raw }
 
 // UnmarshalJSON decodes the links and addresses and keeps the JSON for
 // RawJSON.
@@ -102,13 +103,13 @@ type TriggerHook struct {
 	// IssuedAt is when it was issued.
 	IssuedAt time.Time `json:"issued_at"`
 
-	raw json.RawMessage
+	raw jsontext.Value
 }
 
 // RawJSON returns the JSON the API answered for the link, with every
 // field, including those this package does not model; nil for a
 // TriggerHook the program built itself.
-func (h *TriggerHook) RawJSON() json.RawMessage { return h.raw }
+func (h *TriggerHook) RawJSON() jsontext.Value { return h.raw }
 
 // UnmarshalJSON decodes the link and keeps the JSON for RawJSON.
 func (h *TriggerHook) UnmarshalJSON(b []byte) error {
@@ -130,13 +131,13 @@ type TriggerAddress struct {
 	// IssuedAt is when it was issued.
 	IssuedAt time.Time `json:"issued_at"`
 
-	raw json.RawMessage
+	raw jsontext.Value
 }
 
 // RawJSON returns the JSON the API answered for the address, with every
 // field, including those this package does not model; nil for a
 // TriggerAddress the program built itself.
-func (a *TriggerAddress) RawJSON() json.RawMessage { return a.raw }
+func (a *TriggerAddress) RawJSON() jsontext.Value { return a.raw }
 
 // UnmarshalJSON decodes the address and keeps the JSON for RawJSON.
 func (a *TriggerAddress) UnmarshalJSON(b []byte) error {

@@ -4,7 +4,8 @@
 package evals_test
 
 import (
-	"encoding/json"
+	"encoding/json/jsontext"
+	"encoding/json/v2"
 	"go/ast"
 	"go/parser"
 	"go/token"
@@ -70,7 +71,7 @@ type operation struct {
 }
 
 type document struct {
-	Paths      map[string]map[string]json.RawMessage `json:"paths"`
+	Paths      map[string]map[string]jsontext.Value `json:"paths"`
 	Components struct {
 		Schemas    map[string]*schema   `json:"schemas"`
 		Parameters map[string]parameter `json:"parameters"`

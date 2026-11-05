@@ -5,7 +5,7 @@ package agents
 
 import (
 	"cmp"
-	"encoding/json"
+	"encoding/json/v2"
 	"slices"
 )
 
@@ -153,5 +153,5 @@ func redacted(e Event) bool {
 	var p struct {
 		Tombstone bool `json:"tombstone"`
 	}
-	return json.Unmarshal(e.Payload, &p) == nil && p.Tombstone
+	return json.Unmarshal(e.Payload, &p, foreignJSON) == nil && p.Tombstone
 }

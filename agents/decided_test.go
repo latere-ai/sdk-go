@@ -4,7 +4,7 @@
 package agents_test
 
 import (
-	"encoding/json"
+	"encoding/json/v2"
 	"testing"
 
 	"latere.ai/x/sdk-go/agents"

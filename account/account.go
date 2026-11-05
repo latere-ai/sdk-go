@@ -29,7 +29,8 @@ package account
 
 import (
 	"context"
-	"encoding/json"
+	"encoding/json/jsontext"
+	"encoding/json/v2"
 	"errors"
 	"net/http"
 	"net/url"
@@ -112,13 +113,13 @@ type AppliedAgent struct {
 	// Agent is the copy among the caller's agents.
 	Agent AgentCopy `json:"agent"`
 
-	raw json.RawMessage
+	raw jsontext.Value
 }
 
 // RawJSON returns the JSON the API answered for the applied agent, with
 // every field, including those this package does not model; nil for an
 // AppliedAgent the program built itself.
-func (a *AppliedAgent) RawJSON() json.RawMessage { return a.raw }
+func (a *AppliedAgent) RawJSON() jsontext.Value { return a.raw }
 
 // UnmarshalJSON decodes the applied agent and keeps the JSON for RawJSON.
 func (a *AppliedAgent) UnmarshalJSON(b []byte) error {
@@ -154,21 +155,21 @@ type EffortLevels struct {
 	// Levels are the levels, least effort first.
 	Levels []EffortLevel `json:"levels"`
 	// Auto picks a level for each message.
-	Auto *EffortAuto `json:"auto,omitempty"`
+	Auto *EffortAuto `json:"auto,omitzero"`
 	// ZeroRetention reports whether model requests go only to endpoints
 	// that keep nothing of them, for the caller in this context.
-	ZeroRetention bool `json:"zero_retention,omitempty"`
+	ZeroRetention bool `json:"zero_retention,omitzero"`
 	// ZeroRetentionBy says who keeps ZeroRetention on: "organization" or
 	// "person".
 	ZeroRetentionBy string `json:"zero_retention_by,omitempty"`
 
-	raw json.RawMessage
+	raw jsontext.Value
 }
 
 // RawJSON returns the JSON the API answered for the Effort levels, with
 // every field, including those this package does not model; nil for an
 // EffortLevels the program built itself.
-func (e *EffortLevels) RawJSON() json.RawMessage { return e.raw }
+func (e *EffortLevels) RawJSON() jsontext.Value { return e.raw }
 
 // UnmarshalJSON decodes the Effort levels and keeps the JSON for RawJSON.
 func (e *EffortLevels) UnmarshalJSON(b []byte) error {
@@ -200,9 +201,9 @@ type EffortLevel struct {
 	// provider, and "provider" when one may be.
 	Retention string `json:"retention,omitempty"`
 	// Next is what the next turn on the level costs.
-	Next *NextTurn `json:"next,omitempty"`
+	Next *NextTurn `json:"next,omitzero"`
 	// FreeTurns counts the caller's free turns on the level today.
-	FreeTurns *FreeTurns `json:"free_turns,omitempty"`
+	FreeTurns *FreeTurns `json:"free_turns,omitzero"`
 	// Models are the models the level may run for the caller, in the
 	// level's order of preference.
 	Models []EffortModel `json:"models,omitempty"`
@@ -254,12 +255,12 @@ type NextTurn struct {
 	// wallet.
 	Charge string `json:"charge"`
 	// Price is the price of the model a "credit" turn runs.
-	Price *Price `json:"price,omitempty"`
+	Price *Price `json:"price,omitzero"`
 	// FreeAgainAt is when free turns open again, when they are what kept a
 	// free model from running.
 	FreeAgainAt time.Time `json:"free_again_at,omitzero"`
 	// SponsoredOnly reports that the turn draws on credit Latere gave alone.
-	SponsoredOnly bool `json:"sponsored_only,omitempty"`
+	SponsoredOnly bool `json:"sponsored_only,omitzero"`
 }
 
 // Price is a model's price per a number of tokens. Amounts are decimal
@@ -319,25 +320,25 @@ type Wallet struct {
 	State WalletState `json:"state"`
 	// SpendableMicroUSD is the credit left, in millionths of a US dollar;
 	// nil for a member of an organization, who sees no amount.
-	SpendableMicroUSD *int64 `json:"spendable_micro,omitempty"`
+	SpendableMicroUSD *int64 `json:"spendable_micro,omitzero"`
 	// Bought reports whether the wallet ever held bought credit; false for
 	// a member of an organization.
-	Bought bool `json:"bought,omitempty"`
+	Bought bool `json:"bought,omitzero"`
 	// NextGrant is the next free credit, when one is coming.
-	NextGrant *NextGrant `json:"next_grant,omitempty"`
+	NextGrant *NextGrant `json:"next_grant,omitzero"`
 	// TopUp says what a payment adds, when the wallet can be topped up.
-	TopUp *TopUp `json:"top_up,omitempty"`
+	TopUp *TopUp `json:"top_up,omitzero"`
 	// LimitResetsAt is when an organization's monthly limit opens again,
 	// for an organization that pays after it spends; zero otherwise.
 	LimitResetsAt time.Time `json:"limit_resets_at,omitzero"`
 
-	raw json.RawMessage
+	raw jsontext.Value
 }
 
 // RawJSON returns the JSON the API answered for the wallet, with every
 // field, including those this package does not model; nil for a Wallet the
 // program built itself.
-func (w *Wallet) RawJSON() json.RawMessage { return w.raw }
+func (w *Wallet) RawJSON() jsontext.Value { return w.raw }
 
 // UnmarshalJSON decodes the wallet and keeps the JSON for RawJSON.
 func (w *Wallet) UnmarshalJSON(b []byte) error {
@@ -387,19 +388,19 @@ type Preferences struct {
 	// Instructions are the person's standing instructions to every session.
 	Instructions Instructions `json:"instructions"`
 	// Pins are the sessions, apps and projects the person pinned.
-	Pins *Pins `json:"pins,omitempty"`
+	Pins *Pins `json:"pins,omitzero"`
 	// Bookmarks are the turns the person bookmarked.
-	Bookmarks *Bookmarks `json:"bookmarks,omitempty"`
+	Bookmarks *Bookmarks `json:"bookmarks,omitzero"`
 	// Data holds the person's own data retention setting.
-	Data *DataPreferences `json:"data,omitempty"`
+	Data *DataPreferences `json:"data,omitzero"`
 
-	raw json.RawMessage
+	raw jsontext.Value
 }
 
 // RawJSON returns the JSON the API answered for the preferences, with every
 // field, including those this package does not model; nil for a Preferences
 // the program built itself.
-func (p *Preferences) RawJSON() json.RawMessage { return p.raw }
+func (p *Preferences) RawJSON() jsontext.Value { return p.raw }
 
 // UnmarshalJSON decodes the preferences and keeps the JSON for RawJSON.
 func (p *Preferences) UnmarshalJSON(b []byte) error {
@@ -428,13 +429,13 @@ type Network struct {
 	// MaxDomains is the most sites the context holds.
 	MaxDomains int `json:"max_domains"`
 
-	raw json.RawMessage
+	raw jsontext.Value
 }
 
 // RawJSON returns the JSON the API answered for the network section, with
 // every field, including those this package does not model; nil for a
 // Network the program built itself.
-func (n *Network) RawJSON() json.RawMessage { return n.raw }
+func (n *Network) RawJSON() jsontext.Value { return n.raw }
 
 // UnmarshalJSON decodes the network section and keeps the JSON for
 // RawJSON.
@@ -494,13 +495,13 @@ type Pins struct {
 	// MaxProjects is the most projects a context holds pinned.
 	MaxProjects int `json:"max_projects"`
 
-	raw json.RawMessage
+	raw jsontext.Value
 }
 
 // RawJSON returns the JSON the API answered for the pins, with every field,
 // including those this package does not model; nil for a Pins the
 // program built itself.
-func (p *Pins) RawJSON() json.RawMessage { return p.raw }
+func (p *Pins) RawJSON() jsontext.Value { return p.raw }
 
 // UnmarshalJSON decodes the pins and keeps the JSON for RawJSON.
 func (p *Pins) UnmarshalJSON(b []byte) error {
@@ -522,13 +523,13 @@ type Bookmarks struct {
 	// MaxSessions is the most sessions a context holds bookmarks in.
 	MaxSessions int `json:"max_sessions"`
 
-	raw json.RawMessage
+	raw jsontext.Value
 }
 
 // RawJSON returns the JSON the API answered for the bookmarks, with every
 // field, including those this package does not model; nil for a Bookmarks
 // the program built itself.
-func (b *Bookmarks) RawJSON() json.RawMessage { return b.raw }
+func (b *Bookmarks) RawJSON() jsontext.Value { return b.raw }
 
 // UnmarshalJSON decodes the bookmarks and keeps the JSON for RawJSON.
 func (b *Bookmarks) UnmarshalJSON(data []byte) error {
@@ -549,7 +550,7 @@ type DataPreferences struct {
 	ZeroRetentionBy string `json:"zero_retention_by,omitempty"`
 	// ZeroRetentionRoutes reports whether models no such endpoint serves
 	// stay closed rather than open.
-	ZeroRetentionRoutes bool `json:"zero_retention_routes,omitempty"`
+	ZeroRetentionRoutes bool `json:"zero_retention_routes,omitzero"`
 }
 
 // PinSession pins a session in the token's context and returns the pins.
@@ -593,13 +594,13 @@ type Devices struct {
 	// Limit is how many computers the person may hold.
 	Limit int `json:"limit"`
 
-	raw json.RawMessage
+	raw jsontext.Value
 }
 
 // RawJSON returns the JSON the API answered for the list of computers, with every field,
 // including those this package does not model; nil for a Devices the
 // program built itself.
-func (d *Devices) RawJSON() json.RawMessage { return d.raw }
+func (d *Devices) RawJSON() jsontext.Value { return d.raw }
 
 // UnmarshalJSON decodes the list of computers and keeps the JSON for RawJSON.
 func (d *Devices) UnmarshalJSON(b []byte) error {
@@ -635,17 +636,17 @@ type Device struct {
 	// Folders are the folders a session may work in.
 	Folders []DeviceFolder `json:"folders"`
 	// Network is the network it allows a session.
-	Network *DeviceNetwork `json:"network,omitempty"`
+	Network *DeviceNetwork `json:"network,omitzero"`
 	// CreatedAt is when it was connected.
 	CreatedAt time.Time `json:"created_at"`
 
-	raw json.RawMessage
+	raw jsontext.Value
 }
 
 // RawJSON returns the JSON the API answered for the device, with every
 // field, including those this package does not model; nil for a Device the
 // program built itself.
-func (d *Device) RawJSON() json.RawMessage { return d.raw }
+func (d *Device) RawJSON() jsontext.Value { return d.raw }
 
 // UnmarshalJSON decodes the device and keeps the JSON for RawJSON.
 func (d *Device) UnmarshalJSON(b []byte) error {
@@ -790,13 +791,13 @@ type EnvironmentsContext struct {
 	// runs in; empty where the deployment names none.
 	DefaultEnvironment string `json:"default_environment"`
 
-	raw json.RawMessage
+	raw jsontext.Value
 }
 
 // RawJSON returns the JSON the API answered for the context, with every
 // field, including those this package does not model; nil for an
 // EnvironmentsContext the program built itself.
-func (e *EnvironmentsContext) RawJSON() json.RawMessage { return e.raw }
+func (e *EnvironmentsContext) RawJSON() jsontext.Value { return e.raw }
 
 // UnmarshalJSON decodes the context and keeps the JSON for RawJSON.
 func (e *EnvironmentsContext) UnmarshalJSON(b []byte) error {

@@ -7,7 +7,7 @@ import (
 	"bytes"
 	"crypto/sha256"
 	"encoding/hex"
-	"encoding/json"
+	"encoding/json/v2"
 	"net/http"
 	"net/http/httptest"
 	"os"
@@ -259,4 +259,27 @@ func TestExecute(t *testing.T) {
 			t.Errorf("stderr = %q, want the openapi: prefix", stderr.String())
 		}
 	})
+}
+
+// The JSON written for a document has its keys in order and is indented
+// by two spaces, so a regeneration changes only what the source changed.
+func TestWrittenJSONIsInOrder(t *testing.T) {
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		_, _ = w.Write([]byte(sampleYAML))
+	}))
+	defer srv.Close()
+	pointDocumentsAt(t, srv.URL)
+	dir := t.TempDir()
+	if err := run(dir, nil); err != nil {
+		t.Fatalf("run: %v", err)
+	}
+	for name := range documents {
+		raw, err := os.ReadFile(filepath.Join(dir, name+".json"))
+		if err != nil {
+			t.Fatal(err)
+		}
+		if want := "{\n  \"info\": {\n    \"title\": \"sample\",\n    \"version\": \"1\"\n  },\n  \"openapi\": \"3.1.0\"\n}\n"; string(raw) != want {
+			t.Errorf("%s is written as\n%s\nwant\n%s", name, raw, want)
+		}
+	}
 }

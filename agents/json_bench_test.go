@@ -5,7 +5,8 @@ package agents
 
 import (
 	"bytes"
-	"encoding/json"
+	"encoding/json/jsontext"
+	"encoding/json/v2"
 	"fmt"
 	"io"
 	"net/http"
@@ -61,7 +62,7 @@ func benchEvents(n int) []*Event {
 			payload = map[string]any{"content": []ContentBlock{Text("Please summarise the changes in the working tree and run the tests.")}}
 		case 1:
 			typ = EventAgentToolUse
-			payload = ToolUse{ToolUseID: fmt.Sprintf("tu_%05d", i), Name: "bash", Input: json.RawMessage(`{"cmd":"git status --short && go test ./...","timeout":120}`)}
+			payload = ToolUse{ToolUseID: fmt.Sprintf("tu_%05d", i), Name: "bash", Input: jsontext.Value(`{"cmd":"git status --short && go test ./...","timeout":120}`)}
 		case 2:
 			typ = EventToolResult
 			payload = ToolResult{ToolUseID: fmt.Sprintf("tu_%05d", i-1), Content: []ContentBlock{Text(strings.Repeat("ok  \tlatere.ai/x/sdk-go/latere\t0.412s\n", 6))}}

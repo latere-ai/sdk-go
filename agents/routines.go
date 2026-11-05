@@ -5,7 +5,7 @@ package agents
 
 import (
 	"context"
-	"encoding/json"
+	"encoding/json/jsontext"
 	"errors"
 	"fmt"
 	"iter"
@@ -148,13 +148,13 @@ type Routine struct {
 	// nothing because the week's spend was at it.
 	SkippedBudget int64
 
-	raw json.RawMessage
+	raw jsontext.Value
 }
 
 // RawJSON returns the JSON the API answered for the routine's trigger,
 // with every field, including those this package does not model; nil for
 // a Routine the program built itself.
-func (r *Routine) RawJSON() json.RawMessage { return r.raw }
+func (r *Routine) RawJSON() jsontext.Value { return r.raw }
 
 // RoutineName returns the name of the trigger a routine made with key is
 // written under: RoutinePrefix and the first 20 hexadecimal digits of the
@@ -315,7 +315,7 @@ var errNoAgent = errors.New("agents: the routine's agent is empty")
 
 // applyRoutine writes the manifest of the routine of agent named name and
 // answers the routine as the API stored it.
-func (c *Client) applyRoutine(ctx context.Context, agent, name string, stored json.RawMessage, f routine.Fields) (*Routine, error) {
+func (c *Client) applyRoutine(ctx context.Context, agent, name string, stored jsontext.Value, f routine.Fields) (*Routine, error) {
 	manifest, err := routine.Manifest(agent, name, stored, f)
 	if err != nil {
 		return nil, err

@@ -5,7 +5,8 @@ package evals
 
 import (
 	"context"
-	"encoding/json"
+	"encoding/json/jsontext"
+	"encoding/json/v2"
 	"fmt"
 	"iter"
 	"net/http"
@@ -67,7 +68,7 @@ type StreamEvent struct {
 	Type EventType
 	// Data is the event's content as the API sent it, whose shape depends
 	// on Type; read it with Decode.
-	Data json.RawMessage
+	Data jsontext.Value
 }
 
 // Decode unmarshals the event's Data into v, such as a *CellChange for an
@@ -118,7 +119,7 @@ type TrialChange struct {
 	// retry.
 	RetryOf string `json:"retry_of,omitempty"`
 	// Imported reports a trial a harness ran elsewhere and imported.
-	Imported bool `json:"imported,omitempty"`
+	Imported bool `json:"imported,omitzero"`
 }
 
 // Grading is the Data of an EventGraded.
@@ -152,7 +153,7 @@ type ComparisonChange struct {
 	Final bool `json:"final"`
 	// Declared is, for a comparison its experiment declared, its place in
 	// the experiment's Comparisons; nil otherwise.
-	Declared *int `json:"declared,omitempty"`
+	Declared *int `json:"declared,omitzero"`
 }
 
 // ExperimentEnd is the Data of an EventExperimentCompleted and an
@@ -275,7 +276,7 @@ func decodeFrame(f latere.Frame) (*StreamEvent, error) {
 		}
 		ev.Seq = seq
 	}
-	if !json.Valid(f.Data) {
+	if !jsontext.Value(f.Data).IsValid() {
 		return nil, fmt.Errorf("evals: the %s event %d is not JSON", f.Event, ev.Seq)
 	}
 	return ev, nil

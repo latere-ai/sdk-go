@@ -200,7 +200,7 @@ func JoinGroup(welcomeMessage []byte, kp *KeyPackage, secrets *KeyPackageSecrets
 	if len(gs.joinerSecret) != s.nh {
 		return nil, errors.New("mls: Welcome joiner secret has the wrong size")
 	}
-	g := &Group{cfg: cfg, publicState: publicState{s: s}, signer: signer}
+	g := &Group{cfg: cfg, s: s, signer: signer}
 	for _, id := range gs.psks {
 		if id.typ == pskResumption && id.usage != resumptionApplication {
 			return nil, errors.New("mls: joining a reinitialized or branched group is not supported")

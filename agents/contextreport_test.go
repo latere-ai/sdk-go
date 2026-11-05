@@ -4,7 +4,8 @@
 package agents_test
 
 import (
-	"encoding/json"
+	"encoding/json/jsontext"
+	"encoding/json/v2"
 	"reflect"
 	"testing"
 
@@ -86,7 +87,7 @@ func TestTheUsedShareAndThePartsInOrder(t *testing.T) {
 func TestTheEventsOfAnUnattendedTurn(t *testing.T) {
 	decode := func(typ agents.EventType, payload string, v any) {
 		t.Helper()
-		e := agents.Event{ID: "evt_1", Type: typ, Payload: json.RawMessage(payload)}
+		e := agents.Event{ID: "evt_1", Type: typ, Payload: jsontext.Value(payload)}
 		if err := e.Decode(v); err != nil {
 			t.Fatal(err)
 		}

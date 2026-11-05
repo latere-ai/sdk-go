@@ -7,7 +7,7 @@ import (
 	"bytes"
 	"compress/gzip"
 	"encoding/hex"
-	"encoding/json"
+	"encoding/json/v2"
 	"os"
 	"path/filepath"
 	"testing"
@@ -48,7 +48,7 @@ func loadVectors(t testing.TB, name string, v any) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if err := json.NewDecoder(zr).Decode(v); err != nil {
+	if err := json.UnmarshalRead(zr, v); err != nil {
 		t.Fatalf("%s: %v", name, err)
 	}
 }

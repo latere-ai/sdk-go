@@ -5,7 +5,8 @@ package agents
 
 import (
 	"context"
-	"encoding/json"
+	"encoding/json/jsontext"
+	"encoding/json/v2"
 	"go/ast"
 	"go/parser"
 	"go/token"
@@ -34,7 +35,7 @@ import (
 // schema of its route.
 
 type document struct {
-	Paths      map[string]map[string]json.RawMessage `json:"paths"`
+	Paths      map[string]map[string]jsontext.Value `json:"paths"`
 	Components struct {
 		Schemas map[string]*schema `json:"schemas"`
 	} `json:"components"`
@@ -48,7 +49,7 @@ type schema struct {
 	Properties           map[string]*schema `json:"properties"`
 	Required             []string           `json:"required"`
 	Items                *schema            `json:"items"`
-	AdditionalProperties json.RawMessage    `json:"additionalProperties"`
+	AdditionalProperties jsontext.Value     `json:"additionalProperties"`
 	AllOf                []*schema          `json:"allOf"`
 	AnyOf                []*schema          `json:"anyOf"`
 	OneOf                []*schema          `json:"oneOf"`
@@ -601,7 +602,7 @@ func TestAConfirmationOfHowThePersonAnsweredFitsItsSchema(t *testing.T) {
 	d, _ := loadDocument(t)
 	var body map[string]any
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		if err := json.NewDecoder(r.Body).Decode(&body); err != nil {
+		if err := json.UnmarshalRead(r.Body, &body); err != nil {
 			t.Error(err)
 		}
 		w.Header().Set("Content-Type", "application/json")

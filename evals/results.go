@@ -4,7 +4,8 @@
 package evals
 
 import (
-	"encoding/json"
+	"encoding/json/jsontext"
+	"encoding/json/v2"
 	"fmt"
 )
 
@@ -36,19 +37,19 @@ type Summary struct {
 	// candidate-level metric, its one current value. It is empty when
 	// nothing is valued, and left as JSON since its type is the
 	// aggregate's: read a number with Number.
-	Value json.RawMessage `json:"value,omitempty"`
+	Value jsontext.Value `json:"value,omitzero"`
 	// Numerator is, for a rate, the finished trials whose value is true,
 	// and for a mode share the trials holding the most frequent label.
-	Numerator *int `json:"numerator,omitempty"`
+	Numerator *int `json:"numerator,omitzero"`
 	// Mean, SD, Min and Max are the figures of a numeric metric, nil
 	// where the aggregate has none.
-	Mean *float64 `json:"mean,omitempty"`
-	SD   *float64 `json:"sd,omitempty"`
-	Min  *float64 `json:"min,omitempty"`
-	Max  *float64 `json:"max,omitempty"`
+	Mean *float64 `json:"mean,omitzero"`
+	SD   *float64 `json:"sd,omitzero"`
+	Min  *float64 `json:"min,omitzero"`
+	Max  *float64 `json:"max,omitzero"`
 	// Interval is the value's interval; nil when there is none, and
 	// NoInterval says why.
-	Interval   *Interval `json:"interval,omitempty"`
+	Interval   *Interval `json:"interval,omitzero"`
 	NoInterval string    `json:"no_interval,omitempty"`
 	// Distribution is, for a label metric, each label's count and
 	// proportion.
@@ -57,8 +58,8 @@ type Summary struct {
 	Mode string `json:"mode,omitempty"`
 	// Coverage is, at suite level, the share of the suite's weight the
 	// included tasks hold; Tasks is how many tasks that is.
-	Coverage *float64 `json:"coverage,omitempty"`
-	Tasks    *int     `json:"tasks,omitempty"`
+	Coverage *float64 `json:"coverage,omitzero"`
+	Tasks    *int     `json:"tasks,omitzero"`
 	// Excluded counts the trials of the set not counted in N, by reason:
 	// retried, infra_failed, over_budget, canceled or not_done.
 	Excluded map[string]int `json:"excluded,omitempty"`
@@ -67,7 +68,7 @@ type Summary struct {
 	ExcludedLabels map[string]int `json:"excluded_labels,omitempty"`
 	// Unmapped is, for an open-vocabulary metric, the finished trials
 	// whose raw label the taxonomy record read does not map.
-	Unmapped *int `json:"unmapped,omitempty"`
+	Unmapped *int `json:"unmapped,omitzero"`
 }
 
 // Number returns Value as a number, and false when the summary holds none:
@@ -89,10 +90,10 @@ type LabelShare struct {
 	Count      int     `json:"count"`
 	Proportion float64 `json:"proportion"`
 	// Interval is the proportion's interval, nil when there is none.
-	Interval *Interval `json:"interval,omitempty"`
+	Interval *Interval `json:"interval,omitzero"`
 	// Unmapped reports a raw label of an open vocabulary that the taxonomy
 	// record read does not map.
-	Unmapped bool `json:"unmapped,omitempty"`
+	Unmapped bool `json:"unmapped,omitzero"`
 }
 
 // ResultLevel is what a comparison's result is over.
@@ -137,7 +138,7 @@ type Result struct {
 	Task string `json:"task,omitempty"`
 	// TaskDigests are the digests of the candidate's and the reference's
 	// task, on a task-level result.
-	TaskDigests *TaskDigests `json:"task_digests,omitempty"`
+	TaskDigests *TaskDigests `json:"task_digests,omitzero"`
 	// Direction says which way the metric is better.
 	Direction Direction `json:"direction"`
 	// Candidate and Reference summarize the metric on each side.
@@ -149,24 +150,24 @@ type Result struct {
 	// for a label metric an object from each label to the difference of
 	// its proportions. Absent on a descriptive result. Read it with
 	// DeltaNumber or DeltaLabels.
-	Delta json.RawMessage `json:"delta,omitempty"`
+	Delta jsontext.Value `json:"delta,omitzero"`
 	// DeltaInterval is the delta's interval: one Interval, or for a
 	// per-label delta an object from each label to its interval. Absent
 	// where none is computed, and NoDeltaInterval says why when the result
 	// is not insufficient.
-	DeltaInterval   json.RawMessage `json:"delta_interval,omitempty"`
-	NoDeltaInterval string          `json:"no_delta_interval,omitempty"`
+	DeltaInterval   jsontext.Value `json:"delta_interval,omitzero"`
+	NoDeltaInterval string         `json:"no_delta_interval,omitempty"`
 	// Verdict is what the comparison found; empty on a descriptive
 	// result. Reason is one plain sentence saying why.
 	Verdict Verdict `json:"verdict,omitempty"`
 	Reason  string  `json:"reason"`
 	// P is the uncorrected p-value, and Q its value after the correction
 	// for the comparison's results. Nil where the test computed none.
-	P *float64 `json:"p,omitempty"`
-	Q *float64 `json:"q,omitempty"`
+	P *float64 `json:"p,omitzero"`
+	Q *float64 `json:"q,omitzero"`
 	// H is, on a pair result of two benchmark entries, the Holm-adjusted
 	// value in place of Q; nil on a comparison's result.
-	H *float64 `json:"h,omitempty"`
+	H *float64 `json:"h,omitzero"`
 	// Method is the test, such as "boschloo_exact" or "permutation";
 	// empty on a descriptive result. Statistic is what the test orders
 	// by, Exact reports that it enumerated every case, Resamples is how
@@ -174,8 +175,8 @@ type Result struct {
 	// result's derived seed, in hex.
 	Method    string `json:"method,omitempty"`
 	Statistic string `json:"statistic,omitempty"`
-	Exact     bool   `json:"exact,omitempty"`
-	Resamples *int   `json:"resamples,omitempty"`
+	Exact     bool   `json:"exact,omitzero"`
+	Resamples *int   `json:"resamples,omitzero"`
 	Seed      string `json:"seed,omitempty"`
 	// Confounds are the result's confounds, besides the variable compared.
 	Confounds []Confound `json:"confounds,omitempty"`
@@ -183,12 +184,12 @@ type Result struct {
 	// the result does not include.
 	LeftOut []LeftOut `json:"left_out,omitempty"`
 
-	raw json.RawMessage
+	raw jsontext.Value
 }
 
 // RawJSON returns the JSON the API answered for the result, including any
 // field Result does not model.
-func (r *Result) RawJSON() json.RawMessage { return r.raw }
+func (r *Result) RawJSON() jsontext.Value { return r.raw }
 
 // UnmarshalJSON decodes the result and keeps the JSON for RawJSON.
 func (r *Result) UnmarshalJSON(b []byte) error {
@@ -248,8 +249,8 @@ type Confound struct {
 	// Candidate and Reference are the figure per side: a count of
 	// requests or trials, a window {from, to}, or a taxonomy record id,
 	// by the confound's name. Absent for a field of the setup.
-	Candidate json.RawMessage `json:"candidate,omitempty"`
-	Reference json.RawMessage `json:"reference,omitempty"`
+	Candidate jsontext.Value `json:"candidate,omitzero"`
+	Reference jsontext.Value `json:"reference,omitzero"`
 }
 
 // A LeftOut is a task of weight above zero that a suite-level result does

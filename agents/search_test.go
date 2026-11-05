@@ -4,7 +4,7 @@
 package agents_test
 
 import (
-	"encoding/json"
+	"encoding/json/v2"
 	"net/url"
 	"strings"
 	"testing"

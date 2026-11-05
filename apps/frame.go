@@ -5,7 +5,8 @@ package apps
 
 import (
 	"context"
-	"encoding/json"
+	"encoding/json/jsontext"
+	"encoding/json/v2"
 	"errors"
 	"net/http"
 	"time"
@@ -25,12 +26,12 @@ type FramePass struct {
 	// after it was handed out.
 	ExpiresAt time.Time `json:"expires_at"`
 
-	raw json.RawMessage
+	raw jsontext.Value
 }
 
 // RawJSON returns the JSON the API answered for the pass, with every
 // field; nil for a FramePass the program built itself.
-func (f *FramePass) RawJSON() json.RawMessage { return f.raw }
+func (f *FramePass) RawJSON() jsontext.Value { return f.raw }
 
 // UnmarshalJSON decodes the pass and keeps the JSON for RawJSON.
 func (f *FramePass) UnmarshalJSON(b []byte) error {

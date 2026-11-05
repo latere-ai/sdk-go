@@ -4,7 +4,8 @@
 package wire_test
 
 import (
-	"encoding/json"
+	"encoding/json/jsontext"
+	"encoding/json/v2"
 	"fmt"
 	"strings"
 	"testing"
@@ -21,7 +22,7 @@ var wireSizes = []struct {
 // call and its result in each.
 func wireRequest(turns int) *wire.Request {
 	maxTokens := int64(4096)
-	schema := json.RawMessage(`{"type":"object","properties":{"cmd":{"type":"string","description":"The shell command to run."},"timeout":{"type":"integer"}},"required":["cmd"]}`)
+	schema := jsontext.Value(`{"type":"object","properties":{"cmd":{"type":"string","description":"The shell command to run."},"timeout":{"type":"integer"}},"required":["cmd"]}`)
 	req := &wire.Request{
 		Model:     "claude-sonnet-5-5",
 		System:    []wire.Block{{Type: wire.BlockText, Text: "You are a careful assistant working in the user's repository."}},
@@ -35,7 +36,7 @@ func wireRequest(turns int) *wire.Request {
 			wire.Message{Role: wire.RoleUser, Blocks: []wire.Block{{Type: wire.BlockText, Text: fmt.Sprintf("Step %d: list the files that changed and summarise why. %s", i, strings.Repeat("Keep it short. ", 4))}}},
 			wire.Message{Role: wire.RoleAssistant, Blocks: []wire.Block{
 				{Type: wire.BlockText, Text: strings.Repeat("I will inspect the working tree first. ", 5)},
-				{Type: wire.BlockToolUse, ToolUse: &wire.ToolUse{ID: fmt.Sprintf("tu_%04d", i), Name: "bash", Args: json.RawMessage(`{"cmd":"git status --short && git diff --stat","timeout":30}`)}},
+				{Type: wire.BlockToolUse, ToolUse: &wire.ToolUse{ID: fmt.Sprintf("tu_%04d", i), Name: "bash", Args: jsontext.Value(`{"cmd":"git status --short && git diff --stat","timeout":30}`)}},
 			}},
 			wire.Message{Role: wire.RoleUser, Blocks: []wire.Block{
 				{Type: wire.BlockToolResult, ToolResult: &wire.ToolResult{ToolUseID: fmt.Sprintf("tu_%04d", i), Blocks: []wire.Block{{Type: wire.BlockText, Text: strings.Repeat(" M internal/server/handler.go\n 3 files changed, 41 insertions(+), 7 deletions(-)\n", 4)}}}},
@@ -66,14 +67,14 @@ func BenchmarkJSONRequestMarshal(b *testing.B) {
 	for _, s := range wireSizes {
 		b.Run(s.name, func(b *testing.B) {
 			req := wireRequest(s.turns)
-			enc, err := json.Marshal(req)
+			enc, err := json.Marshal(req, json.Deterministic(true))
 			if err != nil {
 				b.Fatal(err)
 			}
 			b.ReportAllocs()
 			b.SetBytes(int64(len(enc)))
 			for b.Loop() {
-				if _, err := json.Marshal(req); err != nil {
+				if _, err := json.Marshal(req, json.Deterministic(true)); err != nil {
 					b.Fatal(err)
 				}
 			}

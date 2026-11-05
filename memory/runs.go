@@ -5,7 +5,8 @@ package memory
 
 import (
 	"context"
-	"encoding/json"
+	"encoding/json/jsontext"
+	"encoding/json/v2"
 	"errors"
 	"net/http"
 	"net/url"
@@ -99,13 +100,13 @@ type RunList struct {
 	// Runs are the runs, the newest first, without their Changes.
 	Runs []*Run `json:"runs"`
 
-	raw json.RawMessage
+	raw jsontext.Value
 }
 
 // RawJSON returns the JSON the API answered for the list, with every
 // field, including those this package does not model; nil for a RunList
 // the program built itself.
-func (l *RunList) RawJSON() json.RawMessage { return l.raw }
+func (l *RunList) RawJSON() jsontext.Value { return l.raw }
 
 // UnmarshalJSON decodes the list and keeps the JSON for RawJSON.
 func (l *RunList) UnmarshalJSON(b []byte) error {
@@ -157,13 +158,13 @@ type Run struct {
 	// ApplyRun, DeclineRun and UndoRun; a list answers none.
 	Changes []RunChange `json:"changes,omitempty"`
 
-	raw json.RawMessage
+	raw jsontext.Value
 }
 
 // RawJSON returns the JSON the API answered for the run, with every
 // field, including those this package does not model; nil for a Run the
 // program built itself.
-func (r *Run) RawJSON() json.RawMessage { return r.raw }
+func (r *Run) RawJSON() jsontext.Value { return r.raw }
 
 // UnmarshalJSON decodes the run and keeps the JSON for RawJSON.
 func (r *Run) UnmarshalJSON(b []byte) error {
@@ -229,7 +230,7 @@ type Undone struct {
 // RawJSON returns the JSON the API answered for the undo, the run with
 // MovedOn, with every field, including those this package does not
 // model; nil for an Undone the program built itself.
-func (u *Undone) RawJSON() json.RawMessage { return u.raw }
+func (u *Undone) RawJSON() jsontext.Value { return u.raw }
 
 // UnmarshalJSON decodes the run and what the undo left as it was, and
 // keeps the JSON for RawJSON. It decodes in two steps because the Run it

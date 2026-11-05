@@ -14,7 +14,8 @@ import (
 	"context"
 	"crypto/sha256"
 	"encoding/hex"
-	"encoding/json"
+	"encoding/json/jsontext"
+	"encoding/json/v2"
 	"flag"
 	"fmt"
 	"io"
@@ -105,7 +106,7 @@ func run(dir string, local map[string]string) error {
 		if err := yaml.Unmarshal(raw, &doc); err != nil {
 			return fmt.Errorf("%s: parsing the YAML: %w", name, err)
 		}
-		out, err := json.MarshalIndent(doc, "", "  ")
+		out, err := json.Marshal(doc, json.Deterministic(true), jsontext.WithIndent("  "))
 		if err != nil {
 			return fmt.Errorf("%s: encoding the JSON: %w", name, err)
 		}
@@ -115,7 +116,7 @@ func run(dir string, local map[string]string) error {
 		sum := sha256.Sum256(raw)
 		sources[name] = source{URL: url, SHA256: hex.EncodeToString(sum[:])}
 	}
-	out, err := json.MarshalIndent(sources, "", "  ")
+	out, err := json.Marshal(sources, json.Deterministic(true), jsontext.WithIndent("  "))
 	if err != nil {
 		return err
 	}

@@ -4,7 +4,7 @@
 package llm_test
 
 import (
-	"encoding/json"
+	"encoding/json/v2"
 	"errors"
 	"fmt"
 	"io"
@@ -52,7 +52,7 @@ func TestGenerateSendsTheKeyAndReadsTheAnswer(t *testing.T) {
 			t.Errorf("Authorization = %q, want the key itself", got)
 		}
 		var req llm.Request
-		if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		if err := json.UnmarshalRead(r.Body, &req); err != nil {
 			t.Fatal(err)
 		}
 		if req.Stream || req.Model != "anthropic/claude-sonnet-4.5" || req.Messages[0].Blocks[0].Text != "Hello" {
@@ -348,3 +348,38 @@ func TestAConfigThatIsNotBuiltFailsEveryCall(t *testing.T) {
 // drain reads what is left of a request body, so the server's handler can
 // write its answer before the client stops reading.
 func drain(r *http.Request) { _, _ = io.Copy(io.Discard, r.Body) }
+
+// An answer carries what a model wrote: a repeated member takes its last
+// value, and text with a byte that is not UTF-8 is kept with U+FFFD.
+func TestGenerateReadsAnAnswerLeniently(t *testing.T) {
+	c := newClient(t, func(w http.ResponseWriter, r *http.Request) {
+		fmt.Fprint(w, "{\"id\":\"msg_1\",\"id\":\"msg_2\",\"model\":\"m\",\"blocks\":[{\"type\":\"text\",\"text\":\"a\xff\"}],\"stop_reason\":\"end_turn\",\"usage\":{}}")
+	})
+	res, err := c.Generate(t.Context(), hello())
+	if err != nil {
+		t.Fatal(err)
+	}
+	if res.ID != "msg_2" || res.Text() != "a�" {
+		t.Errorf("result = %+v", res)
+	}
+}
+
+// A request that carries a byte that is not UTF-8 is sent with U+FFFD in
+// its place.
+func TestGenerateSendsTextThatIsNotUTF8(t *testing.T) {
+	var got llm.Request
+	c := newClient(t, func(w http.ResponseWriter, r *http.Request) {
+		if err := json.UnmarshalRead(r.Body, &got); err != nil {
+			t.Error(err)
+		}
+		fmt.Fprint(w, `{"id":"m","model":"m","blocks":[],"stop_reason":"end_turn","usage":{}}`)
+	})
+	req := hello()
+	req.Messages = []llm.Message{llm.UserText("a\xffb")}
+	if _, err := c.Generate(t.Context(), req); err != nil {
+		t.Fatal(err)
+	}
+	if got.Messages[0].Blocks[0].Text != "a�b" {
+		t.Errorf("sent %q", got.Messages[0].Blocks[0].Text)
+	}
+}

@@ -24,10 +24,10 @@ type TriggerSpend struct {
 	SpentMicroUSD int64 `json:"spentUsdMicro"`
 	// PerWeekMicroUSD is the trigger's allowance when the spend was
 	// written; zero when it named none.
-	PerWeekMicroUSD int64 `json:"perWeekUsdMicro,omitempty"`
+	PerWeekMicroUSD int64 `json:"perWeekUsdMicro,omitzero"`
 	// PerLookMicroUSD is the mean cost of the latest five looks that
 	// ended; nil before any look ended.
-	PerLookMicroUSD *int64 `json:"perLookUsdMicro,omitempty"`
+	PerLookMicroUSD *int64 `json:"perLookUsdMicro,omitzero"`
 	// ExpectedLooks is how many looks are expected from the firing that
 	// wrote the spend to the end of the window, that firing's own
 	// included: a schedule's fire times, one for a trigger that fires
@@ -38,7 +38,7 @@ type TriggerSpend struct {
 	// SpentMicroUSD plus PerLookMicroUSD times ExpectedLooks. The window
 	// ends 7 days after the oldest look it counts, so this is the spend of
 	// one whole window. Nil with PerLookMicroUSD.
-	ProjectedMicroUSD *int64 `json:"projectedUsdMicro,omitempty"`
+	ProjectedMicroUSD *int64 `json:"projectedUsdMicro,omitzero"`
 }
 
 // AheadOfPace reports whether the window is on course to cost more than
@@ -69,10 +69,10 @@ type FiringSpend struct {
 	// fields of the same names, written by the same firing.
 	WindowDays        int    `json:"window_days"`
 	SpentMicroUSD     int64  `json:"spent_usd_micro"`
-	PerWeekMicroUSD   int64  `json:"per_week_usd_micro,omitempty"`
-	PerLookMicroUSD   *int64 `json:"per_look_usd_micro,omitempty"`
+	PerWeekMicroUSD   int64  `json:"per_week_usd_micro,omitzero"`
+	PerLookMicroUSD   *int64 `json:"per_look_usd_micro,omitzero"`
 	ExpectedLooks     int    `json:"expected_looks"`
-	ProjectedMicroUSD *int64 `json:"projected_usd_micro,omitempty"`
+	ProjectedMicroUSD *int64 `json:"projected_usd_micro,omitzero"`
 }
 
 // AheadOfPace reports whether the window was on course to cost more than

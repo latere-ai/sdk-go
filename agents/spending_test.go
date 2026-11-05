@@ -4,7 +4,8 @@
 package agents_test
 
 import (
-	"encoding/json"
+	"encoding/json/jsontext"
+	"encoding/json/v2"
 	"testing"
 
 	"latere.ai/x/sdk-go/agents"
@@ -12,7 +13,7 @@ import (
 
 // spentEvent is an event of typ with payload at seq, as the log answers it.
 func spentEvent(seq int64, typ agents.EventType, payload string) agents.Event {
-	return agents.Event{ID: "evt_1", Seq: seq, Type: typ, Payload: json.RawMessage(payload)}
+	return agents.Event{ID: "evt_1", Seq: seq, Type: typ, Payload: jsontext.Value(payload)}
 }
 
 // A priced tool call's result carries its cost beside its meta, and a

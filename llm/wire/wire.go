@@ -14,7 +14,8 @@
 package wire
 
 import (
-	"encoding/json"
+	"encoding/json/jsontext"
+	"encoding/json/v2"
 	"math"
 )
 
@@ -34,25 +35,25 @@ type Request struct {
 	// search.
 	ServerTools []ServerTool `json:"server_tools,omitempty"`
 	// ToolChoice constrains how the model uses Tools; nil lets it decide.
-	ToolChoice *ToolChoice `json:"tool_choice,omitempty"`
+	ToolChoice *ToolChoice `json:"tool_choice,omitzero"`
 	// MaxTokens caps the answer's length in tokens.
-	MaxTokens *int64 `json:"max_tokens,omitempty"`
+	MaxTokens *int64 `json:"max_tokens,omitzero"`
 	// Temperature, TopP and TopK are the sampling controls; nil leaves each
 	// at the provider's default.
-	Temperature *float64 `json:"temperature,omitempty"`
-	TopP        *float64 `json:"top_p,omitempty"`
-	TopK        *int64   `json:"top_k,omitempty"`
+	Temperature *float64 `json:"temperature,omitzero"`
+	TopP        *float64 `json:"top_p,omitzero"`
+	TopK        *int64   `json:"top_k,omitzero"`
 	// StopSequences end the answer when any of them is generated.
 	StopSequences []string `json:"stop_sequences,omitempty"`
 	// Stream asks for server-sent events. llm.Client's Generate and Stream
 	// set it themselves, so one Request serves both.
-	Stream bool `json:"stream,omitempty"`
+	Stream bool `json:"stream,omitzero"`
 	// Reasoning turns on extended thinking.
-	Reasoning *Reasoning `json:"reasoning,omitempty"`
+	Reasoning *Reasoning `json:"reasoning,omitzero"`
 	// Schema asks for an answer that conforms to a JSON Schema.
-	Schema *ResponseSchema `json:"schema,omitempty"`
+	Schema *ResponseSchema `json:"schema,omitzero"`
 	// WebSearch asks the provider to ground its answer in a search it runs.
-	WebSearch *WebSearch `json:"web_search,omitempty"`
+	WebSearch *WebSearch `json:"web_search,omitzero"`
 	// UserID is a stable identifier of your end user, for the provider's
 	// abuse monitoring.
 	UserID string `json:"user_id,omitempty"`
@@ -61,11 +62,11 @@ type Request struct {
 	CacheKey string `json:"cache_key,omitempty"`
 	// LogProbs asks for each answer token's log probability, and
 	// TopLogProbs for that many alternatives at each position.
-	LogProbs    bool `json:"logprobs,omitempty"`
-	TopLogProbs int  `json:"top_logprobs,omitempty"`
+	LogProbs    bool `json:"logprobs,omitzero"`
+	TopLogProbs int  `json:"top_logprobs,omitzero"`
 	// ReasoningReplay sends earlier thinking blocks back to a provider that
 	// accepts them, so a long tool-using turn keeps its reasoning.
-	ReasoningReplay bool `json:"reasoning_replay,omitempty"`
+	ReasoningReplay bool `json:"reasoning_replay,omitzero"`
 }
 
 // Message is one turn of a conversation.
@@ -83,12 +84,12 @@ type Block struct {
 	// Text is the content of a BlockText or BlockThinking block.
 	Text string `json:"text,omitempty"`
 	// Image is the content of a BlockImage block.
-	Image *Image `json:"image,omitempty"`
+	Image *Image `json:"image,omitzero"`
 	// ToolUse is the content of a BlockToolUse block: a call the model made.
-	ToolUse *ToolUse `json:"tool_use,omitempty"`
+	ToolUse *ToolUse `json:"tool_use,omitzero"`
 	// ToolResult is the content of a BlockToolResult block: your answer to a
 	// call.
-	ToolResult *ToolResult `json:"tool_result,omitempty"`
+	ToolResult *ToolResult `json:"tool_result,omitzero"`
 	// Signature is the provider's token on a BlockThinking block, which it
 	// needs to accept the block back in a later request.
 	Signature string `json:"signature,omitempty"`
@@ -96,10 +97,10 @@ type Block struct {
 	// you.
 	Redacted string `json:"redacted,omitempty"`
 	// Opaque is the content of a BlockOpaque block.
-	Opaque *Opaque `json:"opaque,omitempty"`
+	Opaque *Opaque `json:"opaque,omitzero"`
 	// CacheHint marks the end of a prompt-cache prefix, for providers that
 	// support one. It does not apply to thinking blocks.
-	CacheHint bool `json:"cache_hint,omitempty"`
+	CacheHint bool `json:"cache_hint,omitzero"`
 }
 
 // Image is image content, inline or by URL.
@@ -119,7 +120,7 @@ type ToolUse struct {
 	// Name is the tool's name.
 	Name string `json:"name"`
 	// Args are the call's arguments, JSON matching the tool's input schema.
-	Args json.RawMessage `json:"args,omitempty"`
+	Args jsontext.Value `json:"args,omitzero"`
 }
 
 // ToolResult is your answer to a ToolUse.
@@ -129,7 +130,7 @@ type ToolResult struct {
 	// Blocks are the answer's content.
 	Blocks []Block `json:"blocks,omitempty"`
 	// IsError says the tool failed, so Blocks describe the failure.
-	IsError bool `json:"is_error,omitempty"`
+	IsError bool `json:"is_error,omitzero"`
 }
 
 // Opaque is an item a provider returned that only that provider can read,
@@ -141,7 +142,7 @@ type Opaque struct {
 	// Kind is the provider's own name for the item.
 	Kind string `json:"kind,omitempty"`
 	// Raw is the item, exactly as the provider sent it.
-	Raw json.RawMessage `json:"raw"`
+	Raw jsontext.Value `json:"raw"`
 }
 
 // Tool is a tool the model may call.
@@ -151,7 +152,7 @@ type Tool struct {
 	// Description tells the model what the tool does and when to use it.
 	Description string `json:"description,omitempty"`
 	// InputSchema is the JSON Schema of the tool's arguments.
-	InputSchema json.RawMessage `json:"input_schema"`
+	InputSchema jsontext.Value `json:"input_schema"`
 }
 
 // ServerTool is a tool the provider runs itself.
@@ -162,7 +163,7 @@ type ServerTool struct {
 	Name string `json:"name,omitempty"`
 	// Config holds the provider's own options for the tool, passed
 	// unchanged.
-	Config json.RawMessage `json:"config,omitempty"`
+	Config jsontext.Value `json:"config,omitzero"`
 }
 
 // WebSearch asks the provider to ground its answer in a search it runs.
@@ -172,7 +173,7 @@ type WebSearch struct {
 	ContextSize string `json:"context_size,omitempty"`
 	// UserLocation biases results geographically, in the provider's own
 	// shape, passed unchanged.
-	UserLocation json.RawMessage `json:"user_location,omitempty"`
+	UserLocation jsontext.Value `json:"user_location,omitzero"`
 }
 
 // ToolChoice constrains how the model uses the request's tools.
@@ -182,7 +183,7 @@ type ToolChoice struct {
 	// Name is the tool the model must call, with ToolChoiceTool.
 	Name string `json:"name,omitempty"`
 	// DisableParallel makes the model call one tool at a time.
-	DisableParallel bool `json:"disable_parallel,omitempty"`
+	DisableParallel bool `json:"disable_parallel,omitzero"`
 }
 
 // Reasoning turns on extended thinking. Set Level or BudgetTokens, not
@@ -191,7 +192,7 @@ type Reasoning struct {
 	// Level is how much the model reasons, on a provider-neutral scale.
 	Level ReasoningLevel `json:"effort,omitempty"`
 	// BudgetTokens is how many tokens the model may spend thinking.
-	BudgetTokens int64 `json:"budget_tokens,omitempty"`
+	BudgetTokens int64 `json:"budget_tokens,omitzero"`
 }
 
 // ResponseSchema asks for an answer that is JSON conforming to Schema.
@@ -201,9 +202,9 @@ type ResponseSchema struct {
 	// Description says what the answer is for.
 	Description string `json:"description,omitempty"`
 	// Schema is the JSON Schema the answer conforms to.
-	Schema json.RawMessage `json:"schema"`
+	Schema jsontext.Value `json:"schema"`
 	// Strict asks the provider to enforce the schema exactly, where it can.
-	Strict bool `json:"strict,omitempty"`
+	Strict bool `json:"strict,omitzero"`
 }
 
 // Usage is what one generation consumed.
@@ -215,14 +216,14 @@ type Usage struct {
 	// served from and written to the provider's prompt cache, or nil when
 	// the provider reported no such figure. Nil means not measured; a
 	// pointer to zero means measured and none.
-	CacheReadInputTokens  *int64 `json:"cache_read_input_tokens,omitempty"`
-	CacheWriteInputTokens *int64 `json:"cache_write_input_tokens,omitempty"`
+	CacheReadInputTokens  *int64 `json:"cache_read_input_tokens,omitzero"`
+	CacheWriteInputTokens *int64 `json:"cache_write_input_tokens,omitzero"`
 	// ReasoningTokens are the output tokens spent thinking.
-	ReasoningTokens int64 `json:"reasoning_tokens,omitempty"`
+	ReasoningTokens int64 `json:"reasoning_tokens,omitzero"`
 	// CostMicroUSD is what the generation cost, in millionths of a US
 	// dollar, or nil when no cost was reported. Nil means unknown, not free:
 	// a reported zero cost is a pointer to zero.
-	CostMicroUSD *int64 `json:"cost_usd_micro,omitempty"`
+	CostMicroUSD *int64 `json:"cost_usd_micro,omitzero"`
 }
 
 // Response is a complete answer. Its blocks use the request's vocabulary, so
@@ -260,7 +261,7 @@ type Event struct {
 	Index int `json:"index"`
 	// Block is the block that opens, on EventBlockStart; for a tool call it
 	// holds the call's ID and name, and its Args arrive as EventArgsDelta.
-	Block *Block `json:"block,omitempty"`
+	Block *Block `json:"block,omitzero"`
 	// Delta is the next piece of a block: text for EventTextDelta and
 	// EventThinkingDelta, serialized JSON for EventArgsDelta, and the
 	// signature for EventSignatureDelta.
@@ -270,7 +271,7 @@ type Event struct {
 	StopSequence string     `json:"stop_sequence,omitempty"`
 	// Usage is reported twice: the input side on EventMessageStart and the
 	// output side on EventMessageDelta. Add both.
-	Usage *Usage `json:"usage,omitempty"`
+	Usage *Usage `json:"usage,omitzero"`
 	// LogProbs are the log probabilities of the tokens in Delta, when the
 	// request asked for them.
 	LogProbs []TokenLogProb `json:"logprobs,omitempty"`

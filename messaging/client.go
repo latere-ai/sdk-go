@@ -537,7 +537,7 @@ type BackupPage struct {
 	Records []StoredBackupRecord `json:"records"`
 	// Next is the cursor to read on from; it is set only when the page is
 	// full, and the next page may be empty.
-	Next int64 `json:"next,omitempty"`
+	Next int64 `json:"next,omitzero"`
 }
 
 // BackupRecords lists the caller's own backup records of a conversation:

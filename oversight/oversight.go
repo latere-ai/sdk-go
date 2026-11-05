@@ -87,7 +87,8 @@ package oversight
 
 import (
 	"context"
-	"encoding/json"
+	"encoding/json/jsontext"
+	"encoding/json/v2"
 	"errors"
 	"fmt"
 	"net/http"
@@ -211,12 +212,12 @@ type Learned struct {
 	// points of their history, the last one now.
 	Recent []TrendPoint `json:"recent"`
 
-	raw json.RawMessage
+	raw jsontext.Value
 }
 
 // RawJSON returns the JSON the API answered for the view, with every
 // field, including those this version of the package does not model.
-func (l *Learned) RawJSON() json.RawMessage { return l.raw }
+func (l *Learned) RawJSON() jsontext.Value { return l.raw }
 
 // UnmarshalJSON decodes the view and keeps the JSON for RawJSON.
 func (l *Learned) UnmarshalJSON(b []byte) error {
@@ -259,7 +260,7 @@ type LearnedKind struct {
 	// Cover is how far the person's approvals cover a step of the label
 	// now, as a Prediction's Cover says, without Nearest; nil from a
 	// decision service that does not send it.
-	Cover *Cover `json:"cover,omitempty"`
+	Cover *Cover `json:"cover,omitzero"`
 }
 
 // TrendPoint is how much the person let steps run at one point of their
@@ -313,7 +314,7 @@ type Explanation struct {
 	// nil when there is none. When the two differ, the decision service
 	// learned since, and the explanation is of what it suggests now.
 	Model       ModelRef  `json:"model"`
-	PredictedBy *ModelRef `json:"predicted_by,omitempty"`
+	PredictedBy *ModelRef `json:"predicted_by,omitzero"`
 	// Approve, Uncertainty and Verdict are what Model predicts for the
 	// step, under Thresholds: those of the recorded prediction, or of the
 	// profile that applies now.
@@ -326,7 +327,7 @@ type Explanation struct {
 	// Parts split Mean into what the model knows of steps like this one,
 	// whenever they were, of the person's answers lately, about any step,
 	// and of the two together. Nil for a model that has no parts.
-	Parts *Parts `json:"parts,omitempty"`
+	Parts *Parts `json:"parts,omitzero"`
 	// EvidenceRatio is the share, from 0 to 1, of the model's uncertainty
 	// about the step that the person's answers removed.
 	EvidenceRatio float64 `json:"evidence_ratio"`
@@ -344,7 +345,7 @@ type Explanation struct {
 	// Cover is how far the person's approvals cover the step, with the
 	// nearest approvals whose Scope the step exceeds; nil from a decision
 	// service that does not send it.
-	Cover *Cover `json:"cover,omitempty"`
+	Cover *Cover `json:"cover,omitzero"`
 	// Calibration is the state of the bin of the recorded prediction's
 	// Approve, not of the Approve explained now, in the person's
 	// calibration report for the last CalibrationWindow. Empty for a step
@@ -353,12 +354,12 @@ type Explanation struct {
 	// says when a client may show Approve.
 	Calibration CalibrationState `json:"calibration,omitempty"`
 
-	raw json.RawMessage
+	raw jsontext.Value
 }
 
 // RawJSON returns the JSON the API answered for the explanation, with
 // every field, including those this version of the package does not model.
-func (e *Explanation) RawJSON() json.RawMessage { return e.raw }
+func (e *Explanation) RawJSON() jsontext.Value { return e.raw }
 
 // UnmarshalJSON decodes the explanation and keeps the JSON for RawJSON.
 func (e *Explanation) UnmarshalJSON(b []byte) error {
@@ -443,8 +444,8 @@ type Certify struct {
 // own setting. A Cover names the settings that applied in MinWeight and
 // MinSessions.
 type Consent struct {
-	MinWeight   int `json:"min_weight,omitempty"`
-	MinSessions int `json:"min_sessions,omitempty"`
+	MinWeight   int `json:"min_weight,omitzero"`
+	MinSessions int `json:"min_sessions,omitzero"`
 }
 
 // Scope is what a trust profile applies to: an organization, which is a
@@ -496,23 +497,23 @@ type Profile struct {
 	// AuditRate is the share, from 0 to 1, of the steps run on their own
 	// that are picked at random for the person to check.
 	AuditRate float64  `json:"audit_rate"`
-	Certify   *Certify `json:"certify,omitempty"`
+	Certify   *Certify `json:"certify,omitzero"`
 	// Consent makes the settings of the cover rule greater for the steps
 	// of the scope; nil is the decision service's own settings. A profile
 	// read with GetProfile and saved again with PutProfile keeps it.
-	Consent *Consent `json:"consent,omitempty"`
+	Consent *Consent `json:"consent,omitzero"`
 	// Thresholds follow from Costs; a value set when saving is ignored.
 	Thresholds Thresholds `json:"thresholds"`
 	// Default is true for the built-in profile of a scope with none saved;
 	// a value set when saving is ignored.
-	Default bool `json:"default,omitempty"`
+	Default bool `json:"default,omitzero"`
 
-	raw json.RawMessage
+	raw jsontext.Value
 }
 
 // RawJSON returns the JSON the API answered for the profile, with every
 // field, including those this version of the package does not model.
-func (p *Profile) RawJSON() json.RawMessage { return p.raw }
+func (p *Profile) RawJSON() jsontext.Value { return p.raw }
 
 // UnmarshalJSON decodes the profile and keeps the JSON for RawJSON.
 func (p *Profile) UnmarshalJSON(b []byte) error {
@@ -622,12 +623,12 @@ type Preview struct {
 	// picked at random to check, as an expected count.
 	ExpectedAsks float64 `json:"expected_asks"`
 
-	raw json.RawMessage
+	raw jsontext.Value
 }
 
 // RawJSON returns the JSON the API answered for the preview, with every
 // field, including those this version of the package does not model.
-func (p *Preview) RawJSON() json.RawMessage { return p.raw }
+func (p *Preview) RawJSON() jsontext.Value { return p.raw }
 
 // UnmarshalJSON decodes the preview and keeps the JSON for RawJSON.
 func (p *Preview) UnmarshalJSON(b []byte) error {
@@ -675,23 +676,23 @@ type AnswerParams struct {
 	// AnswerMS is the milliseconds from the moment the question was visible
 	// to the person to the answer, from 0 to MaxAnswerMS, as the client
 	// measured it.
-	AnswerMS *int64 `json:"answer_ms,omitempty"`
+	AnswerMS *int64 `json:"answer_ms,omitzero"`
 	// WaitedMS is the milliseconds from the decision that showed the step
 	// to the answer, as the caller that recorded the decision measured it.
-	WaitedMS *int64 `json:"waited_ms,omitempty"`
+	WaitedMS *int64 `json:"waited_ms,omitzero"`
 	// DetailsOpened is whether the person opened the step's details, such
 	// as the full input, the change and the target, before answering; nil
 	// where the client offered none.
-	DetailsOpened *bool `json:"details_opened,omitempty"`
+	DetailsOpened *bool `json:"details_opened,omitzero"`
 	// SuggestionShown is whether the client showed any part of the
 	// suggestion, such as its verdict, the chance, the reason or an
 	// explanation, before the person answered.
-	SuggestionShown *bool `json:"suggestion_shown,omitempty"`
+	SuggestionShown *bool `json:"suggestion_shown,omitzero"`
 	// Surface is where the person answered.
 	Surface Surface `json:"surface,omitempty"`
 	// Remembered is true when the answer also made a standing rule for
 	// later steps. The rule itself is never sent.
-	Remembered bool `json:"remembered,omitempty"`
+	Remembered bool `json:"remembered,omitzero"`
 }
 
 // MaxAnswerMS is the largest AnswerParams.AnswerMS: one day.
@@ -757,6 +758,6 @@ func (c *Client) Forget(ctx context.Context, params *ForgetParams) error {
 }
 
 // keep copies b, which the decoder may reuse.
-func keep(b []byte) json.RawMessage {
-	return append(json.RawMessage(nil), b...)
+func keep(b []byte) jsontext.Value {
+	return append(jsontext.Value(nil), b...)
 }

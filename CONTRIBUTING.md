@@ -13,7 +13,7 @@ instance, can go straight to a pull request.
 
 ## Build and test
 
-You need Go 1.26 or newer. On Linux and macOS, everything runs from the
+You need Go 1.27 or newer. On Linux and macOS, everything runs from the
 repository root with `make`:
 
 ```sh
@@ -34,7 +34,7 @@ tool lateregate list -C ../..` prints each check and whether it applies.
 On Windows, run `go test -race ./...` directly.
 
 CI runs the same gate on every pull request. Beside it, the tests run on
-Linux, macOS and Windows, each on Go 1.26 and 1.27, and three checks run on
+Linux, macOS and Windows on Go 1.27, and three checks run on
 Linux: the packages a browser runs build for WebAssembly, `go.mod` requires
 no module, and the refresh tool under `tools/` builds.
 

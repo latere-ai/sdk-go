@@ -5,10 +5,12 @@ package agents
 
 import (
 	"bytes"
-	"encoding/json"
+	"encoding/json/jsontext"
+	"encoding/json/v2"
 	"errors"
 	"fmt"
 	"math"
+	"regexp"
 	"strconv"
 	"strings"
 	"time"
@@ -159,9 +161,9 @@ func (t *ToolUse) triggerOffer() (*Offer, error) {
 		On       *EventFilter `json:"on"`
 		Notify   NotifyPolicy `json:"notify"`
 		// The agent writes the allowance as a string or as a number.
-		PerWeekUSD json.RawMessage `json:"perWeekUsd"`
+		PerWeekUSD jsontext.Value `json:"perWeekUsd"`
 	}
-	if err := json.Unmarshal(t.Input, &in); err != nil {
+	if err := json.Unmarshal(t.Input, &in, foreignJSON); err != nil {
 		return nil, fmt.Errorf("agents: decoding the offer of %s: %w", t.ToolUseID, err)
 	}
 	o := &Offer{ToolUseID: t.ToolUseID, Action: OfferAction(in.Action), Name: in.Name, Ask: in.Ask, Why: in.Why, On: in.On, Notify: in.Notify}
@@ -200,15 +202,14 @@ const microsPerUSD = 1_000_000
 // it is an amount. It returns "" and 0 for an amount left out or null, and
 // an error for any other, and for one past what millionths of a dollar
 // hold in an int64.
-func parseUSD(raw json.RawMessage) (string, int64, error) {
+func parseUSD(raw jsontext.Value) (string, int64, error) {
 	if len(bytes.TrimSpace(raw)) == 0 {
 		return "", 0, nil
 	}
-	var n json.Number
-	if err := json.Unmarshal(raw, &n); err != nil {
+	text, err := numberText(raw)
+	if err != nil {
 		return "", 0, err
 	}
-	text := n.String()
 	if text == "" {
 		return "", 0, nil
 	}
@@ -249,7 +250,7 @@ func (t *ToolUse) wakeOffer() (*Offer, error) {
 		Title  string `json:"title"`
 		Note   string `json:"note"`
 	}
-	if err := json.Unmarshal(t.Input, &in); err != nil {
+	if err := json.Unmarshal(t.Input, &in, foreignJSON); err != nil {
 		return nil, fmt.Errorf("agents: decoding the wake of %s: %w", t.ToolUseID, err)
 	}
 	if in.Action != wakeSet {
@@ -274,4 +275,33 @@ func (t *ToolUse) wakeOffer() (*Offer, error) {
 		o.After = after
 	}
 	return o, nil
+}
+
+// jsonNumber is a number as JSON writes one.
+var jsonNumber = regexp.MustCompile(`^-?(0|[1-9][0-9]*)(\.[0-9]+)?([eE][+-]?[0-9]+)?$`)
+
+// numberText returns the digits of a JSON number, or of a JSON string
+// holding one, as written; "" for null. It returns
+// an error for any other value.
+func numberText(raw jsontext.Value) (string, error) {
+	raw = bytes.TrimSpace(raw)
+	if !raw.IsValid(foreignJSON) {
+		return "", errors.New("it is not valid JSON")
+	}
+	switch raw.Kind() {
+	case 'n':
+		return "", nil
+	case '0':
+		return string(raw), nil
+	case '"':
+		var s string
+		if err := json.Unmarshal(raw, &s, foreignJSON); err != nil {
+			return "", err
+		}
+		if !jsonNumber.MatchString(s) {
+			return "", fmt.Errorf("the string %q is not a number", s)
+		}
+		return s, nil
+	}
+	return "", errors.New("it is not a number or a string holding one")
 }

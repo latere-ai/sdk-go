@@ -5,7 +5,8 @@ package evals
 
 import (
 	"context"
-	"encoding/json"
+	"encoding/json/jsontext"
+	"encoding/json/v2"
 	"net/http"
 	"net/url"
 
@@ -23,7 +24,7 @@ type Grid struct {
 	Metric GridMetric `json:"metric"`
 	// Reference is what the entries' verdicts compare with; nil when the
 	// experiment names none.
-	Reference *Reference `json:"reference,omitempty"`
+	Reference *Reference `json:"reference,omitzero"`
 	// Candidates are the columns, in the experiment's order.
 	Candidates []GridCandidate `json:"candidates"`
 	// Items are the page's rows, in the suite's order.
@@ -32,12 +33,12 @@ type Grid struct {
 	// GridParams.Cursor; empty on the last page.
 	NextCursor string `json:"next_cursor,omitempty"`
 
-	raw json.RawMessage
+	raw jsontext.Value
 }
 
 // RawJSON returns the JSON the API answered for the grid, including any
 // field Grid does not model.
-func (g *Grid) RawJSON() json.RawMessage { return g.raw }
+func (g *Grid) RawJSON() jsontext.Value { return g.raw }
 
 // UnmarshalJSON decodes the grid and keeps the JSON for RawJSON.
 func (g *Grid) UnmarshalJSON(b []byte) error {
@@ -75,7 +76,7 @@ type GridRow struct {
 	// task; nil when there is none. The document leaves its shape open;
 	// the analysis writes it as a Summary, and RawJSON holds anything
 	// more.
-	ReferenceSummary *Summary `json:"reference_summary,omitempty"`
+	ReferenceSummary *Summary `json:"reference_summary,omitzero"`
 	// Cells are the row's entries, one per candidate column kept, in the
 	// columns' order.
 	Cells []GridCell `json:"cells"`
@@ -98,13 +99,13 @@ type GridCell struct {
 	State        CellState `json:"state,omitempty"`
 	ParkedReason string    `json:"parked_reason,omitempty"`
 	// Trials counts the cell's trials.
-	Trials *GridTrials `json:"trials,omitempty"`
+	Trials *GridTrials `json:"trials,omitzero"`
 	// Comparison is the id of the comparison the entry's summary and
 	// verdict read.
 	Comparison string `json:"comparison,omitempty"`
 	// Summary is the cell's summary of the metric; nil until the
 	// analysis computed it.
-	Summary *Summary `json:"summary,omitempty"`
+	Summary *Summary `json:"summary,omitzero"`
 	// Verdict and Reason are the analysis's; empty until it computed
 	// them.
 	Verdict Verdict `json:"verdict,omitempty"`
@@ -114,17 +115,17 @@ type GridCell struct {
 // GridTrials counts a grid cell's trials.
 type GridTrials struct {
 	// Declared is the runs the cell declares.
-	Declared int `json:"declared,omitempty"`
+	Declared int `json:"declared,omitzero"`
 	// Pending, Running, Checking and Done count the cell's trials by
 	// state.
-	Pending  int `json:"pending,omitempty"`
-	Running  int `json:"running,omitempty"`
-	Checking int `json:"checking,omitempty"`
-	Done     int `json:"done,omitempty"`
+	Pending  int `json:"pending,omitzero"`
+	Running  int `json:"running,omitzero"`
+	Checking int `json:"checking,omitzero"`
+	Done     int `json:"done,omitzero"`
 	// Retried counts the trials a retry replaced. Each is also counted
 	// under its state, so Done less Retried counts each finished run of
 	// the cell once.
-	Retried int `json:"retried,omitempty"`
+	Retried int `json:"retried,omitzero"`
 	// Outcomes counts the finished trials by outcome.
 	Outcomes map[TrialOutcome]int `json:"outcomes,omitempty"`
 }

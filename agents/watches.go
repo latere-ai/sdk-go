@@ -5,7 +5,7 @@ package agents
 
 import (
 	"context"
-	"encoding/json"
+	"encoding/json/jsontext"
 	"errors"
 	"iter"
 	"sync"
@@ -157,13 +157,13 @@ type Watch struct {
 	// it, or it is too late.
 	SkippedBudget int64
 
-	raw json.RawMessage
+	raw jsontext.Value
 }
 
 // RawJSON returns the JSON the API answered for the watch's trigger, with
 // every field, including those this package does not model; nil for a
 // Watch the program built itself.
-func (w *Watch) RawJSON() json.RawMessage { return w.raw }
+func (w *Watch) RawJSON() jsontext.Value { return w.raw }
 
 // A WatchSession is the session a watch came from.
 type WatchSession struct {

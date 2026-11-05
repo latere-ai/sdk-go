@@ -74,3 +74,15 @@ func TestReadUnverifiedClaimsRefuses(t *testing.T) {
 		}
 	}
 }
+
+// Claims are read as v1 read them: a repeated claim takes its last value,
+// and a string may hold invalid UTF-8.
+func TestReadUnverifiedClaimsIsLenient(t *testing.T) {
+	got, err := ReadUnverifiedClaims(jwt("{\"sub\":\"first\",\"sub\":\"u\xff\",\"org_id\":\"org_1\"}"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if got.Subject != "u�" || got.OrgID != "org_1" {
+		t.Errorf("read %+v", got)
+	}
+}

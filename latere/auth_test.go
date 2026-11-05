@@ -5,7 +5,7 @@ package latere
 
 import (
 	"context"
-	"encoding/json"
+	"encoding/json/v2"
 	"errors"
 	"fmt"
 	"net/http"
@@ -189,7 +189,7 @@ func TestActorTokensMintsAndReuses(t *testing.T) {
 			Audience string `json:"audience"`
 			TTL      int    `json:"ttl_seconds"`
 		}
-		if err := json.NewDecoder(r.Body).Decode(&in); err != nil || in.Audience != "api.example.test" || in.TTL != 300 {
+		if err := json.UnmarshalRead(r.Body, &in); err != nil || in.Audience != "api.example.test" || in.TTL != 300 {
 			t.Errorf("exchange body %+v, %v", in, err)
 		}
 		n := mints.Add(1)

@@ -21,10 +21,10 @@
 package routine
 
 import (
-	"bytes"
 	"crypto/sha256"
 	"encoding/hex"
-	"encoding/json"
+	"encoding/json/jsontext"
+	"encoding/json/v2"
 	"errors"
 	"fmt"
 	"regexp"
@@ -643,14 +643,10 @@ func writeModel(session map[string]any, model *string) error {
 // time of how it started before are taken off; one that comes to start
 // another way has its spec.times taken off. f is written as it is: New
 // and the checks are the caller's to apply first.
-func Manifest(agent, name string, stored json.RawMessage, f Fields) (json.RawMessage, error) {
+func Manifest(agent, name string, stored jsontext.Value, f Fields) (jsontext.Value, error) {
 	m := map[string]any{}
 	if len(stored) > 0 {
-		dec := json.NewDecoder(bytes.NewReader(stored))
-		// Numbers stay as they were written, so a large one is not rounded
-		// to a float's precision.
-		dec.UseNumber()
-		if err := dec.Decode(&m); err != nil {
+		if err := json.Unmarshal(stored, &m, keepNumbers()); err != nil {
 			return nil, fmt.Errorf("routine: the stored trigger %s is not a JSON object: %w", name, err)
 		}
 	}
@@ -739,9 +735,58 @@ func Manifest(agent, name string, stored json.RawMessage, f Fields) (json.RawMes
 			return nil, err
 		}
 	}
-	b, err := json.Marshal(m)
+	b, err := json.Marshal(m, json.Deterministic(true))
 	if err != nil {
 		return nil, fmt.Errorf("routine: the routine %s could not be written: %w", name, err)
 	}
 	return b, nil
+}
+
+// keepNumbers decodes every number of an untyped value as its digits as
+// written, so a large one is not rounded to a float's precision. The
+// digits are written back unchanged.
+func keepNumbers() json.Options {
+	return json.WithUnmarshalers(json.UnmarshalFromFunc(decodeKeepingNumbers))
+}
+
+// decodeKeepingNumbers reads one untyped value, objects as
+// map[string]any and arrays as []any, with each number as the
+// jsontext.Value of its digits.
+func decodeKeepingNumbers(dec *jsontext.Decoder, v *any) error {
+	switch dec.PeekKind() {
+	case '0':
+		val, err := dec.ReadValue()
+		if err != nil {
+			return err
+		}
+		*v = val.Clone()
+	case '{':
+		var m map[string]any
+		if err := json.UnmarshalDecode(dec, &m, keepNumbers()); err != nil {
+			return err
+		}
+		*v = m
+	case '[':
+		var a []any
+		if err := json.UnmarshalDecode(dec, &a, keepNumbers()); err != nil {
+			return err
+		}
+		*v = a
+	default:
+		tok, err := dec.ReadToken()
+		if err != nil {
+			return err
+		}
+		switch tok.Kind() {
+		case '"':
+			*v = tok.String()
+		case 't':
+			*v = true
+		case 'f':
+			*v = false
+		default:
+			*v = nil
+		}
+	}
+	return nil
 }

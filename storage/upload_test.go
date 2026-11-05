@@ -6,7 +6,7 @@ package storage_test
 import (
 	"bytes"
 	"context"
-	"encoding/json"
+	"encoding/json/v2"
 	"errors"
 	"fmt"
 	"io"
@@ -62,7 +62,7 @@ func (s *fakeStorage) serve(w http.ResponseWriter, r *http.Request) {
 	switch {
 	case r.Method == http.MethodPost && r.URL.Path == "/v1/storage/uploads":
 		var body map[string]any
-		if err := json.NewDecoder(r.Body).Decode(&body); err != nil {
+		if err := json.UnmarshalRead(r.Body, &body); err != nil {
 			s.t.Error(err)
 		}
 		s.mu.Lock()
@@ -75,7 +75,7 @@ func (s *fakeStorage) serve(w http.ResponseWriter, r *http.Request) {
 			urls = append(urls, fmt.Sprintf("%s/part/%d?sig=s%d", s.srv.URL, n, n))
 		}
 		w.WriteHeader(http.StatusCreated)
-		if err := json.NewEncoder(w).Encode(map[string]any{"id": "up_1", "owner": "https://auth.latere.ai|alice", "path": body["path"],
+		if err := json.MarshalWrite(w, map[string]any{"id": "up_1", "owner": "https://auth.latere.ai|alice", "path": body["path"],
 			"part_size": partSize, "part_count": count, "part_urls": urls, "expires_at": "2026-10-21T09:00:00Z"}); err != nil {
 			s.t.Error(err)
 		}
@@ -115,7 +115,7 @@ func (s *fakeStorage) serve(w http.ResponseWriter, r *http.Request) {
 		fmt.Fprint(w, `{"error":{"code":"forbidden","message":"No."}}`)
 	case r.Method == http.MethodPost && r.URL.Path == "/v1/storage/uploads/up_1/complete":
 		var body map[string]any
-		if err := json.NewDecoder(r.Body).Decode(&body); err != nil {
+		if err := json.UnmarshalRead(r.Body, &body); err != nil {
 			s.t.Error(err)
 		}
 		s.mu.Lock()
@@ -203,7 +203,7 @@ func TestUploadFilePutsALargeFileInParts(t *testing.T) {
 	if !bytes.Equal(joined, data) || len(s.parts[3]) != 3+storage.MaxWriteBytes-2*partSize {
 		t.Fatalf("the parts hold %d bytes, the last %d; want the file's %d in order", len(joined), len(s.parts[3]), len(data))
 	}
-	got, err := json.Marshal(s.complete)
+	got, err := json.Marshal(s.complete, json.Deterministic(true))
 	if err != nil {
 		t.Fatal(err)
 	}

@@ -5,7 +5,8 @@ package oversight
 
 import (
 	"context"
-	"encoding/json"
+	"encoding/json/jsontext"
+	"encoding/json/v2"
 	"errors"
 	"fmt"
 	"iter"
@@ -50,19 +51,19 @@ type Case struct {
 	Action CaseAction `json:"action"`
 	// Prediction is the decision service's suggestion; nil for a step it
 	// was not asked about.
-	Prediction *Prediction `json:"prediction,omitempty"`
+	Prediction *Prediction `json:"prediction,omitzero"`
 	// Decision is what was done; nil for a step suggested about but not
 	// yet decided.
-	Decision *Decision `json:"decision,omitempty"`
+	Decision *Decision `json:"decision,omitzero"`
 	// Answers are the person's answers about the step, oldest first.
 	Answers []RecordedAnswer `json:"answers,omitempty"`
 
-	raw json.RawMessage
+	raw jsontext.Value
 }
 
 // RawJSON returns the JSON the API answered for the case, with every
 // field, including those this version of the package does not model.
-func (c *Case) RawJSON() json.RawMessage { return c.raw }
+func (c *Case) RawJSON() jsontext.Value { return c.raw }
 
 // UnmarshalJSON decodes the case and keeps the JSON for RawJSON.
 func (c *Case) UnmarshalJSON(b []byte) error {
@@ -88,7 +89,7 @@ type CaseAction struct {
 	// "write" or "external".
 	Effect string `json:"effect,omitempty"`
 	// Actor is who proposed the step, when the caller said.
-	Actor *Actor `json:"actor,omitempty"`
+	Actor *Actor `json:"actor,omitzero"`
 }
 
 // Actor is who proposed a step.
@@ -117,7 +118,7 @@ type Prediction struct {
 	// EvidenceRatio is how much the person's answers say about the step,
 	// from 0 for nothing to 1; nil from a decision service that did not
 	// record it.
-	EvidenceRatio *float64 `json:"evidence_ratio,omitempty"`
+	EvidenceRatio *float64 `json:"evidence_ratio,omitzero"`
 	// AskKind says why the suggestion is to ask; empty for another
 	// verdict, or from a decision service that did not record it.
 	AskKind AskKind `json:"ask_kind,omitempty"`
@@ -142,11 +143,11 @@ type Prediction struct {
 	// compared, in each member the wider of its reading of the input and
 	// what the caller claimed; nil from a decision service that does not
 	// send it.
-	Scope *StepScope `json:"scope,omitempty"`
+	Scope *StepScope `json:"scope,omitzero"`
 	// Cover is how far the person's approvals cover the step; nil for a
 	// prediction made without the person's model, and from a decision
 	// service that does not send it.
-	Cover *Cover `json:"cover,omitempty"`
+	Cover *Cover `json:"cover,omitzero"`
 }
 
 // StepScope is the reach of a step: whether it can be undone, the
@@ -230,16 +231,16 @@ const (
 type Crosses struct {
 	// Machine is the machine outside the workspace, such as a home or a
 	// system path.
-	Machine *bool `json:"machine,omitempty"`
+	Machine *bool `json:"machine,omitzero"`
 	// Remote is a system other than the machine. Network, Organization
 	// and Public each make it true.
-	Remote *bool `json:"remote,omitempty"`
+	Remote *bool `json:"remote,omitzero"`
 	// Network is a host outside the session's network.
-	Network *bool `json:"network,omitempty"`
+	Network *bool `json:"network,omitzero"`
 	// Organization is a party that the organization does not own.
-	Organization *bool `json:"organization,omitempty"`
+	Organization *bool `json:"organization,omitzero"`
 	// Public makes something readable by anyone.
-	Public *bool `json:"public,omitempty"`
+	Public *bool `json:"public,omitzero"`
 }
 
 // UnmarshalJSON reads each boundary as a JSON boolean, and a boundary left
@@ -248,7 +249,7 @@ type Crosses struct {
 // known, so a decision service that names an unknown boundary is read as
 // one that leaves it out.
 func (c *Crosses) UnmarshalJSON(b []byte) error {
-	var raw map[string]json.RawMessage
+	var raw map[string]jsontext.Value
 	if err := json.Unmarshal(b, &raw); err != nil {
 		return err
 	}
@@ -353,12 +354,12 @@ type RecordedAnswer struct {
 	// Remembered say how the person answered, as the caller that sent the
 	// answer said in AnswerParams: each is nil, empty or false where it
 	// did not say, and from a decision service that does not keep them.
-	AnswerMS        *int64  `json:"answer_ms,omitempty"`
-	WaitedMS        *int64  `json:"waited_ms,omitempty"`
-	DetailsOpened   *bool   `json:"details_opened,omitempty"`
-	SuggestionShown *bool   `json:"suggestion_shown,omitempty"`
+	AnswerMS        *int64  `json:"answer_ms,omitzero"`
+	WaitedMS        *int64  `json:"waited_ms,omitzero"`
+	DetailsOpened   *bool   `json:"details_opened,omitzero"`
+	SuggestionShown *bool   `json:"suggestion_shown,omitzero"`
 	Surface         Surface `json:"surface,omitempty"`
-	Remembered      bool    `json:"remembered,omitempty"`
+	Remembered      bool    `json:"remembered,omitzero"`
 }
 
 // ListCases returns an iterator over the steps params keeps, oldest
@@ -457,12 +458,12 @@ type Reliability struct {
 	// latest checks.
 	Certificate Certificate `json:"certificate"`
 
-	raw json.RawMessage
+	raw jsontext.Value
 }
 
 // RawJSON returns the JSON the API answered for the report, with every
 // field, including those this version of the package does not model.
-func (r *Reliability) RawJSON() json.RawMessage { return r.raw }
+func (r *Reliability) RawJSON() jsontext.Value { return r.raw }
 
 // UnmarshalJSON decodes the report and keeps the JSON for RawJSON.
 func (r *Reliability) UnmarshalJSON(b []byte) error {
@@ -480,7 +481,7 @@ type Estimate struct {
 	// could be checked, so the rate is unknown, which is not zero.
 	Value *float64 `json:"value"`
 	// Interval is a 95% interval for the rate, present with Value.
-	Interval *[2]float64 `json:"interval,omitempty"`
+	Interval *[2]float64 `json:"interval,omitzero"`
 	// Covered is the share of the source's verdicts in the window the
 	// estimate speaks for: those the person could have been shown.
 	Covered float64 `json:"covered"`
@@ -508,7 +509,7 @@ type Certificate struct {
 	// answers, whose weight is 1, so a reader can see if the claim rests
 	// on quick answers. The claim counts every check. Nil from a decision
 	// service that does not send it.
-	Considered *int `json:"considered,omitempty"`
+	Considered *int `json:"considered,omitzero"`
 }
 
 // GetReliability reports how often the source params names went against

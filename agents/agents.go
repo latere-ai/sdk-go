@@ -5,7 +5,7 @@ package agents
 
 import (
 	"context"
-	"encoding/json"
+	"encoding/json/v2"
 	"errors"
 	"fmt"
 	"iter"
@@ -601,7 +601,7 @@ type NewAttachment struct {
 	Data []byte `json:"data,omitempty"`
 	// Source names a file of the sender's Storage, at most MaxSourceBytes:
 	// how a file too large for Data goes, once it is uploaded.
-	Source *AttachmentSource `json:"source,omitempty"`
+	Source *AttachmentSource `json:"source,omitzero"`
 	// Blob names a file a message of the session already carried, by the
 	// Blob of its Attachment, which the platform keeps with that file's
 	// media type and size without its bytes being sent again: how an
@@ -964,7 +964,7 @@ type Delta struct {
 	Text string `json:"text"`
 	// Reset discards what the step's deltas carried so far: the response is
 	// being written again.
-	Reset bool `json:"reset,omitempty"`
+	Reset bool `json:"reset,omitzero"`
 }
 
 // DeltaKind is what a Delta's text is part of.
@@ -1019,13 +1019,13 @@ func (c *Client) StreamEvents(ctx context.Context, id string, params *StreamEven
 func decodeFrame(f latere.Frame) (StreamItem, error) {
 	if f.Event == "delta" {
 		var d Delta
-		if err := json.Unmarshal(f.Data, &d); err != nil {
+		if err := json.Unmarshal(f.Data, &d, foreignJSON); err != nil {
 			return StreamItem{}, fmt.Errorf("agents: decoding a delta: %w", err)
 		}
 		return StreamItem{Delta: &d}, nil
 	}
 	var e Event
-	if err := json.Unmarshal(f.Data, &e); err != nil {
+	if err := json.Unmarshal(f.Data, &e, foreignJSON); err != nil {
 		return StreamItem{}, fmt.Errorf("agents: decoding the event %s of a stream: %w", f.ID, err)
 	}
 	return StreamItem{Event: &e}, nil
@@ -1040,7 +1040,7 @@ func endsSession(f latere.Frame) bool {
 	var e struct {
 		Payload SessionStatus `json:"payload"`
 	}
-	return json.Unmarshal(f.Data, &e) == nil && e.Payload.Status == StatusEnded
+	return json.Unmarshal(f.Data, &e, foreignJSON) == nil && e.Payload.Status == StatusEnded
 }
 
 // keyOr returns key, or a new idempotency key when it is empty.

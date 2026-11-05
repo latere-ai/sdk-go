@@ -5,7 +5,8 @@ package evals
 
 import (
 	"context"
-	"encoding/json"
+	"encoding/json/jsontext"
+	"encoding/json/v2"
 	"errors"
 	"fmt"
 	"net/http"
@@ -64,12 +65,12 @@ var recordMembers = []string{"id", "owner", "name", "digest", "current", "create
 
 // applyBody is the body an apply sends for def: its own members, the
 // record's left out.
-func applyBody(def any) (map[string]json.RawMessage, error) {
+func applyBody(def any) (map[string]jsontext.Value, error) {
 	b, err := json.Marshal(def)
 	if err != nil {
 		return nil, fmt.Errorf("evals: encoding the definition: %w", err)
 	}
-	var body map[string]json.RawMessage
+	var body map[string]jsontext.Value
 	if err := json.Unmarshal(b, &body); err != nil {
 		return nil, fmt.Errorf("evals: encoding the definition: %w", err)
 	}
@@ -116,7 +117,7 @@ func apply[T any](ctx context.Context, c *Client, kind string, def *T, name stri
 	}
 	defer func() { _ = resp.Body.Close() }()
 	out := Applied[T]{Version: new(T), Created: resp.StatusCode == http.StatusCreated}
-	if err := json.NewDecoder(resp.Body).Decode(out.Version); err != nil {
+	if err := json.UnmarshalDecode(jsontext.NewDecoder(resp.Body), out.Version); err != nil {
 		return nil, fmt.Errorf("evals: decoding the answer to PUT %s: %w", req.Path, err)
 	}
 	return &out, nil

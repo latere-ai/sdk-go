@@ -4,7 +4,8 @@
 package agents_test
 
 import (
-	"encoding/json"
+	"encoding/json/jsontext"
+	"encoding/json/v2"
 	"errors"
 	"fmt"
 	"io"
@@ -148,7 +149,7 @@ func (tp *topos) store(name string, m map[string]any) {
 func (tp *topos) write(w http.ResponseWriter, status int, v any) {
 	w.Header().Set("Content-Type", "application/json")
 	w.WriteHeader(status)
-	if err := json.NewEncoder(w).Encode(v); err != nil {
+	if err := json.MarshalWrite(w, v); err != nil {
 		tp.t.Error(err)
 	}
 }
@@ -332,7 +333,7 @@ func TestTheManifestIsTheOneLatereChatWrites(t *testing.T) {
 			tp, c := newTopos(t)
 			r := create(t, c, tc.params(), "key-1")
 			if got := tp.manifest(r.Name); !sameJSON(t, got, strings.ReplaceAll(tc.want, "NAME", r.Name)) {
-				b, _ := json.Marshal(got)
+				b, _ := json.Marshal(got, json.Deterministic(true))
 				t.Errorf("the manifest is\n%s\nwant\n%s", b, tc.want)
 			}
 		})
@@ -544,7 +545,7 @@ func TestAChangeKeepsWhatTheRoutineDoesNotOwn(t *testing.T) {
 		meta["addedLater"] = "kept"
 		spec["maxActive"] = 2
 		spec["addedLater"] = map[string]any{"deep": true}
-		spec["bigNumber"] = json.Number("9007199254740993")
+		spec["bigNumber"] = jsontext.Value("9007199254740993")
 		spec["session"].(map[string]any)["budget"] = map[string]any{"maxCost": "0.50"}
 		spec["session"].(map[string]any)["addedLater"] = "kept"
 	})

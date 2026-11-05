@@ -5,7 +5,8 @@ package latere
 
 import (
 	"encoding/base64"
-	"encoding/json"
+	"encoding/json/jsontext"
+	"encoding/json/v2"
 	"errors"
 	"math"
 	"strings"
@@ -55,21 +56,21 @@ func ReadUnverifiedClaims(token string) (UnverifiedClaims, error) {
 	if err != nil {
 		return UnverifiedClaims{}, errNotAToken
 	}
-	var claims map[string]json.RawMessage
-	if err := json.Unmarshal(payload, &claims); err != nil || claims == nil {
+	var claims map[string]jsontext.Value
+	if err := json.Unmarshal(payload, &claims, foreignJSON); err != nil || claims == nil {
 		return UnverifiedClaims{}, errNotAToken
 	}
 	var out UnverifiedClaims
 	if raw, ok := claims["aud"]; ok && string(raw) != "null" {
 		var one string
-		if json.Unmarshal(raw, &one) == nil {
+		if json.Unmarshal(raw, &one, foreignJSON) == nil {
 			out.Audiences = []string{one}
-		} else if json.Unmarshal(raw, &out.Audiences) != nil {
+		} else if json.Unmarshal(raw, &out.Audiences, foreignJSON) != nil {
 			return UnverifiedClaims{}, errors.New(`latere: ReadUnverifiedClaims: the token's "aud" is neither a string nor a list of strings`)
 		}
 	}
 	for name, into := range map[string]*string{"sub": &out.Subject, "org_id": &out.OrgID} {
-		if raw, ok := claims[name]; ok && string(raw) != "null" && json.Unmarshal(raw, into) != nil {
+		if raw, ok := claims[name]; ok && string(raw) != "null" && json.Unmarshal(raw, into, foreignJSON) != nil {
 			return UnverifiedClaims{}, errors.New(`latere: ReadUnverifiedClaims: the token's "` + name + `" is not a string`)
 		}
 	}
@@ -77,7 +78,7 @@ func ReadUnverifiedClaims(token string) (UnverifiedClaims, error) {
 		// Seconds past 2^53 hold no exact value, and lie far past any
 		// expiry a token is issued with.
 		var secs float64
-		if json.Unmarshal(raw, &secs) != nil || math.Abs(secs) > 1<<53 {
+		if json.Unmarshal(raw, &secs, foreignJSON) != nil || math.Abs(secs) > 1<<53 {
 			return UnverifiedClaims{}, errors.New(`latere: ReadUnverifiedClaims: the token's "exp" is not a number of seconds`)
 		}
 		if secs > 0 {

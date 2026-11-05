@@ -4,7 +4,8 @@
 package account_test
 
 import (
-	"encoding/json"
+	"encoding/json/jsontext"
+	"encoding/json/v2"
 	"errors"
 	"io"
 	"net/http"
@@ -282,7 +283,7 @@ func TestProjectApps(t *testing.T) {
 // was decoded from.
 func TestProjectsAndInletsKeepTheirJSON(t *testing.T) {
 	for name, v := range map[string]interface {
-		RawJSON() json.RawMessage
+		RawJSON() jsontext.Value
 	}{
 		"project":         &account.Project{},
 		"trigger inbound": &account.TriggerInbound{},

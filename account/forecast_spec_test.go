@@ -4,7 +4,8 @@
 package account
 
 import (
-	"encoding/json"
+	"encoding/json/jsontext"
+	"encoding/json/v2"
 	"os"
 	"reflect"
 	"slices"
@@ -24,8 +25,8 @@ func TestTheForecastReadsItsSchemas(t *testing.T) {
 	var d struct {
 		Components struct {
 			Schemas map[string]struct {
-				Properties map[string]json.RawMessage `json:"properties"`
-				Required   []string                   `json:"required"`
+				Properties map[string]jsontext.Value `json:"properties"`
+				Required   []string                  `json:"required"`
 			} `json:"schemas"`
 		} `json:"components"`
 	}

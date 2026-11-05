@@ -43,7 +43,8 @@ package signin
 
 import (
 	"context"
-	"encoding/json"
+	"encoding/json/jsontext"
+	"encoding/json/v2"
 	"errors"
 	"fmt"
 	"io"
@@ -240,7 +241,7 @@ func send(hc *http.Client, req *http.Request, out any) error {
 			Detail      string `json:"detail"`
 		}
 		e := &Error{StatusCode: resp.StatusCode}
-		if json.Unmarshal(body, &oe) == nil && oe.Error != "" {
+		if json.Unmarshal(body, &oe, foreignJSON) == nil && oe.Error != "" {
 			e.Code, e.Description, e.Detail = oe.Error, oe.Description, oe.Detail
 			if e.Description == "" {
 				e.Description = oe.Message
@@ -253,7 +254,7 @@ func send(hc *http.Client, req *http.Request, out any) error {
 	if out == nil {
 		return nil
 	}
-	if err := json.Unmarshal(body, out); err != nil {
+	if err := json.Unmarshal(body, out, foreignJSON); err != nil {
 		return fmt.Errorf("decoding the answer: %w", err)
 	}
 	return nil
@@ -428,7 +429,7 @@ type UserInfo struct {
 	// Email is the person's email address.
 	Email string `json:"email,omitempty"`
 	// EmailVerified reports whether the address was confirmed.
-	EmailVerified bool `json:"email_verified,omitempty"`
+	EmailVerified bool `json:"email_verified,omitzero"`
 	// Picture is the address of the person's picture.
 	Picture string `json:"picture,omitempty"`
 	// OrgID is the organization the sign-in acts in, which the person
@@ -476,3 +477,12 @@ func (c *Config) Revoke(ctx context.Context, token string) error {
 	form := url.Values{"token": {token}, "token_type_hint": {"refresh_token"}, "client_id": {c.ClientID}}
 	return c.postForm(ctx, e.Revocation, form, nil)
 }
+
+// foreignJSON reads the answers of an identity provider, which the platform
+// does not produce: repeated members, invalid UTF-8 and member names in any
+// case are all accepted.
+var foreignJSON = json.JoinOptions(
+	jsontext.AllowDuplicateNames(true),
+	jsontext.AllowInvalidUTF8(true),
+	json.MatchCaseInsensitiveNames(true),
+)

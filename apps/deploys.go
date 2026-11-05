@@ -7,7 +7,8 @@ import (
 	"bufio"
 	"bytes"
 	"context"
-	"encoding/json"
+	"encoding/json/jsontext"
+	"encoding/json/v2"
 	"errors"
 	"fmt"
 	"iter"
@@ -140,12 +141,12 @@ type Deploy struct {
 	// Thumbnail is the deploy's screenshot; nil until it is taken.
 	Thumbnail *Thumbnail `json:"thumbnail"`
 
-	raw json.RawMessage
+	raw jsontext.Value
 }
 
 // RawJSON returns the JSON the API answered for the deploy, with every
 // field; nil for a Deploy the program built itself.
-func (d *Deploy) RawJSON() json.RawMessage { return d.raw }
+func (d *Deploy) RawJSON() jsontext.Value { return d.raw }
 
 // UnmarshalJSON decodes the deploy and keeps the JSON for RawJSON.
 func (d *Deploy) UnmarshalJSON(b []byte) error {
@@ -273,12 +274,12 @@ type OpenApp struct {
 	// URL is the app's address.
 	URL string `json:"url"`
 
-	raw json.RawMessage
+	raw jsontext.Value
 }
 
 // RawJSON returns the JSON the API answered for the app, with every
 // field; nil for an OpenApp the program built itself.
-func (a *OpenApp) RawJSON() json.RawMessage { return a.raw }
+func (a *OpenApp) RawJSON() jsontext.Value { return a.raw }
 
 // UnmarshalJSON decodes the app and keeps the JSON for RawJSON.
 func (a *OpenApp) UnmarshalJSON(b []byte) error {
@@ -331,12 +332,12 @@ type LogLine struct {
 	// Text is the line, without its line break.
 	Text string `json:"line"`
 
-	raw json.RawMessage
+	raw jsontext.Value
 }
 
 // RawJSON returns the JSON the API answered for the line; nil for a
 // LogLine the program built itself.
-func (l *LogLine) RawJSON() json.RawMessage { return l.raw }
+func (l *LogLine) RawJSON() jsontext.Value { return l.raw }
 
 // UnmarshalJSON decodes the line and keeps the JSON for RawJSON.
 func (l *LogLine) UnmarshalJSON(b []byte) error {
@@ -366,14 +367,14 @@ type LogEnd struct {
 	// Status is how the build ended.
 	Status BuildStatus `json:"status"`
 	// Error is why the build failed; nil otherwise.
-	Error *BuildError `json:"error,omitempty"`
+	Error *BuildError `json:"error,omitzero"`
 
-	raw json.RawMessage
+	raw jsontext.Value
 }
 
 // RawJSON returns the JSON the API answered for the end; nil for a LogEnd
 // the program built itself.
-func (e *LogEnd) RawJSON() json.RawMessage { return e.raw }
+func (e *LogEnd) RawJSON() jsontext.Value { return e.raw }
 
 // UnmarshalJSON decodes the end and keeps the JSON for RawJSON.
 func (e *LogEnd) UnmarshalJSON(b []byte) error {

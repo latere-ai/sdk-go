@@ -4,7 +4,8 @@
 package agents_test
 
 import (
-	"encoding/json"
+	"encoding/json/jsontext"
+	"encoding/json/v2"
 	"errors"
 	"fmt"
 	"net/http"
@@ -107,9 +108,9 @@ func (api *watchAPI) serve(w http.ResponseWriter, r *http.Request) {
 				limit = 50
 			}
 			end := min(from+limit, len(events))
-			items := []json.RawMessage{}
+			items := []jsontext.Value{}
 			for _, e := range events[from:end] {
-				items = append(items, json.RawMessage(e))
+				items = append(items, jsontext.Value(e))
 			}
 			api.page(w, items, end, len(events))
 			return
@@ -123,7 +124,7 @@ func (api *watchAPI) serve(w http.ResponseWriter, r *http.Request) {
 		ref := strings.TrimPrefix(r.URL.Path, "/v1/agents/triggers/")
 		for _, t := range api.triggers {
 			if status, _ := t["status"].(map[string]any); status != nil && status["id"] == ref {
-				if err := json.NewEncoder(w).Encode(t); err != nil {
+				if err := json.MarshalWrite(w, t); err != nil {
 					api.t.Error(err)
 				}
 				return
@@ -141,7 +142,7 @@ func (api *watchAPI) page(w http.ResponseWriter, items any, end, total int) {
 	if end < total {
 		next = strconv.Itoa(end)
 	}
-	if err := json.NewEncoder(w).Encode(map[string]any{"items": items, "next_cursor": next}); err != nil {
+	if err := json.MarshalWrite(w, map[string]any{"items": items, "next_cursor": next}); err != nil {
 		api.t.Error(err)
 	}
 }

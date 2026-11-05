@@ -4,7 +4,8 @@
 package agents_test
 
 import (
-	"encoding/json"
+	"encoding/json/jsontext"
+	"encoding/json/v2"
 	"strings"
 	"testing"
 
@@ -14,7 +15,7 @@ import (
 // toolResult decodes the payload of a tool.result event.
 func toolResult(t *testing.T, payload string) agents.ToolResult {
 	t.Helper()
-	e := agents.Event{ID: "evt_1", Type: agents.EventToolResult, Payload: json.RawMessage(payload)}
+	e := agents.Event{ID: "evt_1", Type: agents.EventToolResult, Payload: jsontext.Value(payload)}
 	var r agents.ToolResult
 	if err := e.Decode(&r); err != nil {
 		t.Fatal(err)
@@ -103,7 +104,7 @@ func TestAToolResultWithoutAFile(t *testing.T) {
 }
 
 func TestTheMachineASessionWorksOn(t *testing.T) {
-	e := agents.Event{ID: "evt_2", Type: agents.EventSessionMachine, Payload: json.RawMessage(`{"machine":{"kind":"device","id":"sbx_1",
+	e := agents.Event{ID: "evt_2", Type: agents.EventSessionMachine, Payload: jsontext.Value(`{"machine":{"kind":"device","id":"sbx_1",
 		"environment":"dev-q7v3k9m2abcdefgh","workdir":"/Users/ann/src","os":"darwin","arch":"arm64","egress":"open"},"reason":"restarted","cause":"out_of_memory",
 		"context":"The machine runs macOS."}`)}
 	var m agents.SessionMachine

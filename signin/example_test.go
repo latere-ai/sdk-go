@@ -5,7 +5,7 @@ package signin_test
 
 import (
 	"context"
-	"encoding/json"
+	"encoding/json/jsontext"
 	"errors"
 	"fmt"
 	"os/exec"
@@ -104,7 +104,7 @@ func ExampleConfig_CreateKey() {
 	}
 	key, err := signer.CreateKey(ctx, tok.AccessToken, &signin.CreateKeyParams{
 		Name:      "nightly report",
-		Grants:    json.RawMessage(`[{"type":"latere-authz","actions":["lux:model.use"],"datatypes":["Model"],"locations":["https://api.latere.ai"]}]`),
+		Grants:    jsontext.Value(`[{"type":"latere-authz","actions":["lux:model.use"],"datatypes":["Model"],"locations":["https://api.latere.ai"]}]`),
 		ExpiresAt: time.Now().AddDate(0, 3, 0),
 	})
 	if err != nil {

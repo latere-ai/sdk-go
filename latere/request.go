@@ -6,7 +6,8 @@ package latere
 import (
 	"bytes"
 	"context"
-	"encoding/json"
+	"encoding/json/jsontext"
+	"encoding/json/v2"
 	"errors"
 	"fmt"
 	"io"
@@ -119,7 +120,9 @@ func (c *Config) Do(ctx context.Context, r *Request, out any) error {
 	if out == nil || resp.StatusCode == http.StatusNoContent {
 		return nil
 	}
-	if err := json.NewDecoder(resp.Body).Decode(out); err != nil {
+	// The answer is its first value: bytes after it, or a connection cut
+	// after it, do not fail the call.
+	if err := json.UnmarshalDecode(jsontext.NewDecoder(resp.Body), out); err != nil {
 		return fmt.Errorf("latere: decoding the answer to %s %s: %w", r.Method, c.where(r), causeOr(ctx, err))
 	}
 	return nil
@@ -269,7 +272,11 @@ func (c *Config) send(ctx context.Context, r *Request) (*http.Response, error) {
 	case r.Content != nil && r.ContentLength < 0:
 		return nil, fmt.Errorf("latere: %s %s has a ContentLength of %d", r.Method, where, r.ContentLength)
 	case r.Body != nil:
-		if body, err = json.Marshal(r.Body); err != nil {
+		// Keys of maps are written in order, so a request repeated under one
+		// idempotency key carries the same bytes. A body can carry text a
+		// person, a process or a model wrote, which is written with U+FFFD
+		// for any byte that is not UTF-8, and raw values that repeat a name.
+		if body, err = json.Marshal(r.Body, sendJSON); err != nil {
 			return nil, fmt.Errorf("latere: encoding the body of %s %s: %w", r.Method, where, err)
 		}
 	}
@@ -537,3 +544,20 @@ func (c *Config) backoff(attempt int) time.Duration {
 	half := d / 2
 	return half + rand.N(d-half+1)
 }
+
+// sendJSON writes a request body: keys in order, and no failure on text or
+// raw values that are not strict JSON.
+var sendJSON = json.JoinOptions(
+	json.Deterministic(true),
+	jsontext.AllowDuplicateNames(true),
+	jsontext.AllowInvalidUTF8(true),
+)
+
+// foreignJSON reads JSON the platform does not produce: token claims, the
+// bodies of proxies and identity providers. Duplicate keys, invalid UTF-8
+// and any letter case in a member name are all accepted.
+var foreignJSON = json.JoinOptions(
+	jsontext.AllowDuplicateNames(true),
+	jsontext.AllowInvalidUTF8(true),
+	json.MatchCaseInsensitiveNames(true),
+)

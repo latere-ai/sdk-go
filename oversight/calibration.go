@@ -5,7 +5,8 @@ package oversight
 
 import (
 	"context"
-	"encoding/json"
+	"encoding/json/jsontext"
+	"encoding/json/v2"
 	"errors"
 	"net/http"
 	"net/url"
@@ -90,12 +91,12 @@ type Calibration struct {
 	// in a bin that is not CalibrationNotEstimable; 0 with no step.
 	Estimable float64 `json:"estimable"`
 
-	raw json.RawMessage
+	raw jsontext.Value
 }
 
 // RawJSON returns the JSON the API answered for the report, with every
 // field, including those this version of the package does not model.
-func (c *Calibration) RawJSON() json.RawMessage { return c.raw }
+func (c *Calibration) RawJSON() jsontext.Value { return c.raw }
 
 // UnmarshalJSON decodes the report and keeps the JSON for RawJSON.
 func (c *Calibration) UnmarshalJSON(b []byte) error {
@@ -148,7 +149,7 @@ type CalibrationBin struct {
 	Observed *float64 `json:"observed"`
 	// Interval is the Wilson 95% interval of Observed at the Kish
 	// effective size of the reviews, present with Observed.
-	Interval *[2]float64 `json:"interval,omitempty"`
+	Interval *[2]float64 `json:"interval,omitzero"`
 	// Reviews counts the checks of the covered steps, and Considered
 	// those among them that are considered answers, whose weight is 1. No
 	// number of the bin reads the weight.

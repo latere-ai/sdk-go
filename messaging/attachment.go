@@ -60,7 +60,7 @@ func SealAttachment(dst io.Writer, src io.Reader) (*Attachment, error) {
 	if err != nil {
 		return nil, err
 	}
-	return &Attachment{Attachment: attachment.Attachment{Size: n, Blob: attachment.Sum(sum)}, Key: key}, nil
+	return &Attachment{Size: n, Blob: attachment.Sum(sum), Key: key}, nil
 }
 
 // OpenAttachment decrypts the ciphertext src holds into dst, writing each

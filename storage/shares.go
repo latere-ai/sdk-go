@@ -5,7 +5,8 @@ package storage
 
 import (
 	"context"
-	"encoding/json"
+	"encoding/json/jsontext"
+	"encoding/json/v2"
 	"iter"
 	"net/http"
 	"net/url"
@@ -83,12 +84,12 @@ type Grant struct {
 	// CreatedAt is when it was made.
 	CreatedAt time.Time `json:"created_at"`
 
-	raw json.RawMessage
+	raw jsontext.Value
 }
 
 // RawJSON returns the JSON the API answered for the share, including any
 // field Grant does not model.
-func (g *Grant) RawJSON() json.RawMessage { return g.raw }
+func (g *Grant) RawJSON() jsontext.Value { return g.raw }
 
 // UnmarshalJSON decodes the share and keeps the JSON for RawJSON.
 func (g *Grant) UnmarshalJSON(b []byte) error {

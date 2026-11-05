@@ -5,7 +5,8 @@ package account
 
 import (
 	"context"
-	"encoding/json"
+	"encoding/json/jsontext"
+	"encoding/json/v2"
 	"errors"
 	"iter"
 	"net/http"
@@ -86,13 +87,13 @@ type Project struct {
 	// started in it; ListProjects lists the latest first.
 	UpdatedAt time.Time `json:"updated_at"`
 
-	raw json.RawMessage
+	raw jsontext.Value
 }
 
 // RawJSON returns the JSON the API answered for the project, with every
 // field, including those this package does not model; nil for a Project
 // the program built itself.
-func (p *Project) RawJSON() json.RawMessage { return p.raw }
+func (p *Project) RawJSON() jsontext.Value { return p.raw }
 
 // UnmarshalJSON decodes the project and keeps the JSON for RawJSON.
 func (p *Project) UnmarshalJSON(b []byte) error {
@@ -286,12 +287,12 @@ func (c *Client) GetProject(ctx context.Context, id string) (*Project, error) {
 // the project has.
 type UpdateProjectParams struct {
 	// Name is the project's new name, by CreateProjectParams.Name's rule.
-	Name *string `json:"name,omitempty"`
+	Name *string `json:"name,omitzero"`
 	// Instructions are its new instructions, by
 	// CreateProjectParams.Instructions's rule; an empty string removes
 	// them. A conversation already started keeps the instructions it
 	// started with; the next one reads the new ones.
-	Instructions *string `json:"instructions,omitempty"`
+	Instructions *string `json:"instructions,omitzero"`
 }
 
 // UpdateProject changes a project's name, its instructions or both, and

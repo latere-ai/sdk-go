@@ -6,7 +6,8 @@ package signin
 import (
 	"bytes"
 	"context"
-	"encoding/json"
+	"encoding/json/jsontext"
+	"encoding/json/v2"
 	"errors"
 	"fmt"
 	"io"
@@ -39,7 +40,7 @@ type Organization struct {
 	// OwnerID is the id of the person who owns the organization.
 	OwnerID string `json:"owner_id"`
 	// Owner reports whether the person whose sign-in asked owns it.
-	Owner bool `json:"owner,omitempty"`
+	Owner bool `json:"owner,omitzero"`
 	// JoinedAt is when the person joined the organization. The service
 	// answers it as text, which is read in its ISO forms, such as
 	// "2026-10-22 13:39:16.123456+00"; it is zero for text in another
@@ -50,13 +51,13 @@ type Organization struct {
 	// membership a person granted.
 	ManagedBy string `json:"managed_by,omitempty"`
 
-	raw json.RawMessage
+	raw jsontext.Value
 }
 
 // RawJSON returns the JSON the service answered for the organization, with
 // every field, including those this package does not model; nil for an
 // Organization the program built itself.
-func (o *Organization) RawJSON() json.RawMessage { return o.raw }
+func (o *Organization) RawJSON() jsontext.Value { return o.raw }
 
 // UnmarshalJSON decodes the organization, reads its joined_at, and keeps
 // the JSON for RawJSON.
@@ -70,7 +71,7 @@ func (o *Organization) UnmarshalJSON(b []byte) error {
 		return err
 	}
 	o.JoinedAt = joinedAt(v.JoinedAt)
-	o.raw = append(json.RawMessage(nil), b...)
+	o.raw = append(jsontext.Value(nil), b...)
 	return nil
 }
 
@@ -115,7 +116,7 @@ func (c *Config) record(ctx context.Context, method, accessToken, path string, q
 	}
 	var content io.Reader
 	if body != nil {
-		b, err := json.Marshal(body)
+		b, err := json.Marshal(body, json.Deterministic(true), jsontext.AllowInvalidUTF8(true))
 		if err != nil {
 			return fmt.Errorf("signin: %s %s: %w", method, path, err)
 		}

@@ -63,9 +63,9 @@ func FuzzParsePayload(f *testing.F) {
 	b, _ := EncodePayload(Payload{ID: "m", SentAt: time.UnixMilli(1), Type: PayloadText, Text: "hi"})
 	f.Add(b)
 	b2, _ := EncodePayload(Payload{ID: "m", SentAt: time.UnixMilli(1), Type: PayloadText, Attachments: []Attachment{{
-		Attachment: attachment.Attachment{Name: "f", Size: 3, Blob: attachment.Digest([]byte("abc")), Ref: Folder + "/x",
-			Preview: &attachment.Preview{Data: []byte{1}, Waveform: []byte{2}}},
-		Owner: "alice", Key: bytes.Repeat([]byte{1}, StreamKeySize)}}})
+		Name: "f", Size: 3, Blob: attachment.Digest([]byte("abc")), Ref: Folder + "/x",
+		Preview: &attachment.Preview{Data: []byte{1}, Waveform: []byte{2}},
+		Owner:   "alice", Key: bytes.Repeat([]byte{1}, StreamKeySize)}}})
 	f.Add(b2)
 	f.Fuzz(func(t *testing.T, b []byte) {
 		p, err := ParsePayload(b)
@@ -217,7 +217,7 @@ func FuzzOpenStream(f *testing.F) {
 }
 
 func FuzzOpenAttachmentChunk(f *testing.F) {
-	a := &Attachment{Attachment: attachment.Attachment{Name: "f", Size: 3, Blob: attachment.Digest([]byte("abc"))}, Key: bytes.Repeat([]byte{1}, StreamKeySize)}
+	a := &Attachment{Name: "f", Size: 3, Blob: attachment.Digest([]byte("abc")), Key: bytes.Repeat([]byte{1}, StreamKeySize)}
 	s, _ := sealBytes(a.Key, attachmentInfo, []byte("abc"), MaxAttachmentBytes)
 	f.Add(int64(0), int64(3), s[1:])
 	f.Fuzz(func(t *testing.T, i, size int64, sealed []byte) {

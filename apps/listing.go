@@ -5,7 +5,8 @@ package apps
 
 import (
 	"context"
-	"encoding/json"
+	"encoding/json/jsontext"
+	"encoding/json/v2"
 	"errors"
 	"net/http"
 	"time"
@@ -115,12 +116,12 @@ type Listing struct {
 	// reason of the authorizer.
 	Blocked string `json:"blocked"`
 
-	raw json.RawMessage
+	raw jsontext.Value
 }
 
 // RawJSON returns the JSON the API answered for the listing, with every
 // field; nil for a Listing the program built itself.
-func (l *Listing) RawJSON() json.RawMessage { return l.raw }
+func (l *Listing) RawJSON() jsontext.Value { return l.raw }
 
 // UnmarshalJSON decodes the listing and keeps the JSON for RawJSON.
 func (l *Listing) UnmarshalJSON(b []byte) error {

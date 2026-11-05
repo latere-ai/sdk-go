@@ -5,7 +5,8 @@ package apps
 
 import (
 	"context"
-	"encoding/json"
+	"encoding/json/jsontext"
+	"encoding/json/v2"
 	"errors"
 	"net/http"
 	"net/url"
@@ -47,12 +48,12 @@ type Visits struct {
 	// zeros for a day with nothing counted.
 	Days []VisitDay `json:"days"`
 
-	raw json.RawMessage
+	raw jsontext.Value
 }
 
 // RawJSON returns the JSON the API answered for the visits, with every
 // field; nil for Visits the program built itself.
-func (v *Visits) RawJSON() json.RawMessage { return v.raw }
+func (v *Visits) RawJSON() jsontext.Value { return v.raw }
 
 // UnmarshalJSON decodes the visits and keeps the JSON for RawJSON.
 func (v *Visits) UnmarshalJSON(b []byte) error {

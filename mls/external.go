@@ -49,7 +49,7 @@ func JoinExternal(groupInfoMessage []byte, signer *SignatureKey, cred Credential
 	if len(opts.AuthenticatedData) > MaxContentBytes {
 		return nil, nil, errors.New("mls: authenticated data larger than MaxContentBytes")
 	}
-	g := &Group{cfg: cfg, publicState: publicState{s: s, ctx: gi.context}, signer: signer}
+	g := &Group{cfg: cfg, s: s, ctx: gi.context, signer: signer}
 	tree, err := g.joinTree(&cfg, gi, opts.RatchetTree)
 	if err != nil {
 		return nil, nil, err

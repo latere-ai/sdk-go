@@ -5,7 +5,8 @@ package llm
 
 import (
 	"context"
-	"encoding/json"
+	"encoding/json/jsontext"
+	"encoding/json/v2"
 	"errors"
 	"fmt"
 	"io"
@@ -130,7 +131,7 @@ func (c *Client) Generate(ctx context.Context, req *Request) (*Result, error) {
 	}
 	defer closeBody(resp)
 	out := &Result{Loss: parseLoss(resp.Header), RequestID: resp.Header.Get(requestIDHeader)}
-	if err := json.NewDecoder(io.LimitReader(resp.Body, maxResponse)).Decode(&out.Response); err != nil {
+	if err := json.UnmarshalDecode(jsontext.NewDecoder(io.LimitReader(resp.Body, maxResponse), modelJSON), &out.Response, modelJSON); err != nil {
 		return nil, fmt.Errorf("llm: decoding the answer: %w", causeOr(ctx, err))
 	}
 	return out, nil
@@ -165,7 +166,7 @@ func (c *Client) CountTokens(ctx context.Context, req *Request) (*TokenCount, er
 	var body struct {
 		InputTokens int64 `json:"input_tokens"`
 	}
-	if err := json.NewDecoder(io.LimitReader(resp.Body, maxResponse)).Decode(&body); err != nil {
+	if err := json.UnmarshalDecode(jsontext.NewDecoder(io.LimitReader(resp.Body, maxResponse), modelJSON), &body, modelJSON); err != nil {
 		return nil, fmt.Errorf("llm: decoding the token count: %w", causeOr(ctx, err))
 	}
 	return &TokenCount{
@@ -338,3 +339,11 @@ func causeOr(ctx context.Context, err error) error {
 func closeBody(resp *http.Response) {
 	_ = resp.Body.Close()
 }
+
+// modelJSON reads what a model wrote and a provider passed on: the text of
+// an answer, the arguments of a tool call and the items a provider returned
+// as they were. Repeated members and bytes that are not UTF-8 are accepted.
+var modelJSON = json.JoinOptions(
+	jsontext.AllowDuplicateNames(true),
+	jsontext.AllowInvalidUTF8(true),
+)

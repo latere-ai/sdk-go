@@ -5,7 +5,8 @@ package latere
 
 import (
 	"bytes"
-	"encoding/json"
+	"encoding/json/jsontext"
+	"encoding/json/v2"
 	"errors"
 	"fmt"
 	"net/http"
@@ -125,7 +126,7 @@ func newError(resp *http.Response, body []byte) *Error {
 			Details map[string]any `json:"details"`
 		} `json:"error"`
 	}
-	if json.Unmarshal(body, &envelope) == nil && envelope.Error.Code != "" {
+	if json.Unmarshal(body, &envelope, foreignJSON) == nil && envelope.Error.Code != "" {
 		e.Code = envelope.Error.Code
 		e.Message = envelope.Error.Message
 		e.Details = envelope.Error.Details
@@ -151,26 +152,29 @@ func newError(resp *http.Response, body []byte) *Error {
 // leave the code unread. It returns an empty code for a body that does not
 // start as the envelope.
 func envelopeStart(body []byte) (code, message string) {
-	d := json.NewDecoder(bytes.NewReader(body))
-	for _, want := range []any{json.Delim('{'), "error", json.Delim('{')} {
-		if t, err := d.Token(); err != nil || t != want {
+	d := jsontext.NewDecoder(bytes.NewReader(body), foreignJSON)
+	for _, want := range []struct {
+		kind jsontext.Kind
+		text string
+	}{{'{', ""}, {'"', "error"}, {'{', ""}} {
+		t, err := d.ReadToken()
+		if err != nil || t.Kind() != want.kind || (want.kind == '"' && t.String() != want.text) {
 			return "", ""
 		}
 	}
 	for {
-		key, err := d.Token()
+		key, err := d.ReadToken()
 		if err != nil {
 			return code, message
 		}
-		value, err := d.Token()
-		if err != nil {
+		// A token is valid only until the next read.
+		name := key.String()
+		value, err := d.ReadToken()
+		if err != nil || value.Kind() != '"' {
 			return code, message
 		}
-		text, ok := value.(string)
-		if !ok {
-			return code, message
-		}
-		switch key {
+		text := value.String()
+		switch name {
 		case "code":
 			code = text
 		case "message":

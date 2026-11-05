@@ -614,18 +614,16 @@ func (g *Group) stageCommit(a *authenticatedContent) (*StagedCommit, error) {
 // nextEpoch builds the group's state in the epoch a commit starts.
 func (g *Group) nextEpoch(sp *stagedPublic, priv *privateTree, es epochSecrets, tag []byte) *Group {
 	next := &Group{
-		cfg: g.cfg,
-		publicState: publicState{
-			s:               g.s,
-			ctx:             sp.next,
-			tree:            sp.app.tree,
-			interim:         sp.interim,
-			confirmationTag: tag,
-		},
-		priv:   priv,
-		signer: g.signer,
-		es:     es,
-		st:     newSecretTree(g.s, es.encryption, sp.app.tree.numLeaves()),
+		cfg:             g.cfg,
+		s:               g.s,
+		ctx:             sp.next,
+		tree:            sp.app.tree,
+		interim:         sp.interim,
+		confirmationTag: tag,
+		priv:            priv,
+		signer:          g.signer,
+		es:              es,
+		st:              newSecretTree(g.s, es.encryption, sp.app.tree.numLeaves()),
 	}
 	next.es.encryption = nil // consumed by the secret tree, RFC 9420, Section 9.2
 	next.resumption = append(slices.Clone(g.resumption), resumptionPSK{epoch: sp.next.epoch, psk: es.resumption})

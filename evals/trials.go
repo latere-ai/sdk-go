@@ -5,7 +5,8 @@ package evals
 
 import (
 	"context"
-	"encoding/json"
+	"encoding/json/jsontext"
+	"encoding/json/v2"
 	"errors"
 	"iter"
 	"net/url"
@@ -39,7 +40,7 @@ type Trial struct {
 	Outcome TrialOutcome `json:"outcome,omitempty"`
 	// Imported reports a trial a harness ran elsewhere and imported,
 	// rather than one the platform ran or leased.
-	Imported bool `json:"imported,omitempty"`
+	Imported bool `json:"imported,omitzero"`
 	// RetryOf is the id of the earlier trial of the same cell and index
 	// that this trial runs again: one that ended OutcomeInfraFailed and
 	// was retried automatically, or one a cell's retry runs again. That
@@ -50,32 +51,32 @@ type Trial struct {
 	ExecutorRef string `json:"executor_ref,omitempty"`
 	// Failure says why a trial the platform failed to run failed; nil
 	// otherwise.
-	Failure *TrialFailure `json:"failure,omitempty"`
+	Failure *TrialFailure `json:"failure,omitzero"`
 	// Declared is the provenance a harness declared for an external
 	// trial; nil otherwise.
-	Declared *TrialDeclared `json:"declared,omitempty"`
+	Declared *TrialDeclared `json:"declared,omitzero"`
 	// Lease is the lease an external trial is held under; nil when it is
 	// not leased.
-	Lease *TrialLease `json:"lease,omitempty"`
+	Lease *TrialLease `json:"lease,omitzero"`
 	// Sent is what the trial's model calls sent, as the platform counted
 	// them; nil when it counted none.
-	Sent *TrialSent `json:"sent,omitempty"`
+	Sent *TrialSent `json:"sent,omitzero"`
 	// Checks holds one run record per check of the task, in order, each
 	// with its state, exit code, reason and evidence; the records' shape
 	// is the document's description of the field.
-	Checks []json.RawMessage `json:"checks,omitempty"`
+	Checks []jsontext.Value `json:"checks,omitempty"`
 	// Judgments holds one record per model judge of the trial, each with
 	// its state, served model, tokens and cost.
-	Judgments []json.RawMessage `json:"judgments,omitempty"`
+	Judgments []jsontext.Value `json:"judgments,omitempty"`
 	// Evidence holds the evidence references the trial kept.
-	Evidence []json.RawMessage `json:"evidence,omitempty"`
+	Evidence []jsontext.Value `json:"evidence,omitempty"`
 	// Observed, Outputs and Values are the trial's observed setup, the
 	// files its run produced and the current value of each metric it was
 	// graded on, as JSON objects whose keys the suite and the metrics
 	// decide.
-	Observed json.RawMessage `json:"observed,omitempty"`
-	Outputs  json.RawMessage `json:"outputs,omitempty"`
-	Values   json.RawMessage `json:"values,omitempty"`
+	Observed jsontext.Value `json:"observed,omitzero"`
+	Outputs  jsontext.Value `json:"outputs,omitzero"`
+	Values   jsontext.Value `json:"values,omitzero"`
 	// CreatedAt is when the trial was made, StartedAt when its run
 	// started, AgentEndedAt when the system under test ended, and EndedAt
 	// when the trial finished, its grading included. A time the trial has
@@ -85,12 +86,12 @@ type Trial struct {
 	AgentEndedAt time.Time `json:"agent_ended_at"`
 	EndedAt      time.Time `json:"ended_at"`
 
-	raw json.RawMessage
+	raw jsontext.Value
 }
 
 // RawJSON returns the JSON the API answered for the trial, including any
 // field Trial does not model.
-func (t *Trial) RawJSON() json.RawMessage { return t.raw }
+func (t *Trial) RawJSON() jsontext.Value { return t.raw }
 
 // UnmarshalJSON decodes the trial and keeps the JSON for RawJSON.
 func (t *Trial) UnmarshalJSON(b []byte) error {
@@ -138,7 +139,7 @@ type TrialLease struct {
 // TrialSent counts the model calls a trial sent.
 type TrialSent struct {
 	// Requests is how many calls it sent.
-	Requests int `json:"requests,omitempty"`
+	Requests int `json:"requests,omitzero"`
 	// BySetting counts them by the model and reasoning they asked for.
 	BySetting []TrialSentSetting `json:"by_setting,omitempty"`
 }
@@ -150,7 +151,7 @@ type TrialSentSetting struct {
 	Model     string `json:"model,omitempty"`
 	Reasoning string `json:"reasoning,omitempty"`
 	// Requests is how many calls asked for it.
-	Requests int `json:"requests,omitempty"`
+	Requests int `json:"requests,omitzero"`
 }
 
 // ListTrialsParams filter and page the trials of an experiment. The zero

@@ -83,8 +83,9 @@ environments.
 
 ## Requirements
 
-Go 1.26 or 1.27. The SDK supports the two newest Go releases, as Go itself
-does.
+Go 1.27 or later. The SDK encodes and decodes JSON with `encoding/json/v2`,
+which Go 1.27 is the first release to ship. From Go 1.28 on, the SDK
+supports the two newest Go releases, as Go itself does.
 
 ## Authentication
 

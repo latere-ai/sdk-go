@@ -5,7 +5,8 @@ package account
 
 import (
 	"context"
-	"encoding/json"
+	"encoding/json/jsontext"
+	"encoding/json/v2"
 	"errors"
 	"net/http"
 
@@ -32,13 +33,13 @@ type Checkout struct {
 	// URL is the payment page, which the program sends the person to.
 	URL string `json:"url"`
 
-	raw json.RawMessage
+	raw jsontext.Value
 }
 
 // RawJSON returns the JSON the API answered for the checkout, with every
 // field, including those this package does not model; nil for a Checkout
 // the program built itself.
-func (c *Checkout) RawJSON() json.RawMessage { return c.raw }
+func (c *Checkout) RawJSON() jsontext.Value { return c.raw }
 
 // UnmarshalJSON decodes the checkout and keeps the JSON for RawJSON.
 func (c *Checkout) UnmarshalJSON(b []byte) error {

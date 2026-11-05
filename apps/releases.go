@@ -5,7 +5,8 @@ package apps
 
 import (
 	"context"
-	"encoding/json"
+	"encoding/json/jsontext"
+	"encoding/json/v2"
 	"errors"
 	"net/http"
 	"time"
@@ -63,12 +64,12 @@ type Release struct {
 	// SupersededAt is when a newer release replaced it; zero until then.
 	SupersededAt time.Time `json:"superseded_at,omitzero"`
 
-	raw json.RawMessage
+	raw jsontext.Value
 }
 
 // RawJSON returns the JSON the API answered for the release, with every
 // field; nil for a Release the program built itself.
-func (r *Release) RawJSON() json.RawMessage { return r.raw }
+func (r *Release) RawJSON() jsontext.Value { return r.raw }
 
 // UnmarshalJSON decodes the release and keeps the JSON for RawJSON.
 func (r *Release) UnmarshalJSON(b []byte) error {
@@ -86,17 +87,17 @@ type ReleaseDetail struct {
 	Release Release `json:"release"`
 	// SourceDeploy is the preview of the release's commit; nil until there
 	// is one.
-	SourceDeploy *Deploy `json:"source_deploy,omitempty"`
+	SourceDeploy *Deploy `json:"source_deploy,omitzero"`
 	// Deploy is the deploy that serves the release; nil until it is
 	// created.
-	Deploy *Deploy `json:"deploy,omitempty"`
+	Deploy *Deploy `json:"deploy,omitzero"`
 
-	raw json.RawMessage
+	raw jsontext.Value
 }
 
 // RawJSON returns the JSON the API answered, with every field; nil for a
 // ReleaseDetail the program built itself.
-func (r *ReleaseDetail) RawJSON() json.RawMessage { return r.raw }
+func (r *ReleaseDetail) RawJSON() jsontext.Value { return r.raw }
 
 // UnmarshalJSON decodes the detail and keeps the JSON for RawJSON.
 func (r *ReleaseDetail) UnmarshalJSON(b []byte) error {

@@ -5,7 +5,8 @@ package evals
 
 import (
 	"context"
-	"encoding/json"
+	"encoding/json/jsontext"
+	"encoding/json/v2"
 	"errors"
 	"iter"
 	"net/http"
@@ -182,12 +183,12 @@ type Experiment struct {
 	// Usage is what the calls made with the experiment's key recorded, on
 	// a read of one experiment whose trials ran with its key; nil
 	// otherwise.
-	Usage *Usage `json:"usage,omitempty"`
+	Usage *Usage `json:"usage,omitzero"`
 	// Comparisons are the comparisons it declared when it was created.
 	Comparisons []DeclaredComparison `json:"comparisons,omitempty"`
 	// Independence is the test of independence it declared, nil when it
 	// declared none.
-	Independence *Independence `json:"independence,omitempty"`
+	Independence *Independence `json:"independence,omitzero"`
 	// Metadata are its labels.
 	Metadata map[string]string `json:"metadata,omitempty"`
 	// CreatedAt is when it was created, and UpdatedAt when it last
@@ -195,12 +196,12 @@ type Experiment struct {
 	CreatedAt time.Time `json:"created_at"`
 	UpdatedAt time.Time `json:"updated_at"`
 
-	raw json.RawMessage
+	raw jsontext.Value
 }
 
 // RawJSON returns the JSON the API answered for the experiment, including
 // any field Experiment does not model.
-func (e *Experiment) RawJSON() json.RawMessage { return e.raw }
+func (e *Experiment) RawJSON() jsontext.Value { return e.raw }
 
 // UnmarshalJSON decodes the experiment and keeps the JSON for RawJSON.
 func (e *Experiment) UnmarshalJSON(b []byte) error {
@@ -229,12 +230,12 @@ type Budget struct {
 	// Name names the budget.
 	Name string `json:"name,omitempty"`
 	// CapMicroUSD is the budget's amount, in millionths of a US dollar.
-	CapMicroUSD *int64 `json:"cap_usd_micro,omitempty"`
+	CapMicroUSD *int64 `json:"cap_usd_micro,omitzero"`
 	// SpentMicroUSD is what it spent.
-	SpentMicroUSD *int64 `json:"spent_usd_micro,omitempty"`
+	SpentMicroUSD *int64 `json:"spent_usd_micro,omitzero"`
 	// RemainingMicroUSD is the smallest remainder across the budget and
 	// every budget that pays for it.
-	RemainingMicroUSD *int64 `json:"remaining_usd_micro,omitempty"`
+	RemainingMicroUSD *int64 `json:"remaining_usd_micro,omitzero"`
 	// Currency is the budget's currency when it is not US dollars.
 	Currency string `json:"currency,omitempty"`
 }
@@ -305,7 +306,7 @@ type Usage struct {
 	UnpricedRequests int64 `json:"unpriced_requests"`
 	// Unattributed are the calls no trial claims, which count toward the
 	// experiment and no trial.
-	Unattributed *UsageCount `json:"unattributed,omitempty"`
+	Unattributed *UsageCount `json:"unattributed,omitzero"`
 	// ReadTo is how far the records were read.
 	ReadTo time.Time `json:"read_to"`
 }
@@ -523,12 +524,12 @@ type Cell struct {
 	CreatedAt time.Time `json:"created_at"`
 	UpdatedAt time.Time `json:"updated_at"`
 
-	raw json.RawMessage
+	raw jsontext.Value
 }
 
 // RawJSON returns the JSON the API answered for the cell, including any
 // field Cell does not model.
-func (c *Cell) RawJSON() json.RawMessage { return c.raw }
+func (c *Cell) RawJSON() jsontext.Value { return c.raw }
 
 // UnmarshalJSON decodes the cell and keeps the JSON for RawJSON.
 func (c *Cell) UnmarshalJSON(b []byte) error {
@@ -669,16 +670,16 @@ type Comparison struct {
 	Exploratory bool `json:"exploratory"`
 	// Declared is, for a comparison its experiment declared, its place in
 	// the experiment's Comparisons; nil otherwise.
-	Declared *int `json:"declared,omitempty"`
+	Declared *int `json:"declared,omitzero"`
 	// Declaration is, for a declared comparison of the general form, what
 	// it compares.
-	Declaration *Declaration `json:"declaration,omitempty"`
+	Declaration *Declaration `json:"declaration,omitzero"`
 	// Variable are the fields of the candidates' setups the comparison
 	// means to vary.
 	Variable []string `json:"variable,omitempty"`
 	// SingleVariable reports that no other field of the setups differs on
 	// any task both sides ran; nil until the comparison is computed.
-	SingleVariable *bool `json:"single_variable,omitempty"`
+	SingleVariable *bool `json:"single_variable,omitzero"`
 	// Confounds name each confound of its results, a difference besides
 	// Variable that could explain them.
 	Confounds []string `json:"confounds,omitempty"`
@@ -715,12 +716,12 @@ type Comparison struct {
 	CreatedAt  time.Time `json:"created_at"`
 	ComputedAt time.Time `json:"computed_at"`
 
-	raw json.RawMessage
+	raw jsontext.Value
 }
 
 // RawJSON returns the JSON the API answered for the comparison, with its
 // figures and any other field Comparison does not model.
-func (c *Comparison) RawJSON() json.RawMessage { return c.raw }
+func (c *Comparison) RawJSON() jsontext.Value { return c.raw }
 
 // UnmarshalJSON decodes the comparison and keeps the JSON for RawJSON.
 func (c *Comparison) UnmarshalJSON(b []byte) error {

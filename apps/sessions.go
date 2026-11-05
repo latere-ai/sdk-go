@@ -5,7 +5,8 @@ package apps
 
 import (
 	"context"
-	"encoding/json"
+	"encoding/json/jsontext"
+	"encoding/json/v2"
 	"iter"
 	"net/http"
 	"net/url"
@@ -37,12 +38,12 @@ type AppSession struct {
 	// work reached the app's address at least once.
 	Released bool `json:"released"`
 
-	raw json.RawMessage
+	raw jsontext.Value
 }
 
 // RawJSON returns the JSON the API answered for the session's row, with
 // every field; nil for an AppSession the program built itself.
-func (s *AppSession) RawJSON() json.RawMessage { return s.raw }
+func (s *AppSession) RawJSON() jsontext.Value { return s.raw }
 
 // UnmarshalJSON decodes the row and keeps the JSON for RawJSON.
 func (s *AppSession) UnmarshalJSON(b []byte) error {

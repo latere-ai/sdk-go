@@ -4,7 +4,8 @@
 package memory_test
 
 import (
-	"encoding/json"
+	"encoding/json/jsontext"
+	"encoding/json/v2"
 	"errors"
 	"maps"
 	"net/http"
@@ -78,7 +79,7 @@ type operation struct {
 }
 
 type document struct {
-	Paths      map[string]map[string]json.RawMessage `json:"paths"`
+	Paths      map[string]map[string]jsontext.Value `json:"paths"`
 	Components struct {
 		Schemas   map[string]*schema `json:"schemas"`
 		Responses map[string]struct {

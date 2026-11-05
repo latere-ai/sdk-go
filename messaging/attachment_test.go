@@ -136,7 +136,7 @@ func TestSealAttachmentLimit(t *testing.T) {
 	if _, _, err := sealStream(io.Discard, bytes.NewReader(make([]byte, 3*ChunkBytes)), randomBytes(t, StreamKeySize), attachmentInfo, 3*ChunkBytes); err != nil {
 		t.Fatalf("at the limit: %v", err)
 	}
-	a := Attachment{Attachment: attachment.Attachment{Name: "big", Size: MaxAttachmentBytes + 1, Blob: attachment.Digest(nil)}, Key: make([]byte, StreamKeySize)}
+	a := Attachment{Name: "big", Size: MaxAttachmentBytes + 1, Blob: attachment.Digest(nil), Key: make([]byte, StreamKeySize)}
 	if err := OpenAttachment(io.Discard, strings.NewReader(""), &a); err == nil {
 		t.Fatal("an attachment over the limit opened")
 	}

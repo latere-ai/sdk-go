@@ -4,7 +4,8 @@
 package connections_test
 
 import (
-	"encoding/json"
+	"encoding/json/jsontext"
+	"encoding/json/v2"
 	"os"
 	"reflect"
 	"slices"
@@ -31,7 +32,7 @@ type schema struct {
 }
 
 type document struct {
-	Paths      map[string]map[string]json.RawMessage `json:"paths"`
+	Paths      map[string]map[string]jsontext.Value `json:"paths"`
 	Components struct {
 		Schemas map[string]*schema `json:"schemas"`
 	} `json:"components"`

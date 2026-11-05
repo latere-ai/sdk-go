@@ -4,7 +4,7 @@
 package agents_test
 
 import (
-	"encoding/json"
+	"encoding/json/jsontext"
 	"errors"
 	"fmt"
 	"net/http"
@@ -207,7 +207,7 @@ func TestSetTriggerAllowanceKeepsEveryOtherField(t *testing.T) {
 // int64 of millionths is refused, where the tool's multiplication wraps.
 func TestAnOffersAllowanceIsRead(t *testing.T) {
 	offer := func(input string) (*agents.Offer, error) {
-		use := &agents.ToolUse{ToolUseID: "toolu_1", Name: agents.ToolTrigger, Verdict: agents.VerdictAsk, Input: json.RawMessage(input)}
+		use := &agents.ToolUse{ToolUseID: "toolu_1", Name: agents.ToolTrigger, Verdict: agents.VerdictAsk, Input: jsontext.Value(input)}
 		return use.Offer()
 	}
 	type read struct {
@@ -264,5 +264,16 @@ func TestAnOffersAllowanceIsRead(t *testing.T) {
 	}
 	if o, err := offer(`{"action":"resume","id":"trg_1","perWeekUsd":"3"}`); err != nil || o.PerWeekUSD != "" || o.PerWeekMicroUSD != 0 {
 		t.Errorf("a resume reads %+v, %v", o, err)
+	}
+}
+
+// The arguments a model wrote are read leniently: a repeated member takes
+// its last value, and a member name may be in any case.
+func TestAnOffersArgumentsAreReadLeniently(t *testing.T) {
+	use := &agents.ToolUse{ToolUseID: "toolu_1", Name: agents.ToolTrigger, Verdict: agents.VerdictAsk,
+		Input: jsontext.Value(`{"action":"propose","Name":"Inbox","ask":"Look.","why":"Daily.","schedule":"0 9 * * *","timeZone":"UTC","perWeekUsd":1,"perWeekUsd":"2.50"}`)}
+	o, err := use.Offer()
+	if err != nil || o.Name != "Inbox" || o.PerWeekUSD != "2.50" || o.PerWeekMicroUSD != 2_500_000 {
+		t.Errorf("read %+v, %v", o, err)
 	}
 }

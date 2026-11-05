@@ -5,7 +5,8 @@ package signin
 
 import (
 	"context"
-	"encoding/json"
+	"encoding/json/jsontext"
+	"encoding/json/v2"
 	"errors"
 	"fmt"
 	"net/http"
@@ -65,7 +66,7 @@ type Key struct {
 	Status KeyStatus `json:"status"`
 	// Grants is what the key may do, as CreateKeyParams.Grants gave it
 	// and as every token the key obtains carries it.
-	Grants json.RawMessage `json:"grants,omitempty"`
+	Grants jsontext.Value `json:"grants,omitzero"`
 	// CreatedAt is when the key was created.
 	CreatedAt time.Time `json:"created_at"`
 	// ExpiresAt is when the key stops working; zero for a key that does
@@ -77,13 +78,13 @@ type Key struct {
 	// RevokedAt is when the key was revoked; zero for one that is not.
 	RevokedAt time.Time `json:"revoked_at,omitzero"`
 
-	raw json.RawMessage
+	raw jsontext.Value
 }
 
 // RawJSON returns the JSON the service answered for the key, with every
 // field, including those this package does not model; nil for a Key the
 // program built itself.
-func (k *Key) RawJSON() json.RawMessage { return k.raw }
+func (k *Key) RawJSON() jsontext.Value { return k.raw }
 
 // UnmarshalJSON decodes the key and keeps the JSON for RawJSON.
 func (k *Key) UnmarshalJSON(b []byte) error {
@@ -91,7 +92,7 @@ func (k *Key) UnmarshalJSON(b []byte) error {
 	if err := json.Unmarshal(b, (*plain)(k)); err != nil {
 		return err
 	}
-	k.raw = append(json.RawMessage(nil), b...)
+	k.raw = append(jsontext.Value(nil), b...)
 	return nil
 }
 
@@ -105,7 +106,7 @@ type CreateKeyParams struct {
 	// act on, and the API they are spent at. Required: the service
 	// refuses a list that is empty, malformed or names what no published
 	// vocabulary does, with a code that starts with "grant_".
-	Grants json.RawMessage
+	Grants jsontext.Value
 	// OrgID makes a member key, which acts in that organization; empty
 	// makes a personal key. The organization's policy decides whether a
 	// member key obtains tokens at once, waits for an admin's approval, or
@@ -145,10 +146,10 @@ func (c *Config) CreateKey(ctx context.Context, accessToken string, params *Crea
 		return nil, errors.New("signin: CreateKey: the key's grants are empty")
 	}
 	body := struct {
-		Name      string          `json:"name"`
-		Grants    json.RawMessage `json:"grants"`
-		OrgID     string          `json:"org_id,omitempty"`
-		ExpiresAt string          `json:"expires_at,omitempty"`
+		Name      string         `json:"name"`
+		Grants    jsontext.Value `json:"grants"`
+		OrgID     string         `json:"org_id,omitempty"`
+		ExpiresAt string         `json:"expires_at,omitempty"`
 	}{Name: params.Name, Grants: params.Grants, OrgID: params.OrgID}
 	if !params.ExpiresAt.IsZero() {
 		body.ExpiresAt = params.ExpiresAt.UTC().Format(time.RFC3339Nano)

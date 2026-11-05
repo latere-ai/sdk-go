@@ -5,7 +5,8 @@ package oversight
 
 import (
 	"context"
-	"encoding/json"
+	"encoding/json/jsontext"
+	"encoding/json/v2"
 	"go/ast"
 	"go/parser"
 	"go/token"
@@ -42,7 +43,7 @@ import (
 // serves them under BasePath, /v1/oversight.
 
 type document struct {
-	Paths      map[string]map[string]json.RawMessage `json:"paths"`
+	Paths      map[string]map[string]jsontext.Value `json:"paths"`
 	Components struct {
 		Schemas    map[string]*schema   `json:"schemas"`
 		Parameters map[string]parameter `json:"parameters"`
@@ -55,7 +56,7 @@ type document struct {
 // schema is the part of a JSON Schema these tests read.
 type schema struct {
 	Ref        string             `json:"$ref"`
-	Type       json.RawMessage    `json:"type"`
+	Type       jsontext.Value     `json:"type"`
 	Format     string             `json:"format"`
 	Properties map[string]*schema `json:"properties"`
 	Required   []string           `json:"required"`

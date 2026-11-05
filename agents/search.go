@@ -5,7 +5,8 @@ package agents
 
 import (
 	"context"
-	"encoding/json"
+	"encoding/json/jsontext"
+	"encoding/json/v2"
 	"errors"
 	"iter"
 	"net/http"
@@ -82,13 +83,13 @@ type SessionMatch struct {
 	// newest first.
 	Matches []EventMatch `json:"matches"`
 
-	raw json.RawMessage
+	raw jsontext.Value
 }
 
 // RawJSON returns the JSON the API answered for the match, with every
 // field, including those this package does not model; nil for a
 // SessionMatch the program built itself.
-func (m *SessionMatch) RawJSON() json.RawMessage { return m.raw }
+func (m *SessionMatch) RawJSON() jsontext.Value { return m.raw }
 
 // UnmarshalJSON decodes the match and keeps the JSON for RawJSON.
 func (m *SessionMatch) UnmarshalJSON(b []byte) error {
@@ -125,7 +126,7 @@ type ExcerptPart struct {
 	// Text is the run's text.
 	Text string `json:"text"`
 	// Match says the search's words matched the run.
-	Match bool `json:"match,omitempty"`
+	Match bool `json:"match,omitzero"`
 }
 
 // errNoQuery is returned before any request when a search has no words.

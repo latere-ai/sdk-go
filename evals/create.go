@@ -5,7 +5,8 @@ package evals
 
 import (
 	"context"
-	"encoding/json"
+	"encoding/json/jsontext"
+	"encoding/json/v2"
 	"errors"
 	"net/http"
 	"net/url"
@@ -54,7 +55,7 @@ type BudgetRequest struct {
 	// Name names the budget.
 	Name string `json:"name,omitempty"`
 	// CapMicroUSD is the cap, in millionths of a US dollar.
-	CapMicroUSD int64 `json:"cap_usd_micro,omitempty"`
+	CapMicroUSD int64 `json:"cap_usd_micro,omitzero"`
 }
 
 // CreateExperimentParams describe an experiment to create. Suite,
@@ -69,15 +70,15 @@ type CreateExperimentParams struct {
 	Budget BudgetRequest `json:"budget"`
 	// Trials is how many trials each cell runs; the API's default when
 	// zero.
-	Trials int `json:"trials,omitempty"`
+	Trials int `json:"trials,omitzero"`
 	// Mode is how its trials come to be; ModeExecute when empty.
 	Mode Mode `json:"mode,omitempty"`
 	// Parallelism is how many trials run at once; the API's default when
 	// zero.
-	Parallelism int `json:"parallelism,omitempty"`
+	Parallelism int `json:"parallelism,omitzero"`
 	// Reference is what every other candidate is compared with; nil lets
 	// the API choose.
-	Reference *Reference `json:"reference,omitempty"`
+	Reference *Reference `json:"reference,omitzero"`
 	// Scheduling is how its cells take turns at Parallelism and how its
 	// external trials are leased; SchedulingTaskByTask when empty. Fixed
 	// at create.
@@ -86,7 +87,7 @@ type CreateExperimentParams struct {
 	// without being asked and corrected together. Fixed at create.
 	Comparisons []DeclaredComparison `json:"comparisons,omitempty"`
 	// Independence is the test of independence it declares.
-	Independence *Independence `json:"independence,omitempty"`
+	Independence *Independence `json:"independence,omitzero"`
 	// Metadata are the owner's own labels, such as a commit, a branch or
 	// a CI run: at most 16 pairs, none with a key beginning "examen.".
 	// Evals reads none of them, and ListExperimentsParams.MetadataKey
@@ -140,7 +141,7 @@ type LeaseTrialsParams struct {
 	Candidate string `json:"candidate,omitempty"`
 	// Max is the most trials to take; the API's default when zero. The
 	// experiment's parallelism and each cell's share of it bound it too.
-	Max int `json:"max,omitempty"`
+	Max int `json:"max,omitzero"`
 	// Renew is the Lease of a lease to extend, in place of taking trials.
 	Renew string `json:"renew,omitempty"`
 	// IdempotencyKey, when set, is sent as the Idempotency-Key header, so
@@ -166,12 +167,12 @@ type Lease struct {
 	// Trials are the trials leased, none on a renewal that names none.
 	Trials []LeasedTrial `json:"trials"`
 
-	raw json.RawMessage
+	raw jsontext.Value
 }
 
 // RawJSON returns the JSON the API answered for the lease, including any
 // field Lease does not model. It holds the model key, when there is one.
-func (l *Lease) RawJSON() json.RawMessage { return l.raw }
+func (l *Lease) RawJSON() jsontext.Value { return l.raw }
 
 // UnmarshalJSON decodes the lease and keeps the JSON for RawJSON.
 func (l *Lease) UnmarshalJSON(b []byte) error {
@@ -190,19 +191,19 @@ type LeasedTrial struct {
 	// cell's trials it is.
 	ID    string `json:"id,omitempty"`
 	Cell  string `json:"cell,omitempty"`
-	Index int    `json:"index,omitempty"`
+	Index int    `json:"index,omitzero"`
 	// Candidate is the candidate the trial runs.
 	Candidate LeasedCandidate `json:"candidate"`
 	// Task is the task it runs.
 	Task LeasedTask `json:"task"`
 	// Instruction is the task's instruction; Inputs its input files, as
 	// the API describes them; Outputs the paths the harness reports.
-	Instruction string            `json:"instruction,omitempty"`
-	Inputs      []json.RawMessage `json:"inputs,omitempty"`
-	Outputs     []string          `json:"outputs,omitempty"`
+	Instruction string           `json:"instruction,omitempty"`
+	Inputs      []jsontext.Value `json:"inputs,omitempty"`
+	Outputs     []string         `json:"outputs,omitempty"`
 	// MaxTurns and Timeout are the task's limits, Timeout as a duration
 	// such as "10m".
-	MaxTurns int    `json:"max_turns,omitempty"`
+	MaxTurns int    `json:"max_turns,omitzero"`
 	Timeout  string `json:"timeout,omitempty"`
 	// LuxLabels is the value of the Lux-Labels header each of the trial's
 	// model calls carries, attributing the call to the trial.
@@ -215,7 +216,7 @@ type LeasedCandidate struct {
 	Name   string `json:"name,omitempty"`
 	Digest string `json:"digest,omitempty"`
 	// External is the setup the candidate declares.
-	External *LeasedExternal `json:"external,omitempty"`
+	External *LeasedExternal `json:"external,omitzero"`
 }
 
 // A LeasedExternal is the setup an external candidate declares.
@@ -276,9 +277,9 @@ type SubmitTrialParams struct {
 	StartedAt    time.Time `json:"started_at"`
 	AgentEndedAt time.Time `json:"agent_ended_at"`
 	// Failure says why a run that failed did.
-	Failure *SubmitFailure `json:"failure,omitempty"`
+	Failure *SubmitFailure `json:"failure,omitzero"`
 	// Declared is the provenance the harness declares.
-	Declared *TrialDeclared `json:"declared,omitempty"`
+	Declared *TrialDeclared `json:"declared,omitzero"`
 	// Outputs are the files the run produced, each an Arca reference with
 	// its digest.
 	Outputs []SubmitOutput `json:"outputs,omitempty"`

@@ -5,7 +5,8 @@ package account
 
 import (
 	"context"
-	"encoding/json"
+	"encoding/json/jsontext"
+	"encoding/json/v2"
 	"fmt"
 	"net/http"
 	"net/url"
@@ -61,13 +62,13 @@ type Spend struct {
 	// names a weekly allowance no larger than it.
 	PoolMicroUSD int64 `json:"pool_micro"`
 
-	raw json.RawMessage
+	raw jsontext.Value
 }
 
 // RawJSON returns the JSON the API answered for the spend, with every
 // field, including those this package does not model; nil for a Spend the
 // program built itself.
-func (s *Spend) RawJSON() json.RawMessage { return s.raw }
+func (s *Spend) RawJSON() jsontext.Value { return s.raw }
 
 // UnmarshalJSON decodes the spend and keeps the JSON for RawJSON.
 func (s *Spend) UnmarshalJSON(b []byte) error {

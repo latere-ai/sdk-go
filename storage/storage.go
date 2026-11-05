@@ -5,7 +5,8 @@ package storage
 
 import (
 	"context"
-	"encoding/json"
+	"encoding/json/jsontext"
+	"encoding/json/v2"
 	"errors"
 	"fmt"
 	"io"
@@ -88,12 +89,12 @@ type File struct {
 	// every other file.
 	URL string `json:"url,omitempty"`
 
-	raw json.RawMessage
+	raw jsontext.Value
 }
 
 // RawJSON returns the JSON the API answered for the file, including any
 // field File does not model.
-func (f *File) RawJSON() json.RawMessage { return f.raw }
+func (f *File) RawJSON() jsontext.Value { return f.raw }
 
 // UnmarshalJSON decodes the file and keeps the JSON for RawJSON.
 func (f *File) UnmarshalJSON(b []byte) error {
@@ -373,7 +374,7 @@ type FilesPage struct {
 	// Usage is what the whole space holds, answered for a listing of
 	// "files", the top of the space; nil for any other folder, and for a
 	// listing narrowed by Query or Recent.
-	Usage *Usage `json:"space,omitempty"`
+	Usage *Usage `json:"space,omitzero"`
 	// NextCursor asks for the next page; empty on the last.
 	NextCursor string `json:"next_cursor,omitempty"`
 }
@@ -422,6 +423,6 @@ func (c *Client) listPage(ctx context.Context, owner, path string, params *ListF
 }
 
 // keep returns a copy of b, which a decoder may reuse after it returns.
-func keep(b []byte) json.RawMessage {
-	return append(json.RawMessage(nil), b...)
+func keep(b []byte) jsontext.Value {
+	return append(jsontext.Value(nil), b...)
 }

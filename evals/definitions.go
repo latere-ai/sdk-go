@@ -5,7 +5,8 @@ package evals
 
 import (
 	"context"
-	"encoding/json"
+	"encoding/json/jsontext"
+	"encoding/json/v2"
 	"errors"
 	"fmt"
 	"iter"
@@ -235,12 +236,12 @@ type Metric struct {
 	// list leaves out none.
 	ExcludeLabels []string `json:"exclude_labels,omitempty"`
 
-	raw json.RawMessage
+	raw jsontext.Value
 }
 
 // RawJSON returns the JSON the API answered for the metric, including any
 // field Metric does not model.
-func (m *Metric) RawJSON() json.RawMessage { return m.raw }
+func (m *Metric) RawJSON() jsontext.Value { return m.raw }
 
 // UnmarshalJSON decodes the metric and keeps the JSON for RawJSON.
 func (m *Metric) UnmarshalJSON(b []byte) error {
@@ -364,20 +365,20 @@ type Grader struct {
 	// Produces are the digests of the metrics the grader fills.
 	Produces []string `json:"produces,omitempty"`
 	// Check is a GraderCheck's command.
-	Check *Check `json:"check,omitempty"`
+	Check *Check `json:"check,omitzero"`
 	// ModelJudge is a GraderModelJudge's model and prompt.
-	ModelJudge *ModelJudge `json:"model_judge,omitempty"`
+	ModelJudge *ModelJudge `json:"model_judge,omitzero"`
 	// AgentJudge is a GraderAgentJudge's agent and instructions.
-	AgentJudge *AgentJudge `json:"agent_judge,omitempty"`
+	AgentJudge *AgentJudge `json:"agent_judge,omitzero"`
 	// Annotation is a GraderAnnotation's instructions and sample.
-	Annotation *Annotation `json:"annotation,omitempty"`
+	Annotation *Annotation `json:"annotation,omitzero"`
 
-	raw json.RawMessage
+	raw jsontext.Value
 }
 
 // RawJSON returns the JSON the API answered for the grader, including any
 // field Grader does not model.
-func (g *Grader) RawJSON() json.RawMessage { return g.raw }
+func (g *Grader) RawJSON() jsontext.Value { return g.raw }
 
 // UnmarshalJSON decodes the grader and keeps the JSON for RawJSON.
 func (g *Grader) UnmarshalJSON(b []byte) error {
@@ -404,7 +405,7 @@ type Check struct {
 	Image string `json:"image,omitempty"`
 	// Files is a file of the owner's Storage delivered read-only to the
 	// check, by its path and the digest of its content.
-	Files *StorageFile `json:"files,omitempty"`
+	Files *StorageFile `json:"files,omitzero"`
 }
 
 // A ModelJudge is the model a GraderModelJudge asks, and what it asks.
@@ -414,7 +415,7 @@ type ModelJudge struct {
 	// Reasoning is the reasoning level the model runs at.
 	Reasoning string `json:"reasoning,omitempty"`
 	// Temperature is the sampling temperature; nil for the model's own.
-	Temperature *float64 `json:"temperature,omitempty"`
+	Temperature *float64 `json:"temperature,omitzero"`
 	// Role is what the judge does; empty reads as JudgeGrade.
 	Role JudgeRole `json:"role,omitempty"`
 	// Preamble is the platform's judge preamble, pinned on the grader when
@@ -425,7 +426,7 @@ type ModelJudge struct {
 	// Rubric is what the judge grades against.
 	Rubric string `json:"rubric,omitempty"`
 	// Inputs are what the judge reads of a trial.
-	Inputs *JudgeInputs `json:"inputs,omitempty"`
+	Inputs *JudgeInputs `json:"inputs,omitzero"`
 }
 
 // An AgentJudge is the agent a GraderAgentJudge runs, and what it tells it.
@@ -435,7 +436,7 @@ type AgentJudge struct {
 	// Instructions are what the agent is told to grade.
 	Instructions string `json:"instructions"`
 	// Inputs are what the agent reads of a trial.
-	Inputs *JudgeInputs `json:"inputs,omitempty"`
+	Inputs *JudgeInputs `json:"inputs,omitzero"`
 }
 
 // An Annotation is the queue of a GraderAnnotation: what a person grading
@@ -450,12 +451,12 @@ type Annotation struct {
 // JudgeInputs are what a judge reads of a trial.
 type JudgeInputs struct {
 	// Transcript reads the trial's whole transcript.
-	Transcript bool `json:"transcript,omitempty"`
+	Transcript bool `json:"transcript,omitzero"`
 	// FinalMessage reads the last message of the system under test.
-	FinalMessage bool `json:"final_message,omitempty"`
+	FinalMessage bool `json:"final_message,omitzero"`
 	// Checks reads, once every check of the trial ended, the values the
 	// checks recorded, by metric name.
-	Checks bool `json:"checks,omitempty"`
+	Checks bool `json:"checks,omitzero"`
 	// Files are files of the trial's workspace the judge reads.
 	Files []string `json:"files,omitempty"`
 	// Outputs are outputs of the trial the judge reads: an output by its
@@ -566,9 +567,9 @@ type Task struct {
 	// directory, each relative to the outputs directory.
 	Outputs []string `json:"outputs,omitempty"`
 	// Workspace is where the trial starts.
-	Workspace *Workspace `json:"workspace,omitempty"`
+	Workspace *Workspace `json:"workspace,omitzero"`
 	// Environment is the sandbox the trial runs in.
-	Environment *Environment `json:"environment,omitempty"`
+	Environment *Environment `json:"environment,omitzero"`
 	// Checks are the graders of kind GraderCheck run in order after the
 	// system under test ends, by digest.
 	Checks []string `json:"checks,omitempty"`
@@ -581,7 +582,7 @@ type Task struct {
 	// MaxTurns bounds the model responses of the system under test's own
 	// conversation, not its subagents', which some kinds of candidate take
 	// as advice alone; zero for no bound.
-	MaxTurns int `json:"max_turns,omitempty"`
+	MaxTurns int `json:"max_turns,omitzero"`
 	// Evidence are files of the workspace kept as evidence besides the
 	// transcript.
 	Evidence []string `json:"evidence,omitempty"`
@@ -592,12 +593,12 @@ type Task struct {
 	// Metadata are the task's labels.
 	Metadata map[string]string `json:"metadata,omitempty"`
 
-	raw json.RawMessage
+	raw jsontext.Value
 }
 
 // RawJSON returns the JSON the API answered for the task, including any
 // field Task does not model.
-func (t *Task) RawJSON() json.RawMessage { return t.raw }
+func (t *Task) RawJSON() jsontext.Value { return t.raw }
 
 // UnmarshalJSON decodes the task and keeps the JSON for RawJSON.
 func (t *Task) UnmarshalJSON(b []byte) error {
@@ -618,9 +619,9 @@ type FileSource struct {
 	// Text is the file's content, given inline.
 	Text string `json:"text,omitempty"`
 	// Storage is a file of the owner's Storage, the API's "arca".
-	Storage *StorageFile `json:"arca,omitempty"`
+	Storage *StorageFile `json:"arca,omitzero"`
 	// Repository is a file of a repository of Repos, the API's "origo".
-	Repository *RepositoryFile `json:"origo,omitempty"`
+	Repository *RepositoryFile `json:"origo,omitzero"`
 }
 
 // A StorageFile is a file of Storage pinned by the digest of its content.
@@ -662,10 +663,10 @@ type Environment struct {
 	Image string `json:"image"`
 	// Resources are the sandbox's resources, in the shape Environments
 	// takes them.
-	Resources json.RawMessage `json:"resources,omitempty"`
+	Resources jsontext.Value `json:"resources,omitzero"`
 	// Network is the sandbox's network policy, in the shape Environments
 	// takes it.
-	Network json.RawMessage `json:"network,omitempty"`
+	Network jsontext.Value `json:"network,omitzero"`
 }
 
 // ListTasksParams filter and page the tasks of the caller's context. The
@@ -782,12 +783,12 @@ type Suite struct {
 	// task not listed weighs 1.
 	Weights map[string]float64 `json:"weights,omitempty"`
 
-	raw json.RawMessage
+	raw jsontext.Value
 }
 
 // RawJSON returns the JSON the API answered for the suite, including any
 // field Suite does not model.
-func (s *Suite) RawJSON() json.RawMessage { return s.raw }
+func (s *Suite) RawJSON() jsontext.Value { return s.raw }
 
 // UnmarshalJSON decodes the suite and keeps the JSON for RawJSON.
 func (s *Suite) UnmarshalJSON(b []byte) error {
@@ -885,20 +886,20 @@ type Candidate struct {
 	// Kind is what the candidate runs.
 	Kind CandidateKind `json:"kind"`
 	// Agent is a CandidateAgent's agent and model.
-	Agent *AgentCandidate `json:"topos,omitempty"`
+	Agent *AgentCandidate `json:"topos,omitzero"`
 	// Program is a CandidateProgram's image and command.
-	Program *ProgramCandidate `json:"program,omitempty"`
+	Program *ProgramCandidate `json:"program,omitzero"`
 	// External is a CandidateExternal's harness.
-	External *ExternalCandidate `json:"external,omitempty"`
+	External *ExternalCandidate `json:"external,omitzero"`
 	// Metadata are the candidate's labels.
 	Metadata map[string]string `json:"metadata,omitempty"`
 
-	raw json.RawMessage
+	raw jsontext.Value
 }
 
 // RawJSON returns the JSON the API answered for the candidate, including
 // any field Candidate does not model.
-func (c *Candidate) RawJSON() json.RawMessage { return c.raw }
+func (c *Candidate) RawJSON() jsontext.Value { return c.raw }
 
 // UnmarshalJSON decodes the candidate and keeps the JSON for RawJSON.
 func (c *Candidate) UnmarshalJSON(b []byte) error {
@@ -935,7 +936,7 @@ type ProgramCandidate struct {
 	// Env are the variables the program runs with, none of them a secret.
 	Env map[string]string `json:"env,omitempty"`
 	// Config is an object the program defines and reads.
-	Config json.RawMessage `json:"config,omitempty"`
+	Config jsontext.Value `json:"config,omitzero"`
 	// Model and Reasoning are the model, by its pinned id, and the
 	// reasoning level the program is told to use.
 	Model     string `json:"model,omitempty"`
@@ -943,7 +944,7 @@ type ProgramCandidate struct {
 	// Models says where the program finds its way to Models: the
 	// variables it reads the address and the key from, and the API it
 	// speaks.
-	Models *ModelAccess `json:"lux,omitempty"`
+	Models *ModelAccess `json:"lux,omitzero"`
 	// Credentials are the tokens the program is given for other parts of
 	// the API, each scoped to one host.
 	Credentials []ProgramCredential `json:"credentials,omitempty"`

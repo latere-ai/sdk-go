@@ -5,7 +5,8 @@ package apps
 
 import (
 	"context"
-	"encoding/json"
+	"encoding/json/jsontext"
+	"encoding/json/v2"
 	"errors"
 	"net/http"
 	"net/url"
@@ -84,12 +85,12 @@ type Access struct {
 	// Limits bound the people and the password.
 	Limits AccessLimits `json:"limits"`
 
-	raw json.RawMessage
+	raw jsontext.Value
 }
 
 // RawJSON returns the JSON the API answered, with every field; nil for an
 // Access the program built itself.
-func (a *Access) RawJSON() json.RawMessage { return a.raw }
+func (a *Access) RawJSON() jsontext.Value { return a.raw }
 
 // UnmarshalJSON decodes the access and keeps the JSON for RawJSON.
 func (a *Access) UnmarshalJSON(b []byte) error {
@@ -143,7 +144,7 @@ type Person struct {
 	ClaimedAt time.Time `json:"claimed_at,omitzero"`
 	// Account is the account that signed in with the address, when the
 	// platform can name it; nil otherwise.
-	Account *PersonAccount `json:"person,omitempty"`
+	Account *PersonAccount `json:"person,omitzero"`
 }
 
 // PersonAccount is the account of a person who signed in with an invited
@@ -184,12 +185,12 @@ type Invites struct {
 	// Skipped are the addresses not invited, each with the reason.
 	Skipped []SkippedInvite `json:"skipped"`
 
-	raw json.RawMessage
+	raw jsontext.Value
 }
 
 // RawJSON returns the JSON the API answered, with every field; nil for
 // Invites the program built itself.
-func (i *Invites) RawJSON() json.RawMessage { return i.raw }
+func (i *Invites) RawJSON() jsontext.Value { return i.raw }
 
 // UnmarshalJSON decodes the invites and keeps the JSON for RawJSON.
 func (i *Invites) UnmarshalJSON(b []byte) error {

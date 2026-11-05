@@ -4,15 +4,16 @@
 package memory_test
 
 import (
-	"encoding/json"
+	"encoding/json/jsontext"
+	"encoding/json/v2"
 	"testing"
 
 	"latere.ai/x/sdk-go/memory"
 )
 
 // rawResources are the resources the package answers, each new.
-func rawResources() map[string]interface{ RawJSON() json.RawMessage } {
-	return map[string]interface{ RawJSON() json.RawMessage }{
+func rawResources() map[string]interface{ RawJSON() jsontext.Value } {
+	return map[string]interface{ RawJSON() jsontext.Value }{
 		"memory":           &memory.Memory{},
 		"list":             &memory.List{},
 		"settings changed": &memory.SettingsChanged{},

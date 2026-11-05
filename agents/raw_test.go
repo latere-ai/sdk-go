@@ -4,7 +4,8 @@
 package agents_test
 
 import (
-	"encoding/json"
+	"encoding/json/jsontext"
+	"encoding/json/v2"
 	"strings"
 	"testing"
 
@@ -37,7 +38,7 @@ func TestEveryResourceKeepsItsJSON(t *testing.T) {
 	for name, tc := range map[string]struct {
 		raw string
 		v   interface {
-			RawJSON() json.RawMessage
+			RawJSON() jsontext.Value
 		}
 	}{
 		"event":   {event, &agents.Event{}},
@@ -58,7 +59,7 @@ func TestEveryResourceKeepsItsJSON(t *testing.T) {
 // JSON of the wrong shape is refused, and nothing is kept.
 func TestAResourceRefusesJSONOfTheWrongShape(t *testing.T) {
 	for _, v := range []interface {
-		RawJSON() json.RawMessage
+		RawJSON() jsontext.Value
 	}{
 		&agents.Session{},
 		&agents.Event{},
@@ -73,5 +74,17 @@ func TestAResourceRefusesJSONOfTheWrongShape(t *testing.T) {
 		if v.RawJSON() != nil {
 			t.Errorf("%T kept JSON it refused", v)
 		}
+	}
+}
+
+// The meta of a result is read as the rest of an event is: a repeated
+// member takes its last value.
+func TestToolMetaIsReadLeniently(t *testing.T) {
+	var m agents.ToolMeta
+	if err := json.Unmarshal([]byte(`{"path":"a","path":"b"}`), &m, jsontext.AllowDuplicateNames(true)); err != nil {
+		t.Fatal(err)
+	}
+	if m.Path != "b" {
+		t.Errorf("path = %q", m.Path)
 	}
 }

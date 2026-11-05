@@ -45,7 +45,7 @@ type Attachment struct {
 	Ref string `json:"ref,omitempty"`
 	// Preview is what draws the file before its bytes are read, when the
 	// sender made one.
-	Preview *Preview `json:"preview,omitempty"`
+	Preview *Preview `json:"preview,omitzero"`
 }
 
 // Preview is a small stand-in for a file: a thumbnail of a picture, the
@@ -58,15 +58,15 @@ type Preview struct {
 	Data []byte `json:"data,omitempty"`
 	// Width and Height are the file's own dimensions in pixels, for a
 	// picture, a video or a page, so the app lays it out before it loads.
-	Width  int `json:"width,omitempty"`
-	Height int `json:"height,omitempty"`
+	Width  int `json:"width,omitzero"`
+	Height int `json:"height,omitzero"`
 	// DurationMillis is the length of a video or of audio.
-	DurationMillis int64 `json:"duration_ms,omitempty"`
+	DurationMillis int64 `json:"duration_ms,omitzero"`
 	// Waveform is the loudness of a voice note, one byte per step from
 	// silence at 0 to the loudest at 255.
 	Waveform []byte `json:"waveform,omitempty"`
 	// Pages is a document's number of pages.
-	Pages int `json:"pages,omitempty"`
+	Pages int `json:"pages,omitzero"`
 }
 
 // Digest is the Blob of a file's bytes.

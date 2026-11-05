@@ -4,7 +4,8 @@
 package account_test
 
 import (
-	"encoding/json"
+	"encoding/json/jsontext"
+	"encoding/json/v2"
 	"errors"
 	"fmt"
 	"net/http"
@@ -112,7 +113,7 @@ func TestRoutesOutsideTheDocumentAreStillOutside(t *testing.T) {
 		t.Fatal(err)
 	}
 	var d struct {
-		Paths map[string]map[string]json.RawMessage `json:"paths"`
+		Paths map[string]map[string]jsontext.Value `json:"paths"`
 	}
 	if err := json.Unmarshal(raw, &d); err != nil {
 		t.Fatal(err)

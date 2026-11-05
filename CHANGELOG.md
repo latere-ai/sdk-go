@@ -9,6 +9,20 @@ minor version may break code, and every such change is marked **Breaking**.
 
 ### Changed
 
+- **Breaking**: the SDK requires Go 1.27. It encodes and decodes JSON with
+  `encoding/json/v2`, which Go 1.27 is the first release to ship; Go 1.26
+  is no longer supported. Exported `json.RawMessage` fields and parameters
+  are now `jsontext.Value`, the same type under another name, so code that
+  passes either keeps compiling.
+- **Breaking**: errors from a malformed response wrap the
+  `encoding/json/v2` and `encoding/json/jsontext` error types
+  (`*json.SemanticError`, `*jsontext.SyntacticError`) instead of
+  `*json.SyntaxError` and `*json.UnmarshalTypeError`, and their text
+  changes.
+- Request bodies write a nil list or map as `[]` or `{}` instead of
+  `null`, write map keys in sorted order, and no longer escape `<`, `>` and
+  `&`. Struct fields that were omitted before are still omitted, and
+  message payloads keep their exact bytes.
 - Errors the SDK wraps from a failed message check, a malformed payload
   or a bad signature now also match the underlying error with `errors.Is`
   and `errors.As`.

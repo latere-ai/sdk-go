@@ -9,7 +9,7 @@ import (
 	"crypto/ecdh"
 	"crypto/ed25519"
 	"crypto/rand"
-	"encoding/json"
+	"encoding/json/v2"
 	"errors"
 	"io"
 	"net"
@@ -92,7 +92,7 @@ func refusedWith(t *testing.T, status int, code string) error {
 // b64 is bytes as the wire has them.
 func b64(t *testing.T, b []byte) string {
 	t.Helper()
-	raw, err := json.Marshal(b)
+	raw, err := json.Marshal(b, json.Deterministic(true))
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -336,7 +336,7 @@ func TestCalls(t *testing.T) {
 				t.Errorf("%s %s sent the device header %q; the document requires it: %v", r.method, r.path, r.device, e.asDevice)
 			}
 			for k, v := range c.sent {
-				if got, _ := json.Marshal(r.body[k]); string(got) != mustJSON(t, v) {
+				if got, _ := json.Marshal(r.body[k], json.Deterministic(true)); string(got) != mustJSON(t, v) {
 					t.Errorf("sent %s %s, want %s", k, got, mustJSON(t, v))
 				}
 			}
@@ -372,7 +372,7 @@ func callOf(method, path string) (call, bool) {
 
 func mustJSON(t *testing.T, v any) string {
 	t.Helper()
-	b, err := json.Marshal(v)
+	b, err := json.Marshal(v, json.Deterministic(true))
 	if err != nil {
 		t.Fatal(err)
 	}

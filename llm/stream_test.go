@@ -4,7 +4,7 @@
 package llm_test
 
 import (
-	"encoding/json"
+	"encoding/json/v2"
 	"errors"
 	"fmt"
 	"io"
@@ -26,7 +26,7 @@ func sseFrame(w io.Writer, event, data string) {
 func TestStreamYieldsTheAnswerInOrder(t *testing.T) {
 	c := newClient(t, func(w http.ResponseWriter, r *http.Request) {
 		var req llm.Request
-		if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		if err := json.UnmarshalRead(r.Body, &req); err != nil {
 			t.Fatal(err)
 		}
 		if !req.Stream || r.Header.Get("Accept") != "text/event-stream" || r.Header.Get("Authorization") != "Bearer pat_test" {

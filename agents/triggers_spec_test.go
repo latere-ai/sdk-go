@@ -5,7 +5,8 @@ package agents
 
 import (
 	"context"
-	"encoding/json"
+	"encoding/json/jsontext"
+	"encoding/json/v2"
 	"io"
 	"net/http"
 	"net/http/httptest"
@@ -111,7 +112,7 @@ func TestTriggerRequestsFitTheirSchemas(t *testing.T) {
 		{"FireTrigger", func() error {
 			_, err := c.FireTrigger(ctx, "weekly", &FireTriggerParams{Event: &TriggerEvent{
 				ID: "e1", Product: "github", Verb: "release.published", Resource: "r", Actor: "ann", Subject: "bob",
-				Time: time.Date(2026, 10, 20, 12, 0, 0, 0, time.UTC), Payload: json.RawMessage(`{"tag":"v1"}`),
+				Time: time.Date(2026, 10, 20, 12, 0, 0, 0, time.UTC), Payload: jsontext.Value(`{"tag":"v1"}`),
 			}})
 			return err
 		}, s["Envelope"], false},

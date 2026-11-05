@@ -5,7 +5,7 @@ package llm_test
 
 import (
 	"context"
-	"encoding/json"
+	"encoding/json/jsontext"
 	"fmt"
 	"strings"
 
@@ -79,7 +79,7 @@ func ExampleClient_Generate_tools() {
 		Tools: []llm.Tool{{
 			Name:        "clock",
 			Description: "Tells the current time in a city.",
-			InputSchema: json.RawMessage(`{"type":"object","properties":{"city":{"type":"string"}},"required":["city"]}`),
+			InputSchema: jsontext.Value(`{"type":"object","properties":{"city":{"type":"string"}},"required":["city"]}`),
 		}},
 	}
 	res, err := c.Generate(ctx, req)

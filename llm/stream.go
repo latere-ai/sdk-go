@@ -5,7 +5,7 @@ package llm
 
 import (
 	"context"
-	"encoding/json"
+	"encoding/json/v2"
 	"errors"
 	"fmt"
 	"io"
@@ -168,7 +168,7 @@ func readEvents(ctx context.Context, body io.Reader, requestID string, yield fun
 			continue
 		}
 		var ev Event
-		if err := json.Unmarshal(f.Data, &ev); err != nil {
+		if err := json.Unmarshal(f.Data, &ev, modelJSON); err != nil {
 			yield(Event{}, fmt.Errorf("llm: decoding a %s event: %w", f.Event, err))
 			return
 		}
@@ -209,7 +209,7 @@ func streamError(data []byte, requestID string) *StreamError {
 			} `json:"details"`
 		} `json:"error"`
 	}
-	if json.Unmarshal(data, &envelope) != nil || (envelope.Error.Code == "" && envelope.Error.Type == "" && envelope.Error.Message == "") {
+	if json.Unmarshal(data, &envelope, modelJSON) != nil || (envelope.Error.Code == "" && envelope.Error.Type == "" && envelope.Error.Message == "") {
 		return &StreamError{Message: strings.TrimSpace(string(data)), RequestID: requestID}
 	}
 	code := envelope.Error.Code

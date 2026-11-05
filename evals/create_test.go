@@ -4,7 +4,7 @@
 package evals_test
 
 import (
-	"encoding/json"
+	"encoding/json/v2"
 	"errors"
 	"net/http"
 	"strings"
@@ -47,7 +47,7 @@ func TestAnExperimentIsCreated(t *testing.T) {
 	want := `{"budget":{"cap_usd_micro":1000000},"candidates":["sha256:c1"],"comparisons":[{"candidate":"sha256:c2","reference_candidate":"sha256:c1","variable":"model"}],` +
 		`"independence":{"metric":"sha256:m"},"metadata":{"pr":"7"},"mode":"execute","parallelism":2,"reference":{"candidate":"sha256:c1"},"scheduling":"interleaved",` +
 		`"sign_in":"handle","suite":"sha256:s","trials":3}`
-	if gotJSON, _ := json.Marshal(body); string(gotJSON) != want {
+	if gotJSON, _ := json.Marshal(body, json.Deterministic(true)); string(gotJSON) != want {
 		t.Errorf("body %s\nwant %s", gotJSON, want)
 	}
 	// Without a key none is sent.
@@ -135,7 +135,7 @@ func TestATrialIsSubmitted(t *testing.T) {
 	if err := json.Unmarshal([]byte(rec.last(t).body), &body); err != nil {
 		t.Fatal(err)
 	}
-	if got, _ := json.Marshal(body); string(got) != want {
+	if got, _ := json.Marshal(body, json.Deterministic(true)); string(got) != want {
 		t.Errorf("body %s\nwant %s", got, want)
 	}
 	if _, err := c.SubmitTrial(t.Context(), "", &evals.SubmitTrialParams{}); err == nil {

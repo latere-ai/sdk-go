@@ -4,7 +4,8 @@
 package messaging_test
 
 import (
-	"encoding/json"
+	"encoding/json/jsontext"
+	"encoding/json/v2"
 	"errors"
 	"fmt"
 	"net/http"
@@ -61,7 +62,7 @@ type operation struct {
 }
 
 type document struct {
-	Paths      map[string]map[string]json.RawMessage `json:"paths"`
+	Paths      map[string]map[string]jsontext.Value `json:"paths"`
 	Components struct {
 		Schemas    map[string]*schema   `json:"schemas"`
 		Parameters map[string]parameter `json:"parameters"`
@@ -176,7 +177,7 @@ func TestModelsMatchTheSchemas(t *testing.T) {
 // text is what a value is on the wire.
 func text(t *testing.T, v any) string {
 	t.Helper()
-	b, err := json.Marshal(v)
+	b, err := json.Marshal(v, json.Deterministic(true))
 	if err != nil {
 		t.Fatal(err)
 	}

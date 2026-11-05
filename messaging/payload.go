@@ -6,7 +6,8 @@ package messaging
 import (
 	"bytes"
 	"encoding/binary"
-	"encoding/json"
+	"encoding/json/jsontext"
+	"encoding/json/v2"
 	"errors"
 	"fmt"
 	"time"
@@ -68,6 +69,17 @@ type Payload struct {
 	Attachments []Attachment `json:"attachments,omitempty"`
 }
 
+// payloadEncoding is the one encoding of a payload. Every device writes
+// and checks the same bytes, so the HTML-unsafe characters stay escaped,
+// and the text a person typed is written even when it holds bytes that
+// are not UTF-8.
+var payloadEncoding = json.JoinOptions(
+	json.Deterministic(true),
+	jsontext.EscapeForHTML(true),
+	jsontext.EscapeForJS(true),
+	jsontext.AllowInvalidUTF8(true),
+)
+
 // payloadVersion is the first byte of an encoded payload.
 const payloadVersion = 1
 
@@ -77,7 +89,7 @@ func EncodePayload(p Payload) ([]byte, error) {
 	if err := p.validate(); err != nil {
 		return nil, err
 	}
-	body, err := json.Marshal(p)
+	body, err := json.Marshal(p, payloadEncoding)
 	if err != nil {
 		return nil, err
 	}
@@ -122,7 +134,7 @@ func ParsePayload(b []byte) (Payload, error) {
 	if err := p.validate(); err != nil {
 		return Payload{}, err
 	}
-	canon, err := json.Marshal(p)
+	canon, err := json.Marshal(p, payloadEncoding)
 	if err != nil {
 		return Payload{}, err
 	}

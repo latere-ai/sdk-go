@@ -4,7 +4,8 @@
 package wire_test
 
 import (
-	"encoding/json"
+	"encoding/json/jsontext"
+	"encoding/json/v2"
 	"math"
 	"reflect"
 	"slices"
@@ -26,15 +27,15 @@ func TestRequestWireFormat(t *testing.T) {
 	req := wire.Request{
 		Model:       "anthropic/claude-sonnet-4.5",
 		System:      []wire.Block{{Type: wire.BlockText, Text: "Be brief.", CacheHint: true}},
-		Messages:    []wire.Message{hi, {Role: wire.RoleAssistant, Blocks: []wire.Block{{Type: wire.BlockToolUse, ToolUse: &wire.ToolUse{ID: "tu_1", Name: "bash", Args: json.RawMessage(`{"cmd":"ls"}`)}}}}},
-		Tools:       []wire.Tool{{Name: "bash", Description: "run", InputSchema: json.RawMessage(`{"type":"object"}`)}},
-		ServerTools: []wire.ServerTool{{Type: "web_search", Name: "search", Config: json.RawMessage(`{}`)}},
+		Messages:    []wire.Message{hi, {Role: wire.RoleAssistant, Blocks: []wire.Block{{Type: wire.BlockToolUse, ToolUse: &wire.ToolUse{ID: "tu_1", Name: "bash", Args: jsontext.Value(`{"cmd":"ls"}`)}}}}},
+		Tools:       []wire.Tool{{Name: "bash", Description: "run", InputSchema: jsontext.Value(`{"type":"object"}`)}},
+		ServerTools: []wire.ServerTool{{Type: "web_search", Name: "search", Config: jsontext.Value(`{}`)}},
 		ToolChoice:  &wire.ToolChoice{Mode: wire.ToolChoiceTool, Name: "bash", DisableParallel: true},
 		MaxTokens:   &maxTokens, Temperature: &temperature, TopP: &topP, TopK: &topK,
 		StopSequences:   []string{"END"},
 		Stream:          true,
 		Reasoning:       &wire.Reasoning{Level: wire.ReasoningHigh},
-		Schema:          &wire.ResponseSchema{Name: "answer", Schema: json.RawMessage(`{"type":"object"}`), Strict: true},
+		Schema:          &wire.ResponseSchema{Name: "answer", Schema: jsontext.Value(`{"type":"object"}`), Strict: true},
 		WebSearch:       &wire.WebSearch{ContextSize: "low"},
 		UserID:          "u_1",
 		CacheKey:        "k",
@@ -68,7 +69,7 @@ func TestResponseAndEventWireFormat(t *testing.T) {
 	read, cost := int64(0), int64(12)
 	res := wire.Response{
 		ID: "msg_1", Model: "m", StopReason: wire.StopStopSequence, StopSequence: "END",
-		Blocks:   []wire.Block{{Type: wire.BlockThinking, Text: "hm", Signature: "sig"}, {Type: wire.BlockOpaque, Opaque: &wire.Opaque{Dialect: wire.DialectOpenAIResponses, Kind: "reasoning", Raw: json.RawMessage(`{"id":"rs_1"}`)}}},
+		Blocks:   []wire.Block{{Type: wire.BlockThinking, Text: "hm", Signature: "sig"}, {Type: wire.BlockOpaque, Opaque: &wire.Opaque{Dialect: wire.DialectOpenAIResponses, Kind: "reasoning", Raw: jsontext.Value(`{"id":"rs_1"}`)}}},
 		Usage:    wire.Usage{InputTokens: 3, OutputTokens: 4, CacheReadInputTokens: &read, ReasoningTokens: 2, CostMicroUSD: &cost},
 		LogProbs: []wire.TokenLogProb{{Token: "a", Bytes: []byte("a"), LogProb: wire.LogProb(math.Inf(-1)), Top: []wire.TokenLogProb{{Token: "b", LogProb: -0.5}}}},
 	}

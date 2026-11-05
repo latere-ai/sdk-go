@@ -1036,3 +1036,23 @@ func TestSmallOrderKeyRefused(t *testing.T) {
 		t.Errorf("an entry under a key of small order: got %v, want a refusal for its key", err)
 	}
 }
+
+// The payload's one encoding escapes <, > and & and the line and paragraph
+// separators, as every device writes it, and writes a byte that is not UTF-8
+// as the replacement character.
+func TestPayloadEncodingBytes(t *testing.T) {
+	p := Payload{ID: "m1", SentAt: time.Date(2026, 10, 29, 10, 0, 0, 0, time.UTC), Type: PayloadText, Text: "<a & b> \xff"}
+	b, err := EncodePayload(p)
+	if err != nil {
+		t.Fatal(err)
+	}
+	n := binary.BigEndian.Uint32(b[1:5])
+	want := `{"id":"m1","sent_at":"2026-10-29T10:00:00Z","type":"text","text":"\u003ca \u0026 b\u003e\u2028` + "\ufffd" + `"}`
+	if got := string(b[5 : 5+n]); got != want {
+		t.Errorf("encoded %s, want %s", got, want)
+	}
+	got, err := ParsePayload(b)
+	if err != nil || got.Text != "<a & b> �" {
+		t.Errorf("parsed %+v, %v", got, err)
+	}
+}

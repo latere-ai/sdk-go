@@ -4,7 +4,8 @@
 package connections_test
 
 import (
-	"encoding/json"
+	"encoding/json/jsontext"
+	"encoding/json/v2"
 	"testing"
 
 	"latere.ai/x/sdk-go/connections"
@@ -14,7 +15,7 @@ import (
 // field the package does not model included.
 func TestEveryResourceKeepsItsJSON(t *testing.T) {
 	for name, v := range map[string]interface {
-		RawJSON() json.RawMessage
+		RawJSON() jsontext.Value
 	}{
 		"connection": &connections.Connection{},
 		"connector":  &connections.Connector{},
@@ -50,7 +51,7 @@ func TestAConnectionKeepsTheJSONTheAPIAnswered(t *testing.T) {
 // JSON of the wrong shape is refused, and nothing is kept.
 func TestAResourceRefusesJSONOfTheWrongShape(t *testing.T) {
 	for _, v := range []interface {
-		RawJSON() json.RawMessage
+		RawJSON() jsontext.Value
 	}{
 		&connections.Connection{},
 		&connections.Connector{},

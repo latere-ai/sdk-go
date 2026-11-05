@@ -5,7 +5,7 @@ package latere
 
 import (
 	"context"
-	"encoding/json"
+	"encoding/json/v2"
 	"errors"
 	"fmt"
 	"io"
@@ -46,7 +46,7 @@ func writeError(w http.ResponseWriter, status int, code, message string) {
 	w.Header().Set("Content-Type", "application/json")
 	w.Header().Set("X-Request-Id", "req_test")
 	w.WriteHeader(status)
-	if err := json.NewEncoder(w).Encode(map[string]any{"error": map[string]any{"code": code, "message": message, "details": map[string]any{"field": "agent"}}}); err != nil {
+	if err := json.MarshalWrite(w, map[string]any{"error": map[string]any{"code": code, "message": message, "details": map[string]any{"field": "agent"}}}); err != nil {
 		panic(err)
 	}
 }
@@ -117,7 +117,9 @@ func TestDoSendsTheRequest(t *testing.T) {
 			hooked = append(hooked, fmt.Sprintf("after %d", resp.StatusCode))
 		},
 	}))
-	var out struct{ ID string }
+	var out struct {
+		ID string `json:"id"`
+	}
 	err := c.Do(t.Context(), &Request{
 		Method: http.MethodPost, Path: "/v1/agents/sessions/ses%2F1/events",
 		Query: map[string][]string{"a": {"b c"}}, Body: map[string]string{"k": "v"},
@@ -598,7 +600,9 @@ func TestTimeoutDoesNotCutTheAnswerShort(t *testing.T) {
 	}))
 	defer srv.Close()
 	c, _ := testConfig(t, srv, WithTimeout(10*time.Second))
-	var out struct{ ID string }
+	var out struct {
+		ID string `json:"id"`
+	}
 	if err := c.Do(t.Context(), &Request{Method: http.MethodGet, Path: "/v1/x"}, &out); err != nil || out.ID != "ses_1" {
 		t.Errorf("an answer whose body came after its headers: %+v, %v", out, err)
 	}
@@ -728,5 +732,82 @@ func TestErrorRequestIDFromTheDetails(t *testing.T) {
 	var apiErr *Error
 	if !errors.As(err, &apiErr) || apiErr.RequestID != "req_1" || apiErr.Code != "model_not_found" {
 		t.Fatalf("err = %#v, want model_not_found with request req_1", err)
+	}
+}
+
+// A body of maps is written with its keys in order, so the same request
+// repeated under one idempotency key carries the same bytes.
+func TestRequestBodyKeysAreInOrder(t *testing.T) {
+	var body string
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		b, _ := io.ReadAll(r.Body)
+		body = string(b)
+		fmt.Fprint(w, `{}`)
+	}))
+	defer srv.Close()
+	c, _ := testConfig(t, srv)
+	err := c.Do(t.Context(), &Request{Method: http.MethodPost, Path: "/v1/x", Body: map[string]any{
+		"zeta": 1, "alpha": map[string]any{"y": []int{}, "b": nil}, "mid": "<&>",
+	}}, nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if want := `{"alpha":{"b":null,"y":[]},"mid":"<&>","zeta":1}`; body != want {
+		t.Errorf("sent %s, want %s", body, want)
+	}
+}
+
+// An answer is decoded from its first value; what follows it, or a
+// connection cut after it, does not fail the call.
+func TestDoReadsTheFirstValueOfTheAnswer(t *testing.T) {
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		fmt.Fprint(w, `{"id":"a"} trailing`)
+	}))
+	defer srv.Close()
+	c, _ := testConfig(t, srv)
+	var out struct {
+		ID string `json:"id"`
+	}
+	if err := c.Do(t.Context(), &Request{Method: http.MethodGet, Path: "/v1/x"}, &out); err != nil || out.ID != "a" {
+		t.Errorf("decoded %+v, %v", out, err)
+	}
+}
+
+// A body from a proxy or an identity provider is read as v1 read it:
+// repeated members, invalid UTF-8 and member names in any case.
+func TestForeignErrorBodiesAreReadLeniently(t *testing.T) {
+	resp := &http.Response{StatusCode: http.StatusBadRequest, Header: http.Header{}}
+	for name, body := range map[string]string{
+		"repeated member": `{"error":{"code":"first","code":"last","message":"m"}}`,
+		"invalid UTF-8":   "{\"error\":{\"code\":\"last\",\"message\":\"m\xff\"}}",
+		"member case":     `{"Error":{"Code":"last","Message":"m"}}`,
+	} {
+		e := newError(resp, []byte(body))
+		if e.Code != "last" {
+			t.Errorf("%s: code %q, want last", name, e.Code)
+		}
+	}
+	if code, msg := envelopeStart([]byte("{\"error\":{\"code\":\"c\",\"message\":\"m\xff\"")); code != "c" || msg != "m�" {
+		t.Errorf("a cut body with invalid UTF-8 read as %q, %q", code, msg)
+	}
+}
+
+// A body that carries text with a byte that is not UTF-8, such as a
+// process's output, is sent with U+FFFD in its place.
+func TestRequestBodyWithTextThatIsNotUTF8(t *testing.T) {
+	var body string
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		b, _ := io.ReadAll(r.Body)
+		body = string(b)
+		fmt.Fprint(w, `{}`)
+	}))
+	defer srv.Close()
+	c, _ := testConfig(t, srv)
+	err := c.Do(t.Context(), &Request{Method: http.MethodPost, Path: "/v1/x", Body: map[string]any{"out": "a\xffb"}}, nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if want := "{\"out\":\"a�b\"}"; body != want {
+		t.Errorf("sent %q, want %q", body, want)
 	}
 }

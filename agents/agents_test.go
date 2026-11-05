@@ -4,7 +4,8 @@
 package agents_test
 
 import (
-	"encoding/json"
+	"encoding/json/jsontext"
+	"encoding/json/v2"
 	"errors"
 	"fmt"
 	"io"
@@ -250,7 +251,7 @@ func TestEvents(t *testing.T) {
 		t.Error("events of a missing session succeeded")
 	}
 	var bad agents.Event
-	bad.Payload = json.RawMessage(`[`)
+	bad.Payload = jsontext.Value(`[`)
 	if err := bad.Decode(&msg); err == nil {
 		t.Error("a broken payload decoded")
 	}
@@ -285,7 +286,7 @@ func TestSendingEvents(t *testing.T) {
 		`{"payload":{"approval_id":"apr_1","decision":"deny"},"type":"user.tool_confirmation"}`,
 	}
 	for i, w := range want {
-		got, err := json.Marshal((*calls)[i].Body)
+		got, err := json.Marshal((*calls)[i].Body, json.Deterministic(true))
 		if err != nil {
 			t.Fatal(err)
 		}
@@ -318,7 +319,7 @@ func TestSendingEvents(t *testing.T) {
 func second[T any](_ T, err error) error { return err }
 
 func TestQuestions(t *testing.T) {
-	q := agents.ToolUse{ToolUseID: "call_1", Name: "question", Input: json.RawMessage(`{"questions":[{"question":"Which?","header":"Pick","options":[{"label":"A","description":"a","recommended":true},{"label":"B","description":"b"}]}]}`)}
+	q := agents.ToolUse{ToolUseID: "call_1", Name: "question", Input: jsontext.Value(`{"questions":[{"question":"Which?","header":"Pick","options":[{"label":"A","description":"a","recommended":true},{"label":"B","description":"b"}]}]}`)}
 	got, err := q.Questions()
 	if err != nil || len(got) != 1 || got[0].Options[0].Label != "A" || !got[0].Options[0].Recommended {
 		t.Errorf("questions %+v, %v", got, err)
@@ -326,7 +327,7 @@ func TestQuestions(t *testing.T) {
 	if _, err := (&agents.ToolUse{Name: "bash"}).Questions(); err == nil {
 		t.Error("a bash call yielded questions")
 	}
-	if _, err := (&agents.ToolUse{Name: "question", Input: json.RawMessage(`[`)}).Questions(); err == nil {
+	if _, err := (&agents.ToolUse{Name: "question", Input: jsontext.Value(`[`)}).Questions(); err == nil {
 		t.Error("a broken input yielded questions")
 	}
 }
@@ -382,7 +383,7 @@ func TestSendToolResult(t *testing.T) {
 		`{"payload":{"content":[{"text":"no such file","type":"text"}],"is_error":true,"tool_use_id":"call_9"},"type":"user.tool_result"}`,
 		`{"payload":{"content":[],"tool_use_id":"call_10"},"type":"user.tool_result"}`,
 	} {
-		got, err := json.Marshal((*calls)[i].Body)
+		got, err := json.Marshal((*calls)[i].Body, json.Deterministic(true))
 		if err != nil {
 			t.Fatal(err)
 		}
@@ -401,7 +402,7 @@ func TestSendToolResult(t *testing.T) {
 func TestPayloads(t *testing.T) {
 	decode := func(typ agents.EventType, payload string, v any) {
 		t.Helper()
-		e := agents.Event{ID: "evt_1", Type: typ, Payload: json.RawMessage(payload)}
+		e := agents.Event{ID: "evt_1", Type: typ, Payload: jsontext.Value(payload)}
 		if err := e.Decode(v); err != nil {
 			t.Fatal(err)
 		}
@@ -445,7 +446,7 @@ func TestUpdateAndResume(t *testing.T) {
 	if err != nil || got.ID != "ses_1" {
 		t.Fatalf("update: %+v, %v", got, err)
 	}
-	body, err := json.Marshal((*calls)[0].Body)
+	body, err := json.Marshal((*calls)[0].Body, json.Deterministic(true))
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -504,7 +505,7 @@ func TestUpdateSessionSendsWhatItChanges(t *testing.T) {
 		if _, err := s.UpdateSession(t.Context(), "ses_1", tc.params); err != nil {
 			t.Fatalf("%s: %v", name, err)
 		}
-		body, err := json.Marshal((*calls)[0].Body)
+		body, err := json.Marshal((*calls)[0].Body, json.Deterministic(true))
 		if err != nil {
 			t.Fatal(err)
 		}
@@ -550,7 +551,7 @@ func TestUpdateSessionIsRetried(t *testing.T) {
 
 func TestVerdictsAndApprovals(t *testing.T) {
 	var u agents.ToolUse
-	e := agents.Event{ID: "evt_1", Type: agents.EventAgentToolUse, Payload: json.RawMessage(`{"tool_use_id":"call_3","name":"bash","input":{"command":"rm -r build"},"verdict":"ask","reason":"Deletes files."}`)}
+	e := agents.Event{ID: "evt_1", Type: agents.EventAgentToolUse, Payload: jsontext.Value(`{"tool_use_id":"call_3","name":"bash","input":{"command":"rm -r build"},"verdict":"ask","reason":"Deletes files."}`)}
 	if err := e.Decode(&u); err != nil {
 		t.Fatal(err)
 	}
@@ -558,7 +559,7 @@ func TestVerdictsAndApprovals(t *testing.T) {
 		t.Errorf("tool use %+v", u)
 	}
 	var a agents.ApprovalRequested
-	e = agents.Event{ID: "evt_2", Type: agents.EventApprovalRequested, Payload: json.RawMessage(`{"approval_id":"apr_1","tool_use_id":"call_3","source":"egress","destination":{"host":"example.com","port":443},"verdict":"ask","more":2}`)}
+	e = agents.Event{ID: "evt_2", Type: agents.EventApprovalRequested, Payload: jsontext.Value(`{"approval_id":"apr_1","tool_use_id":"call_3","source":"egress","destination":{"host":"example.com","port":443},"verdict":"ask","more":2}`)}
 	if err := e.Decode(&a); err != nil {
 		t.Fatal(err)
 	}
@@ -566,7 +567,7 @@ func TestVerdictsAndApprovals(t *testing.T) {
 		t.Errorf("approval requested %+v", a)
 	}
 	var d agents.ApprovalDecided
-	e = agents.Event{ID: "evt_3", Type: agents.EventApprovalDecided, Payload: json.RawMessage(`{"approval_id":"apr_1","decision":"allow","by":{"subject":"alice","kind":"person"}}`)}
+	e = agents.Event{ID: "evt_3", Type: agents.EventApprovalDecided, Payload: jsontext.Value(`{"approval_id":"apr_1","decision":"allow","by":{"subject":"alice","kind":"person"}}`)}
 	if err := e.Decode(&d); err != nil {
 		t.Fatal(err)
 	}
@@ -599,7 +600,7 @@ func TestSendingAMessageWithPicturesAndFiles(t *testing.T) {
 		`{"payload":{"attachments":[{"name":"old.pdf","source":{"owner":"me","path":"files/old.pdf","version":2}}],"content":[]},"type":"user.message"}`,
 	}
 	for i, w := range want {
-		got, err := json.Marshal((*calls)[i].Body)
+		got, err := json.Marshal((*calls)[i].Body, json.Deterministic(true))
 		if err != nil {
 			t.Fatal(err)
 		}
@@ -665,7 +666,7 @@ func TestSendingAMessageThatAsksOrAnswers(t *testing.T) {
 		`{"payload":{"answers":"ask_1","attachments":[{"blob":"sha256:ab","name":"plan.pdf"}],"content":[{"text":"Plan it","type":"text"}]},"type":"user.message"}`,
 	}
 	for i, w := range want {
-		got, err := json.Marshal((*calls)[i].Body)
+		got, err := json.Marshal((*calls)[i].Body, json.Deterministic(true))
 		if err != nil {
 			t.Fatal(err)
 		}
@@ -716,7 +717,7 @@ func TestForkingAtAPointWithAMessage(t *testing.T) {
 		`{"message":{"attachments":[{"blob":"sha256:cd","name":"c.txt"}],"content":[]}}`,
 	}
 	for i, w := range want {
-		got, err := json.Marshal((*calls)[i].Body)
+		got, err := json.Marshal((*calls)[i].Body, json.Deterministic(true))
 		if err != nil {
 			t.Fatal(err)
 		}
@@ -764,13 +765,13 @@ func TestAWakeAndATurnsOutcomeAreRead(t *testing.T) {
 		t.Errorf("read the outcome %q and the notice %+v", s.Outcome, s.Notice)
 	}
 
-	status := &agents.Event{Type: agents.EventSessionStatus, Payload: json.RawMessage(`{"status":"idle","stop_reason":"end_turn","outcome":"notified"}`)}
+	status := &agents.Event{Type: agents.EventSessionStatus, Payload: jsontext.Value(`{"status":"idle","stop_reason":"end_turn","outcome":"notified"}`)}
 	var st agents.SessionStatus
 	if err := status.Decode(&st); err != nil || st.Outcome != agents.TurnNotified {
 		t.Errorf("read the status as %+v, %v", st, err)
 	}
 
-	message := &agents.Event{Type: agents.EventUserMessage, Payload: json.RawMessage(`{"sender":{"subject":"trigger:trg_2","kind":"trigger"},
+	message := &agents.Event{Type: agents.EventUserMessage, Payload: jsontext.Value(`{"sender":{"subject":"trigger:trg_2","kind":"trigger"},
 "content":[{"type":"text","text":"Look at the inbox."}],"firing_id":"frg_3",
 "wake":{"trigger_id":"trg_2","set_at":"2026-10-23T09:00:00Z","due_at":"2026-10-24T07:00:00Z","count":2}}`)}
 	var m agents.UserMessage

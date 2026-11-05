@@ -5,7 +5,8 @@ package storage
 
 import (
 	"context"
-	"encoding/json"
+	"encoding/json/jsontext"
+	"encoding/json/v2"
 	"errors"
 	"net/http"
 	"net/url"
@@ -57,12 +58,12 @@ type MovedFolder struct {
 	// Bytes is the size of those files.
 	Bytes int64 `json:"bytes"`
 
-	raw json.RawMessage
+	raw jsontext.Value
 }
 
 // RawJSON returns the JSON the API answered for the move, including any
 // field MovedFolder does not model.
-func (m *MovedFolder) RawJSON() json.RawMessage { return m.raw }
+func (m *MovedFolder) RawJSON() jsontext.Value { return m.raw }
 
 // UnmarshalJSON decodes the move and keeps the JSON for RawJSON.
 func (m *MovedFolder) UnmarshalJSON(b []byte) error {

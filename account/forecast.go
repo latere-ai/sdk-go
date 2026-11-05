@@ -5,7 +5,8 @@ package account
 
 import (
 	"context"
-	"encoding/json"
+	"encoding/json/jsontext"
+	"encoding/json/v2"
 	"fmt"
 	"net/http"
 	"net/url"
@@ -117,13 +118,13 @@ type Forecast struct {
 	// Items holds one entry for each of the person's triggers.
 	Items []ForecastItem
 
-	raw json.RawMessage
+	raw jsontext.Value
 }
 
 // RawJSON returns the JSON the API answered for the forecast, with every
 // field, including those this package does not model; nil for a Forecast
 // the program built itself.
-func (f *Forecast) RawJSON() json.RawMessage { return f.raw }
+func (f *Forecast) RawJSON() jsontext.Value { return f.raw }
 
 // A ForecastDay is one day of a forecast's month: what was spent so far
 // and what the rest of it is expected to cost, each half apart.
@@ -257,19 +258,19 @@ type forecastItemJSON struct {
 	Paused           bool                  `json:"paused"`
 	Half             SpendHalf             `json:"half"`
 	CountedIn        string                `json:"counted_in,omitempty"`
-	PerWeekMicroUSD  int64                 `json:"per_week_micro,omitempty"`
-	PerRunMicroUSD   *int64                `json:"per_run_micro,omitempty"`
+	PerWeekMicroUSD  int64                 `json:"per_week_micro,omitzero"`
+	PerRunMicroUSD   *int64                `json:"per_run_micro,omitzero"`
 	SpentMicroUSD    int64                 `json:"spent_micro"`
 	Runs             int                   `json:"runs"`
 	Days             []forecastItemDayJSON `json:"days"`
-	ForecastMicroUSD *int64                `json:"forecast_micro,omitempty"`
-	MostMicroUSD     *int64                `json:"most_micro,omitempty"`
+	ForecastMicroUSD *int64                `json:"forecast_micro,omitzero"`
+	MostMicroUSD     *int64                `json:"most_micro,omitzero"`
 	ExpectedAt       []time.Time           `json:"expected_at,omitempty"`
-	PerDay           float64               `json:"per_day,omitempty"`
+	PerDay           float64               `json:"per_day,omitzero"`
 	ExpectedRuns     int                   `json:"expected_runs"`
 	AllowanceSkips   int                   `json:"allowance_skips"`
 	ShareSkips       int                   `json:"share_skips"`
-	Skipping         *forecastSkippingJSON `json:"skipping,omitempty"`
+	Skipping         *forecastSkippingJSON `json:"skipping,omitzero"`
 }
 
 type forecastItemDayJSON struct {

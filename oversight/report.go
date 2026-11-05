@@ -5,7 +5,8 @@ package oversight
 
 import (
 	"context"
-	"encoding/json"
+	"encoding/json/jsontext"
+	"encoding/json/v2"
 	"errors"
 	"net/http"
 	"net/url"
@@ -66,12 +67,12 @@ type Report struct {
 	MinMembers int    `json:"min_subjects"`
 	Weeks      []Week `json:"weeks"`
 
-	raw json.RawMessage
+	raw jsontext.Value
 }
 
 // RawJSON returns the JSON the API answered for the report, with every
 // field, including those this version of the package does not model.
-func (r *Report) RawJSON() json.RawMessage { return r.raw }
+func (r *Report) RawJSON() jsontext.Value { return r.raw }
 
 // UnmarshalJSON decodes the report and keeps the JSON for RawJSON.
 func (r *Report) UnmarshalJSON(b []byte) error {
@@ -91,7 +92,7 @@ type Week struct {
 	To    time.Time `json:"to"`
 	State WeekState `json:"state"`
 	// Total is the whole organization in the week.
-	Total *ReportCell `json:"total,omitempty"`
+	Total *ReportCell `json:"total,omitzero"`
 	// Agents has one cell for each agent with ReportMinMembers members or
 	// more in the week.
 	Agents []AgentCell `json:"agents,omitempty"`
@@ -99,7 +100,7 @@ type Week struct {
 	// nil when there are none. An agent with too few members is counted
 	// here, and so, when the others have too few members, is the agent
 	// with the fewest.
-	Other *ReportCell `json:"other,omitempty"`
+	Other *ReportCell `json:"other,omitzero"`
 }
 
 // ReportCell is the numbers of a group of a week's steps. Members,
@@ -149,15 +150,15 @@ type VerdictCounts struct {
 type FlagChecks struct {
 	Checks int `json:"reviews"`
 	// Denied is nil when withheld.
-	Denied *int `json:"denied,omitempty"`
+	Denied *int `json:"denied,omitzero"`
 }
 
 // Rates are one source's two error rates in a cell. A rate is nil when
 // withheld; a rate no member could check has a nil Value, which is not
 // zero.
 type Rates struct {
-	FalseAllow *Estimate `json:"false_allow,omitempty"`
-	FalseBlock *Estimate `json:"false_block,omitempty"`
+	FalseAllow *Estimate `json:"false_allow,omitzero"`
+	FalseBlock *Estimate `json:"false_block,omitzero"`
 }
 
 // GetReport reads the report of the organization params names. Only an

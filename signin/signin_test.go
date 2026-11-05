@@ -7,7 +7,7 @@ import (
 	"context"
 	"crypto/sha256"
 	"encoding/base64"
-	"encoding/json"
+	"encoding/json/v2"
 	"errors"
 	"fmt"
 	"net/http"
@@ -117,7 +117,7 @@ func (f *fakeIssuer) token(w http.ResponseWriter, r *http.Request) {
 
 func writeJSON(w http.ResponseWriter, v any) {
 	w.Header().Set("Content-Type", "application/json")
-	if err := json.NewEncoder(w).Encode(v); err != nil {
+	if err := json.MarshalWrite(w, v); err != nil {
 		panic(err)
 	}
 }
@@ -125,7 +125,7 @@ func writeJSON(w http.ResponseWriter, v any) {
 func oauthError(w http.ResponseWriter, status int, code, desc string) {
 	w.Header().Set("Content-Type", "application/json")
 	w.WriteHeader(status)
-	if err := json.NewEncoder(w).Encode(map[string]string{"error": code, "error_description": desc}); err != nil {
+	if err := json.MarshalWrite(w, map[string]string{"error": code, "error_description": desc}); err != nil {
 		panic(err)
 	}
 }

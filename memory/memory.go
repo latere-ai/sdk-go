@@ -64,7 +64,8 @@ package memory
 
 import (
 	"context"
-	"encoding/json"
+	"encoding/json/jsontext"
+	"encoding/json/v2"
 	"errors"
 	"net/http"
 	"net/url"
@@ -214,7 +215,7 @@ type Memory struct {
 	// Sensitive reports that the memory is about a sensitive topic, such
 	// as health or beliefs, which is kept only while Include sensitive
 	// topics is on.
-	Sensitive bool `json:"sensitive,omitempty"`
+	Sensitive bool `json:"sensitive,omitzero"`
 	// Body is more detail, on a memory read alone; a list answers none. A
 	// memory names another as "[[id]]".
 	Body string `json:"body,omitempty"`
@@ -227,7 +228,7 @@ type Memory struct {
 	// answer of an add or a change; zero otherwise.
 	Updated time.Time `json:"updated,omitzero"`
 
-	raw json.RawMessage
+	raw jsontext.Value
 }
 
 // Ref returns the Ref that addresses the memory.
@@ -236,7 +237,7 @@ func (m *Memory) Ref() Ref { return Ref{Scope: m.Scope, Project: m.Project, ID: 
 // RawJSON returns the JSON the API answered for the memory, with every
 // field, including those this package does not model; nil for a Memory the
 // program built itself.
-func (m *Memory) RawJSON() json.RawMessage { return m.raw }
+func (m *Memory) RawJSON() jsontext.Value { return m.raw }
 
 // UnmarshalJSON decodes the memory and keeps the JSON for RawJSON.
 func (m *Memory) UnmarshalJSON(b []byte) error {
@@ -268,13 +269,13 @@ type List struct {
 	// import: its answer is ImportMemoryParams.Text.
 	ImportPrompt string `json:"import_prompt"`
 
-	raw json.RawMessage
+	raw jsontext.Value
 }
 
 // RawJSON returns the JSON the API answered for the list, with every
 // field, including those this package does not model; nil for a List the
 // program built itself.
-func (l *List) RawJSON() json.RawMessage { return l.raw }
+func (l *List) RawJSON() jsontext.Value { return l.raw }
 
 // UnmarshalJSON decodes the list and keeps the JSON for RawJSON.
 func (l *List) UnmarshalJSON(b []byte) error {
@@ -423,14 +424,14 @@ func (c *Client) GetMemory(ctx context.Context, ref Ref) (*Memory, error) {
 // value keeps what the memory has.
 type UpdateMemoryParams struct {
 	// Name is the memory's new name, by AddMemoryParams.Name's rule.
-	Name *string `json:"name,omitempty"`
+	Name *string `json:"name,omitzero"`
 	// Description is its new description, by
 	// AddMemoryParams.Description's rule.
-	Description *string `json:"description,omitempty"`
+	Description *string `json:"description,omitzero"`
 	// Type is its new group.
 	Type Type `json:"type,omitempty"`
 	// Body is its new body; a pointer to "" removes it.
-	Body *string `json:"body,omitempty"`
+	Body *string `json:"body,omitzero"`
 	// Scope moves the memory: ScopeYou to the person's own, or
 	// ScopeProject with Project to one of their projects.
 	Scope Scope `json:"scope,omitempty"`
@@ -530,15 +531,15 @@ type UpdateSettingsParams struct {
 	// Remember turns Remember new things on or off. With it off,
 	// conversations still read what is remembered and save nothing new,
 	// from their next save on.
-	Remember *bool `json:"remember,omitempty"`
+	Remember *bool `json:"remember,omitzero"`
 	// Chats turns Search past chats on or off. With it off, conversations
 	// read none of the person's past conversations, from their next read
 	// on, running ones included.
-	Chats *bool `json:"chats,omitempty"`
+	Chats *bool `json:"chats,omitzero"`
 	// Sensitive turns Include sensitive topics on or off. Turning it off
 	// deletes, for good, every memory marked Sensitive; a program asks the
 	// person to confirm first.
-	Sensitive *bool `json:"sensitive,omitempty"`
+	Sensitive *bool `json:"sensitive,omitzero"`
 	// Review sets what happens to what Tidy memory changes from its next
 	// run on: ReviewApply or ReviewAsk. Empty keeps the mode the person
 	// has; a run that started keeps the mode it started with.
@@ -560,13 +561,13 @@ type SettingsChanged struct {
 	// deleted, when it turned Include sensitive topics off.
 	DeletedSensitive int `json:"deleted_sensitive"`
 
-	raw json.RawMessage
+	raw jsontext.Value
 }
 
 // RawJSON returns the JSON the API answered for the settings, with every
 // field, including those this package does not model; nil for a
 // SettingsChanged the program built itself.
-func (s *SettingsChanged) RawJSON() json.RawMessage { return s.raw }
+func (s *SettingsChanged) RawJSON() jsontext.Value { return s.raw }
 
 // UnmarshalJSON decodes the settings and keeps the JSON for RawJSON.
 func (s *SettingsChanged) UnmarshalJSON(b []byte) error {
@@ -604,13 +605,13 @@ type ForgottenList struct {
 	// Forgotten are the memories, the one forgotten last first.
 	Forgotten []Forgotten `json:"forgotten"`
 
-	raw json.RawMessage
+	raw jsontext.Value
 }
 
 // RawJSON returns the JSON the API answered for the list, with every
 // field, including those this package does not model; nil for a
 // ForgottenList the program built itself.
-func (l *ForgottenList) RawJSON() json.RawMessage { return l.raw }
+func (l *ForgottenList) RawJSON() jsontext.Value { return l.raw }
 
 // UnmarshalJSON decodes the list and keeps the JSON for RawJSON.
 func (l *ForgottenList) UnmarshalJSON(b []byte) error {
@@ -699,13 +700,13 @@ type Imported struct {
 	// out.
 	Skipped int `json:"skipped"`
 
-	raw json.RawMessage
+	raw jsontext.Value
 }
 
 // RawJSON returns the JSON the API answered for the import, with every
 // field, including those this package does not model; nil for an
 // Imported the program built itself.
-func (i *Imported) RawJSON() json.RawMessage { return i.raw }
+func (i *Imported) RawJSON() jsontext.Value { return i.raw }
 
 // UnmarshalJSON decodes the import and keeps the JSON for RawJSON.
 func (i *Imported) UnmarshalJSON(b []byte) error {
@@ -742,6 +743,6 @@ func (c *Client) ImportMemory(ctx context.Context, params *ImportMemoryParams) (
 }
 
 // keep returns a copy of b, which a decoder may reuse after it returns.
-func keep(b []byte) json.RawMessage {
-	return append(json.RawMessage(nil), b...)
+func keep(b []byte) jsontext.Value {
+	return append(jsontext.Value(nil), b...)
 }

@@ -5,7 +5,8 @@ package agents
 
 import (
 	"context"
-	"encoding/json"
+	"encoding/json/jsontext"
+	"encoding/json/v2"
 	"errors"
 	"fmt"
 	"iter"
@@ -67,12 +68,12 @@ type SharedPage struct {
 	// the last.
 	NextCursor string `json:"next_cursor,omitempty"`
 
-	raw json.RawMessage
+	raw jsontext.Value
 }
 
 // RawJSON returns the JSON the API answered for the page, with every
 // field, including those this package does not model.
-func (p *SharedPage) RawJSON() json.RawMessage { return p.raw }
+func (p *SharedPage) RawJSON() jsontext.Value { return p.raw }
 
 // UnmarshalJSON decodes the page and keeps the JSON for RawJSON.
 func (p *SharedPage) UnmarshalJSON(b []byte) error {

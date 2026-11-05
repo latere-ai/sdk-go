@@ -4,9 +4,9 @@
 package agents
 
 import (
-	"bytes"
 	"context"
-	"encoding/json"
+	"encoding/json/jsontext"
+	"encoding/json/v2"
 	"errors"
 	"fmt"
 	"iter"
@@ -49,13 +49,13 @@ type Trigger struct {
 	// ignored when a trigger is applied.
 	Status TriggerStatus `json:"status,omitzero"`
 
-	raw json.RawMessage
+	raw jsontext.Value
 }
 
 // RawJSON returns the JSON the API answered for the trigger, with every
 // field, including those this package does not model; nil for a Trigger the
 // program built itself.
-func (t *Trigger) RawJSON() json.RawMessage { return t.raw }
+func (t *Trigger) RawJSON() jsontext.Value { return t.raw }
 
 // UnmarshalJSON decodes the trigger and keeps the JSON for RawJSON.
 func (t *Trigger) UnmarshalJSON(b []byte) error {
@@ -93,7 +93,7 @@ type TriggerSpec struct {
 	// TimeZone is the IANA zone Schedule is read in; UTC when empty.
 	TimeZone string `json:"timeZone,omitempty"`
 	// On selects the events the trigger fires on.
-	On *EventFilter `json:"on,omitempty"`
+	On *EventFilter `json:"on,omitzero"`
 	// At fires the trigger once, at this time, which must not have
 	// passed. The API deletes the trigger once that firing started,
 	// continued, was skipped or was refused; the session it reached keeps
@@ -110,22 +110,22 @@ type TriggerSpec struct {
 	Session TriggerSession `json:"session"`
 	// SkipIfActive skips a firing while a session the trigger started is
 	// still working; the API's default when nil.
-	SkipIfActive *bool `json:"skipIfActive,omitempty"`
+	SkipIfActive *bool `json:"skipIfActive,omitzero"`
 	// MaxActive bounds how many of the trigger's sessions work at once;
 	// the API's default when nil.
-	MaxActive *int `json:"maxActive,omitempty"`
+	MaxActive *int `json:"maxActive,omitzero"`
 	// MaxAge is how late a scheduled firing may still run, as a Go
 	// duration such as "1h"; a later one is skipped.
 	MaxAge string `json:"maxAge,omitempty"`
 	// Suspend stops the trigger from firing until it is applied without.
-	Suspend bool `json:"suspend,omitempty"`
+	Suspend bool `json:"suspend,omitzero"`
 	// Budget is the trigger's weekly allowance; nil for a trigger with
 	// none.
-	Budget *TriggerAllowance `json:"budget,omitempty"`
+	Budget *TriggerAllowance `json:"budget,omitzero"`
 	// Reach names what the trigger's runs may read and write, and whether
 	// a firing runs once per scope that is due; nil for a trigger that
 	// runs as its agent does.
-	Reach *TriggerReach `json:"reach,omitempty"`
+	Reach *TriggerReach `json:"reach,omitzero"`
 }
 
 // A TriggerReach is what a trigger's runs reach. The platform maps Kind to
@@ -196,18 +196,18 @@ type TriggerSession struct {
 	// schedule, and the event's resource on an event, when left out.
 	Key string `json:"key,omitempty"`
 	// Machine is where the session's commands run; the agent's when nil.
-	Machine *Machine `json:"machine,omitempty"`
+	Machine *Machine `json:"machine,omitzero"`
 	// Resources are what the session attaches: memory stores and git
 	// repositories.
 	Resources []SessionResource `json:"resources,omitempty"`
 	// Budget bounds what the session may spend.
-	Budget *TriggerBudget `json:"budget,omitempty"`
+	Budget *TriggerBudget `json:"budget,omitzero"`
 	// Limits bound how long the session and each turn may take.
-	Limits *SessionLimits `json:"limits,omitempty"`
+	Limits *SessionLimits `json:"limits,omitzero"`
 	// EndOnIdle ends the session once it stops working instead of leaving
 	// it open; the API's default when nil. A session with a pending wake
 	// stays open for it.
-	EndOnIdle *bool `json:"endOnIdle,omitempty"`
+	EndOnIdle *bool `json:"endOnIdle,omitzero"`
 	// Target is the open session, "ses_" and a ULID, every firing sends
 	// Message to, for SessionPolicyContinue, in place of the session Key
 	// would name; a trigger sets Target or Key, never both. A firing whose
@@ -216,7 +216,7 @@ type TriggerSession struct {
 	// Attended starts each session a firing starts as attended, so its
 	// questions wait for the trigger's owner instead of being answered at
 	// once as unanswered. A session Target names keeps its own.
-	Attended bool `json:"attended,omitempty"`
+	Attended bool `json:"attended,omitzero"`
 	// Notify is whether every turn a firing begins brings its result to
 	// the person, or the agent judges; NotifyAlways when empty. A wake's
 	// turn is judged whatever it says.
@@ -224,7 +224,7 @@ type TriggerSession struct {
 	// Model is the model each session a firing starts runs on, its Name
 	// such as "tier/thorough" and, when set, its Reasoning, as
 	// UpdateSession changes a session's; the agent's own when nil.
-	Model *Model `json:"model,omitempty"`
+	Model *Model `json:"model,omitzero"`
 }
 
 // NotifyPolicy is whether the turns a trigger begins bring their result
@@ -313,7 +313,7 @@ type TriggerStatus struct {
 	// ID is the trigger's id, "trg_" followed by a ULID.
 	ID string `json:"id,omitempty"`
 	// Version counts the distinct specs the trigger has had.
-	Version int `json:"version,omitempty"`
+	Version int `json:"version,omitzero"`
 	// Digest identifies the current spec.
 	Digest string `json:"digest,omitempty"`
 	// CreatedAt is when the trigger was first applied.
@@ -327,21 +327,21 @@ type TriggerStatus struct {
 	// NextFireAt is when a schedule fires next.
 	NextFireAt *time.Time `json:"nextFireAt,omitempty"`
 	// Counts is how many firings came to each outcome.
-	Counts *FiringCounts `json:"counts,omitempty"`
+	Counts *FiringCounts `json:"counts,omitzero"`
 	// Origin is the call of a session's agent that made the trigger; nil
 	// for a trigger applied through the API. It is kept when the trigger
 	// is applied again.
-	Origin *TriggerOrigin `json:"origin,omitempty"`
+	Origin *TriggerOrigin `json:"origin,omitzero"`
 	// Paused is why and by whom the trigger was paused, which the API
 	// writes when an apply suspends it, keeps while it stays suspended
 	// and clears when it is resumed; nil while it runs, and for a trigger
 	// paused before the API began writing it.
-	Paused *TriggerPause `json:"paused,omitempty"`
+	Paused *TriggerPause `json:"paused,omitzero"`
 	// Spend is the trigger's week as of its latest firing that counts
 	// toward it: what its looks cost in the 7 days before that firing,
 	// and the pace they are on. Nil for a trigger that has not fired since
 	// the API began writing it.
-	Spend *TriggerSpend `json:"spend,omitempty"`
+	Spend *TriggerSpend `json:"spend,omitzero"`
 }
 
 // A TriggerOrigin is the call of a session's agent that made a trigger:
@@ -443,7 +443,7 @@ type Firing struct {
 	Origin FiringOrigin `json:"origin"`
 	// Event is the event that fired it; nil for a schedule or a manual
 	// firing.
-	Event *FiringEvent `json:"event,omitempty"`
+	Event *FiringEvent `json:"event,omitzero"`
 	// Key names the session the firing goes to.
 	Key string `json:"key"`
 	// Outcome is what came of the firing; empty when it was not recorded.
@@ -455,13 +455,13 @@ type Firing struct {
 	// ReceivedAt is when the firing arrived.
 	ReceivedAt time.Time `json:"received_at"`
 
-	raw json.RawMessage
+	raw jsontext.Value
 }
 
 // RawJSON returns the JSON the API answered for the firing, with every
 // field, including those this package does not model; nil for a Firing the
 // program built itself.
-func (f *Firing) RawJSON() json.RawMessage { return f.raw }
+func (f *Firing) RawJSON() jsontext.Value { return f.raw }
 
 // UnmarshalJSON decodes the firing and keeps the JSON for RawJSON.
 func (f *Firing) UnmarshalJSON(b []byte) error {
@@ -732,14 +732,10 @@ func (c *Client) rewriteSpec(ctx context.Context, ref string, edit func(spec map
 		return nil, fmt.Errorf("agents: the API answered the trigger %s with the name %q", ref, t.Metadata.Name)
 	}
 	var m map[string]any
-	dec := json.NewDecoder(bytes.NewReader(t.RawJSON()))
-	// Numbers stay as they were written, so a large one is not rounded to
-	// a float's precision.
-	dec.UseNumber()
 	// The answer already decoded as a Trigger, so it is a JSON object or
 	// null, and decodes into a map without an error; null leaves the map
 	// nil, refused below for the spec it lacks.
-	_ = dec.Decode(&m)
+	_ = json.Unmarshal(t.RawJSON(), &m, keepNumbers())
 	spec, ok := m["spec"].(map[string]any)
 	if !ok {
 		return nil, fmt.Errorf("agents: the API answered the trigger %s without a spec", ref)
@@ -765,13 +761,13 @@ type TriggerHold struct {
 	// Since is when it was put on; nil while it is off.
 	Since *time.Time `json:"since,omitempty"`
 
-	raw json.RawMessage
+	raw jsontext.Value
 }
 
 // RawJSON returns the JSON the API answered for the hold, with every
 // field, including those this package does not model; nil for a
 // TriggerHold the program built itself.
-func (h *TriggerHold) RawJSON() json.RawMessage { return h.raw }
+func (h *TriggerHold) RawJSON() jsontext.Value { return h.raw }
 
 // UnmarshalJSON decodes the hold and keeps the JSON for RawJSON.
 func (h *TriggerHold) UnmarshalJSON(b []byte) error {
@@ -844,7 +840,7 @@ type TriggerEvent struct {
 	Time time.Time `json:"time,omitzero"`
 	// Payload is the event's own data, which the trigger's filter and
 	// templates read under "payload".
-	Payload json.RawMessage `json:"payload,omitempty"`
+	Payload jsontext.Value `json:"payload,omitzero"`
 }
 
 // FireTrigger fires the trigger ref names, by its id or its name, and
@@ -931,4 +927,53 @@ func (c *Client) firingsPage(ctx context.Context, ref string, params *ListFiring
 		return nil, err
 	}
 	return &page, nil
+}
+
+// keepNumbers decodes every number of an untyped value as its digits as
+// written, so a large one is not rounded to a float's precision. The
+// digits are written back unchanged.
+func keepNumbers() json.Options {
+	return json.WithUnmarshalers(json.UnmarshalFromFunc(decodeKeepingNumbers))
+}
+
+// decodeKeepingNumbers reads one untyped value, objects as
+// map[string]any and arrays as []any, with each number as the
+// jsontext.Value of its digits.
+func decodeKeepingNumbers(dec *jsontext.Decoder, v *any) error {
+	switch dec.PeekKind() {
+	case '0':
+		val, err := dec.ReadValue()
+		if err != nil {
+			return err
+		}
+		*v = val.Clone()
+	case '{':
+		var m map[string]any
+		if err := json.UnmarshalDecode(dec, &m, keepNumbers()); err != nil {
+			return err
+		}
+		*v = m
+	case '[':
+		var a []any
+		if err := json.UnmarshalDecode(dec, &a, keepNumbers()); err != nil {
+			return err
+		}
+		*v = a
+	default:
+		tok, err := dec.ReadToken()
+		if err != nil {
+			return err
+		}
+		switch tok.Kind() {
+		case '"':
+			*v = tok.String()
+		case 't':
+			*v = true
+		case 'f':
+			*v = false
+		default:
+			*v = nil
+		}
+	}
+	return nil
 }

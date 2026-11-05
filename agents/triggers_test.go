@@ -4,7 +4,8 @@
 package agents_test
 
 import (
-	"encoding/json"
+	"encoding/json/jsontext"
+	"encoding/json/v2"
 	"errors"
 	"fmt"
 	"net/http"
@@ -148,7 +149,7 @@ func TestFireTriggerSendsTheEventAndAKey(t *testing.T) {
 	c, calls := fakeAPI(t, map[string]string{"POST /v1/agents/triggers/trg_1/fire": firing})
 	got, err := c.FireTrigger(t.Context(), "trg_1", &agents.FireTriggerParams{
 		Event: &agents.TriggerEvent{ID: "e1", Product: "github", Verb: "release.published", Resource: "example/widgets@v1.4.0",
-			Time: time.Date(2026, 9, 22, 12, 40, 0, 0, time.UTC), Payload: json.RawMessage(`{"tag":"v1.4.0"}`)},
+			Time: time.Date(2026, 9, 22, 12, 40, 0, 0, time.UTC), Payload: jsontext.Value(`{"tag":"v1.4.0"}`)},
 		IdempotencyKey: "fire-1",
 	})
 	if err != nil {

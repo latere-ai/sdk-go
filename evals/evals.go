@@ -5,7 +5,7 @@ package evals
 
 import (
 	"context"
-	"encoding/json"
+	"encoding/json/jsontext"
 	"errors"
 	"net/http"
 	"net/url"
@@ -140,6 +140,6 @@ func listQuery(limit int, cursor string) url.Values {
 }
 
 // keep returns a copy of b, which a decoder may reuse after it returns.
-func keep(b []byte) json.RawMessage {
-	return append(json.RawMessage(nil), b...)
+func keep(b []byte) jsontext.Value {
+	return append(jsontext.Value(nil), b...)
 }

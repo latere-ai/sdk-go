@@ -229,16 +229,14 @@ func CreateGroup(groupID []byte, signer *SignatureKey, cred Credential, opts Cre
 	}
 	leaf := kp.kp.leaf
 	g := &Group{
-		cfg: cfg,
-		publicState: publicState{
-			s:    s,
-			tree: newTree(&leaf),
-			ctx: groupContext{
-				version:    protocolVersionMLS10,
-				suite:      s.id,
-				groupID:    bytes.Clone(groupID),
-				extensions: cloneExtensions(opts.Extensions),
-			},
+		cfg:  cfg,
+		s:    s,
+		tree: newTree(&leaf),
+		ctx: groupContext{
+			version:    protocolVersionMLS10,
+			suite:      s.id,
+			groupID:    bytes.Clone(groupID),
+			extensions: cloneExtensions(opts.Extensions),
 		},
 		priv: &privateTree{leaf: 0, keys: map[uint32]hpkeKey{0: {priv: secrets.encryptionPriv, pub: leaf.encryptionKey}}},
 	}

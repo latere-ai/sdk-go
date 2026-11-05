@@ -42,7 +42,9 @@ func TestContentIsSentWithItsLengthAndAgainOnARetry(t *testing.T) {
 	}))
 	defer srv.Close()
 	c, _ := testConfig(t, srv)
-	var out struct{ Path string }
+	var out struct {
+		Path string `json:"path"`
+	}
 	err := c.Do(context.Background(), &Request{Method: http.MethodPut, Path: "/v1/x", Content: strings.NewReader("hello"), ContentLength: 5, ContentType: "text/plain"}, &out)
 	if err != nil {
 		t.Fatal(err)

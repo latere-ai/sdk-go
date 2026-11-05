@@ -4,7 +4,8 @@
 package signin
 
 import (
-	"encoding/json"
+	"encoding/json/jsontext"
+	"encoding/json/v2"
 	"errors"
 	"fmt"
 	"io"
@@ -92,7 +93,7 @@ func newKeys(t *testing.T) *keysService {
 			if body["org_id"] != nil {
 				answer["status"] = "pending_approval"
 			}
-			if err := json.NewEncoder(w).Encode(answer); err != nil {
+			if err := json.MarshalWrite(w, answer); err != nil {
 				t.Error(err)
 			}
 		}
@@ -142,7 +143,7 @@ func newKeys(t *testing.T) *keysService {
 // do not need.
 func (k *keysService) config() *Config { return &Config{Issuer: k.srv.URL + "/"} }
 
-var testGrants = json.RawMessage(`[{"type":"latere-authz","actions":["lux:model.use"],"datatypes":["Model"],"locations":["https://api.latere.ai"]}]`)
+var testGrants = jsontext.Value(`[{"type":"latere-authz","actions":["lux:model.use"],"datatypes":["Model"],"locations":["https://api.latere.ai"]}]`)
 
 func TestCreateKey(t *testing.T) {
 	k := newKeys(t)
@@ -280,7 +281,7 @@ func TestKeysUnreachable(t *testing.T) {
 	if _, err := (&Config{Issuer: "http://bad host"}).CreateKey(t.Context(), "login_1", &CreateKeyParams{Name: "x", Grants: testGrants}); err == nil {
 		t.Error("an issuer that is no address answered")
 	}
-	if _, err := c.CreateKey(t.Context(), "login_1", &CreateKeyParams{Name: "x", Grants: json.RawMessage(`[`)}); err == nil || !strings.HasPrefix(err.Error(), "signin: POST /me/keys: ") {
+	if _, err := c.CreateKey(t.Context(), "login_1", &CreateKeyParams{Name: "x", Grants: jsontext.Value(`[`)}); err == nil || !strings.HasPrefix(err.Error(), "signin: POST /me/keys: ") {
 		t.Errorf("grants that are not JSON: %v", err)
 	}
 }

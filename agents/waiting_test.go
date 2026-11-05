@@ -4,7 +4,8 @@
 package agents_test
 
 import (
-	"encoding/json"
+	"encoding/json/jsontext"
+	"encoding/json/v2"
 	"errors"
 	"fmt"
 	"net/http"
@@ -24,13 +25,13 @@ func logOf(t *testing.T, entries ...string) []agents.Event {
 	var out []agents.Event
 	for i := 0; i < len(entries); i += 2 {
 		seq := int64(i/2 + 1)
-		e := agents.Event{ID: fmt.Sprintf("evt_%d", seq), Seq: seq, SessionID: "ses_1", Payload: json.RawMessage(entries[i+1])}
+		e := agents.Event{ID: fmt.Sprintf("evt_%d", seq), Seq: seq, SessionID: "ses_1", Payload: jsontext.Value(entries[i+1])}
 		typ, sub := strings.CutSuffix(entries[i], "@sub")
 		if sub {
 			e.Subagent = "sub"
 		}
 		e.Type = agents.EventType(typ)
-		if !json.Valid(e.Payload) {
+		if !e.Payload.IsValid() {
 			t.Fatalf("entry %d is not JSON: %s", i/2, e.Payload)
 		}
 		out = append(out, e)
@@ -160,7 +161,7 @@ func TestSendingNowAndWithdrawing(t *testing.T) {
 		`{"payload":{"event_id":"evt_8"},"type":"user.withdraw"}`,
 	}
 	for i, w := range want {
-		got, err := json.Marshal((*calls)[i].Body)
+		got, err := json.Marshal((*calls)[i].Body, json.Deterministic(true))
 		if err != nil {
 			t.Fatal(err)
 		}

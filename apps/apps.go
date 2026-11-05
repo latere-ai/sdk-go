@@ -5,7 +5,8 @@ package apps
 
 import (
 	"context"
-	"encoding/json"
+	"encoding/json/jsontext"
+	"encoding/json/v2"
 	"errors"
 	"iter"
 	"net/http"
@@ -196,19 +197,19 @@ type App struct {
 	SlugGenerated bool `json:"slug_generated"`
 	// Restored reports, in the answer of a create, that it restored an app
 	// of the same slug deleted within the last seven days.
-	Restored bool `json:"restored,omitempty"`
+	Restored bool `json:"restored,omitzero"`
 	// CreatedAt is when the app was created.
 	CreatedAt time.Time `json:"created_at"`
 	// UpdatedAt is when the app last changed.
 	UpdatedAt time.Time `json:"updated_at"`
 
-	raw json.RawMessage
+	raw jsontext.Value
 }
 
 // RawJSON returns the JSON the API answered for the app, with every field,
 // including those this package does not model; nil for an App the program
 // built itself.
-func (a *App) RawJSON() json.RawMessage { return a.raw }
+func (a *App) RawJSON() jsontext.Value { return a.raw }
 
 // UnmarshalJSON decodes the app and keeps the JSON for RawJSON.
 func (a *App) UnmarshalJSON(b []byte) error {
@@ -422,19 +423,19 @@ type UpdateAppParams struct {
 	// publish a paused one again.
 	State AppState `json:"state,omitempty"`
 	// Settings are merged into the app's settings, field by field.
-	Settings *SettingsUpdate `json:"settings,omitempty"`
+	Settings *SettingsUpdate `json:"settings,omitzero"`
 }
 
 // SettingsUpdate are the settings to change; nil fields keep their value.
 type SettingsUpdate struct {
 	// SleepAfterSeconds is how long the app runs without a request before
 	// it sleeps.
-	SleepAfterSeconds *int `json:"sleep_after_seconds,omitempty"`
+	SleepAfterSeconds *int `json:"sleep_after_seconds,omitzero"`
 	// AlwaysOn, when true, keeps the app from sleeping; the platform may
 	// refuse it for the account.
-	AlwaysOn *bool `json:"always_on,omitempty"`
+	AlwaysOn *bool `json:"always_on,omitzero"`
 	// Previews says who may open the app's previews.
-	Previews *PreviewSettings `json:"previews,omitempty"`
+	Previews *PreviewSettings `json:"previews,omitzero"`
 }
 
 // UpdateApp changes the app slug names and returns it as changed. A new
@@ -467,6 +468,6 @@ func (c *Client) DeleteApp(ctx context.Context, slug string) error {
 }
 
 // keep returns a copy of b, which a decoder may reuse after it returns.
-func keep(b []byte) json.RawMessage {
-	return append(json.RawMessage(nil), b...)
+func keep(b []byte) jsontext.Value {
+	return append(jsontext.Value(nil), b...)
 }

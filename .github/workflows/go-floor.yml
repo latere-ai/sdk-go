@@ -6,8 +6,9 @@ name: go-floor
 # on the toolchain its own module pins, one Go version, so the oldest
 # supported release and the WebAssembly vet run here. Its plain test on other
 # systems runs without -race and may replay cached results, so macOS and
-# Windows run the test here with the race detector and no cache, on the
-# gate's Go version and on the next one. The dependency check
+# Windows run the test here with the race detector and no cache. The floor
+# is Go 1.27, the first release with encoding/json/v2; once Go 1.28 ships,
+# the matrix adds it next to the floor. The dependency check
 # of the gate follows imports of the listed packages only, not test files or
 # unlisted packages such as the examples, so the check that go.mod requires
 # nothing runs here too.
@@ -49,13 +50,9 @@ jobs:
       matrix:
         include:
           - os: ubuntu-latest
-            go: "1.26.x"
-          - os: macos-latest
-            go: "1.26.x"
+            go: "1.27.x"
           - os: macos-latest
             go: "1.27.x"
-          - os: windows-latest
-            go: "1.26.x"
           - os: windows-latest
             go: "1.27.x"
     steps:

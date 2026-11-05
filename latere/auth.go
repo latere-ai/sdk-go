@@ -6,7 +6,7 @@ package latere
 import (
 	"bytes"
 	"context"
-	"encoding/json"
+	"encoding/json/v2"
 	"errors"
 	"fmt"
 	"io"
@@ -457,12 +457,12 @@ func exchange(t *transport, req *http.Request, out any) error {
 			Error       string `json:"error"`
 			Description string `json:"error_description"`
 		}
-		if e.Code == "" && json.Unmarshal(raw, &oauth) == nil && oauth.Error != "" {
+		if e.Code == "" && json.Unmarshal(raw, &oauth, foreignJSON) == nil && oauth.Error != "" {
 			e.Code, e.Message = oauth.Error, oauth.Description
 		}
 		return e
 	}
-	if err := json.Unmarshal(raw, out); err != nil {
+	if err := json.Unmarshal(raw, out, foreignJSON); err != nil {
 		return fmt.Errorf("decoding the answer: %w", err)
 	}
 	return nil

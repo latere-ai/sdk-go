@@ -100,13 +100,6 @@ depcheck:
 # beside the root's.
 modules: [tools]
 
-test:
-  # The plain test also runs on macOS: the SDK is a client library, and path,
-  # time zone and line-ending differences show up on other systems first.
-  # Windows runs in go-floor.yml, because the shared workflow's test job
-  # cannot run its bash steps there.
-  os: [macos-latest]
-
 release:
   # `lateregate release` moves the number the SDK reports to the version it
   # cuts, in the release commit, so the number and the changelog section

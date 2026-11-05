@@ -7,6 +7,8 @@ minor version may break code, and every such change is marked **Breaking**.
 
 ## Unreleased
 
+## v0.33.0 - 2026-11-05
+
 ### Changed
 
 - **Breaking**: the SDK requires Go 1.27. It encodes and decodes JSON with

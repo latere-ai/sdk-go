@@ -1,4 +1,4 @@
-// Copyright 2026 Latere AI
+// SPDX-FileCopyrightText: 2026 Latere AI
 // SPDX-License-Identifier: Apache-2.0
 
 // Package latere holds what every package of the Latere Go SDK shares: the

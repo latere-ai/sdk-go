@@ -1,4 +1,4 @@
-// Copyright 2026 Latere AI
+// SPDX-FileCopyrightText: 2026 Latere AI
 // SPDX-License-Identifier: Apache-2.0
 
 // Package ed25519key checks an Ed25519 public key before a signature is

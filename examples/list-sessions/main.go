@@ -1,4 +1,4 @@
-// Copyright 2026 Latere AI
+// SPDX-FileCopyrightText: 2026 Latere AI
 // SPDX-License-Identifier: Apache-2.0
 
 // Command list-sessions prints your sessions with agents, newest first.

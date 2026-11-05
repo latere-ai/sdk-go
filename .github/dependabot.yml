@@ -1,9 +1,10 @@
 version: 2
+# Action pins are not updated here: every third-party action is the
+# organization's one commit, from the list ci-gate embeds and its
+# action-pins gate holds this repository to. A version moves in that list
+# (Dependabot in latere-ai/ci-gate), and `go tool lateregate action-pins -w`
+# rewrites the pins here with the gate bump that carries it.
 updates:
-  - package-ecosystem: github-actions
-    directory: /
-    schedule:
-      interval: weekly
   - package-ecosystem: gomod
     directory: /tools
     schedule:

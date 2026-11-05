@@ -11,6 +11,7 @@
 package main
 
 import (
+	"context"
 	"crypto/sha256"
 	"encoding/hex"
 	"encoding/json"
@@ -47,9 +48,17 @@ type source struct {
 }
 
 func main() {
-	dir := flag.String("dir", "openapi", "the directory the documents are written to")
+	os.Exit(execute(os.Args[1:], os.Stderr))
+}
+
+// execute parses the arguments, refreshes the documents and returns the
+// process's exit code, writing what went wrong to stderr.
+func execute(args []string, stderr io.Writer) int {
+	fs := flag.NewFlagSet("openapi", flag.ContinueOnError)
+	fs.SetOutput(stderr)
+	dir := fs.String("dir", "openapi", "the directory the documents are written to")
 	local := map[string]string{}
-	flag.Func("local", "name=path: read the document of name from a file, such as a core's branch, in place of the public reference, to check the models against a change before it is published; the next run without it fetches the published document again", func(v string) error {
+	fs.Func("local", "name=path: read the document of name from a file, such as a core's branch, in place of the public reference, to check the models against a change before it is published; the next run without it fetches the published document again", func(v string) error {
 		name, path, ok := strings.Cut(v, "=")
 		if _, known := documents[name]; !ok || !known || path == "" {
 			return fmt.Errorf("%q is not name=path for a document of %v", v, documentNames())
@@ -57,11 +66,14 @@ func main() {
 		local[name] = path
 		return nil
 	})
-	flag.Parse()
-	if err := run(*dir, local); err != nil {
-		fmt.Fprintln(os.Stderr, "openapi:", err)
-		os.Exit(1)
+	if err := fs.Parse(args); err != nil {
+		return 2
 	}
+	if err := run(*dir, local); err != nil {
+		_, _ = fmt.Fprintln(stderr, "openapi:", err)
+		return 1
+	}
+	return 0
 }
 
 // documentNames is the names of the documents, sorted.
@@ -84,7 +96,7 @@ func run(dir string, local map[string]string) error {
 		if path, ok := local[name]; ok {
 			raw, err = os.ReadFile(path)
 		} else {
-			raw, err = fetch(client, url)
+			raw, err = fetch(context.Background(), client, url)
 		}
 		if err != nil {
 			return fmt.Errorf("%s: %w", name, err)
@@ -111,8 +123,12 @@ func run(dir string, local map[string]string) error {
 }
 
 // fetch returns the body of a 200 answer to a GET of url.
-func fetch(client *http.Client, url string) ([]byte, error) {
-	resp, err := client.Get(url)
+func fetch(ctx context.Context, client *http.Client, url string) ([]byte, error) {
+	req, err := http.NewRequestWithContext(ctx, http.MethodGet, url, nil)
+	if err != nil {
+		return nil, err
+	}
+	resp, err := client.Do(req)
 	if err != nil {
 		return nil, err
 	}

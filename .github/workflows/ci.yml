@@ -1,9 +1,25 @@
 name: CI
 
+# A push or pull request that changes only specs or markdown outside the
+# exceptions starts no run, because no build or test reads them. The exceptions
+# are CHANGELOG.md, whose newest release the version test reads, and the
+# markdown inside a testdata directory, which tests load.
 on:
   push:
     branches: [main]
+    paths:
+      - "**"
+      - "!specs/**"
+      - "!**.md"
+      - "CHANGELOG.md"
+      - "**/testdata/**"
   pull_request:
+    paths:
+      - "**"
+      - "!specs/**"
+      - "!**.md"
+      - "CHANGELOG.md"
+      - "**/testdata/**"
 
 permissions:
   contents: read

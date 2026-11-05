@@ -95,6 +95,17 @@ depcheck:
       decision: sdk-go-stdlib-only
       allow: {}
 
+# The refresh tool for the vendored API documents is a module of its own, so
+# the root's ./... never reaches it. Listing it runs its vet, tests and lint
+# beside the root's.
+modules: [tools]
+
+test:
+  # The plain test also runs on macOS and Windows: the SDK is a client
+  # library, and path, time zone and line-ending differences show up there
+  # first.
+  os: [macos-latest, windows-latest]
+
 release:
   # `lateregate release` moves the number the SDK reports to the version it
   # cuts, in the release commit, so the number and the changelog section

@@ -1,6 +1,6 @@
 # The per-push gate configuration for sdk-go. Every check runs from
-# latere.ai/x/ci-gate, pinned in go.mod, so each one runs the same on a laptop
-# as it does on a runner.
+# latere.ai/x/ci-gate, pinned in internal/gate/go.mod, so each one runs the
+# same on a laptop as it does on a runner.
 
 cover:
   trim_prefix: latere.ai/x/sdk-go/
@@ -33,7 +33,8 @@ depcheck:
   # package here takes on no module besides this one, and that is a promise
   # callers build on: the browser build of mls, messaging and attachment
   # (GOOS=js GOARCH=wasm) is part of it. The check reads what the build
-  # reaches, so the gate tool pinned in go.mod does not count.
+  # reaches; the gate tool lives in internal/gate's own module and is not
+  # part of it.
   platforms: [linux/amd64, darwin/arm64, windows/amd64, js/wasm]
   packages:
     latere.ai/x/sdk-go/account:

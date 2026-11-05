@@ -1,4 +1,4 @@
-name: CI
+name: ci
 
 # A push or pull request that changes only specs or markdown outside the
 # exceptions starts no run, because no build or test reads them. The exceptions
@@ -29,6 +29,13 @@ concurrency:
   cancel-in-progress: true
 
 jobs:
+  # The shared gate. Its tool is pinned in internal/gate, a module of its own,
+  # so the SDK's go.mod stays free of requirements.
+  gate:
+    uses: latere-ai/ci/.github/workflows/lateregate.yml@v1
+    with:
+      gate_module: internal/gate
+
   test:
     name: test (${{ matrix.os }}, Go ${{ matrix.go }})
     runs-on: ${{ matrix.os }}
@@ -57,28 +64,21 @@ jobs:
           echo "### Coverage" >> "$GITHUB_STEP_SUMMARY"
           go tool cover -func=coverage.out | tail -1 >> "$GITHUB_STEP_SUMMARY"
 
-  lint:
+  # What the gate does not cover: the browser build, the standard-library-only
+  # promise at the module level, and the refresh tool, a module of its own.
+  checks:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
       - uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e # v7.0.0
         with:
           go-version: "1.27.x"
-          # The linters and the refresh tool are the module downloads.
           cache-dependency-path: tools/go.sum
-      - name: gofmt
-        run: make fmt-check
-      - name: go vet
-        run: make vet
-      - name: staticcheck
-        run: make staticcheck
-      - name: govulncheck
-        run: make vulncheck
       - name: WebAssembly
         run: make wasm
       - name: The module has no dependencies
         run: |
-          if grep -q '^require' go.mod; then
+          if grep -q '^require' go.mod || [ -e go.sum ]; then
             echo "go.mod requires a module; the SDK depends on the standard library alone" >&2
             exit 1
           fi

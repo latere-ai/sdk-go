@@ -7,6 +7,12 @@ minor version may break code, and every such change is marked **Breaking**.
 
 ## Unreleased
 
+### Changed
+
+- Errors the SDK wraps from a failed message check, a malformed payload
+  or a bad signature now also match the underlying error with `errors.Is`
+  and `errors.As`.
+
 ## v0.32.0 - 2026-11-03
 
 ### Added

@@ -17,20 +17,26 @@ You need Go 1.26 or newer. On Linux and macOS, everything runs from the
 repository root with `make`:
 
 ```sh
-make test      # go test -race over every package
-make check     # gofmt, go vet, staticcheck, govulncheck and the tests
-make cover     # the tests with a coverage report in coverage.html
+make test      # go test over every package
+make check     # the shared gate, then the WebAssembly build
+make cover     # the per-package coverage floor
+make hooks     # install the pre-commit and pre-push hooks
 ```
 
-`make check` needs nothing but Go: the linters run at pinned versions
-through `go run`, and the module has no dependencies to install. On
-Windows, run `go test -race ./...` directly.
+The checks come from [lateregate](https://github.com/latere-ai/ci-gate), which
+`internal/gate/go.mod` pins as a tool. The pin lives in a module of its own,
+so the SDK's `go.mod` has no requirements and asks callers for no newer Go
+than the SDK itself needs; the gate's own Go version applies to that module
+alone, and it names the toolchain the checks run on. `make check` needs
+nothing but Go. The settings, including the 90 percent coverage floor every
+package clears on its own, are in `.lateregate.yaml`; `go -C internal/gate
+tool lateregate list -C ../..` prints each check and whether it applies.
+On Windows, run `go test -race ./...` directly.
 
-CI runs two jobs on every pull request. The test job runs
-`go test -race` with coverage on Linux, macOS and Windows, each on Go 1.26
-and 1.27. The lint job runs, on Linux, the formatting check, `go vet`,
-staticcheck and govulncheck, checks that `go.mod` requires no module, and
-vets the refresh tool under `tools/`.
+CI runs the same gate on every pull request. Beside it, the tests run on
+Linux, macOS and Windows, each on Go 1.26 and 1.27, and three checks run on
+Linux: the packages a browser runs build for WebAssembly, `go.mod` requires
+no module, and the refresh tool under `tools/` builds.
 
 ## How the code is laid out
 
@@ -115,15 +121,18 @@ approved, a maintainer merges it.
 
 ## Releasing
 
-A maintainer releases from `main`:
+A maintainer releases from `main`, with the changes for the release written
+under `Unreleased` in [CHANGELOG.md](CHANGELOG.md), and runs one command:
 
-1. Move the entries under `Unreleased` in [CHANGELOG.md](CHANGELOG.md) to a
-   new `## vX.Y.Z - YYYY-MM-DD` section, leaving an empty `Unreleased`
-   above it.
-2. Set `latere.Version` to `X.Y.Z`. A test fails while the two disagree;
-   before the first release, `Version` is the coming version followed by
-   `-dev`.
-3. Run `make check`, commit, and tag that commit `vX.Y.Z`.
+```sh
+go -C internal/gate tool lateregate -C ../.. release vX.Y.Z
+```
+
+It refuses while CI is red or `HEAD` is not the tip of `origin/main`, runs
+the whole gate, moves the `Unreleased` notes to a `## vX.Y.Z - YYYY-MM-DD`
+section, sets `latere.Version` to `X.Y.Z` in the same commit, tags it and
+pushes the commit and the tag together. A test fails while `Version`
+disagrees with the newest section of the changelog.
 
 Pushing the tag publishes the GitHub release, with the tag's section as its
 body, once CI has passed on the tagged commit; a tag on a commit whose CI

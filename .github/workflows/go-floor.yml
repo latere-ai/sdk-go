@@ -1,9 +1,11 @@
 name: go-floor
 
 # What the shared gate cannot express: the Go release the module declares as
-# its floor, and the browser build. The gate runs the suite on the toolchain
-# its own module pins, one Go version, so the oldest supported release and
-# the WebAssembly vet run here.
+# its floor, the browser build, and the Windows test. The gate runs the suite
+# on the toolchain its own module pins, one Go version, so the oldest
+# supported release and the WebAssembly vet run here. The shared workflow's
+# test job runs its steps in the runner's default shell, which on Windows is
+# PowerShell and cannot read them, so the Windows test runs here with bash.
 #
 # A push or pull request that changes only specs or markdown outside the
 # exceptions starts no run, because no build or test reads them. The exceptions
@@ -34,17 +36,29 @@ concurrency:
   cancel-in-progress: true
 
 jobs:
-  floor:
-    name: test (Go 1.26.x)
-    runs-on: ubuntu-latest
+  test:
+    name: test (${{ matrix.os }}, Go ${{ matrix.go }})
+    runs-on: ${{ matrix.os }}
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - os: ubuntu-latest
+            go: "1.26.x"
+          - os: windows-latest
+            go: "1.26.x"
+          - os: windows-latest
+            go: "1.27.x"
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
       - uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e # v7.0.0
         with:
-          go-version: "1.26.x"
+          go-version: ${{ matrix.go }}
           # The module has no dependencies, so there is nothing to cache.
           cache: false
       - name: Test
+        # bash on every runner, so the step reads the same on each.
+        shell: bash
         run: go test -race -count=1 ./...
 
   wasm:

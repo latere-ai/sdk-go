@@ -107,3 +107,9 @@ release:
   stamp:
     - file: latere/config.go
       pattern: 'const Version = "\d+\.\d+\.\d+"'
+
+test:
+  # The SDK builds and runs on Windows, so the plain test also runs there. The
+  # race-detector test on Windows stays in go-floor.yml, which the shared test
+  # job does not repeat.
+  os: [windows-latest]

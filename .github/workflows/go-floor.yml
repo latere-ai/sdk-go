@@ -5,9 +5,9 @@ name: go-floor
 # and the module-level standard-library-only check. The gate runs the suite
 # on the toolchain its own module pins, one Go version, so the oldest
 # supported release and the WebAssembly vet run here. Its plain test on other
-# systems runs without -race and may replay cached results, and on Windows its
-# steps run in PowerShell and cannot be read, so macOS and Windows run the
-# test here with bash, the race detector and no cache. The dependency check
+# systems runs without -race and may replay cached results, so macOS and
+# Windows run the test here with the race detector and no cache, on the
+# gate's Go version and on the next one. The dependency check
 # of the gate follows imports of the listed packages only, not test files or
 # unlisted packages such as the examples, so the check that go.mod requires
 # nothing runs here too.

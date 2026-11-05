@@ -656,7 +656,7 @@ func TestVersionMatchesTheChangelog(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	m := regexp.MustCompile(`(?m)^## \[(\d+\.\d+\.\d+)\]`).FindSubmatch(raw)
+	m := regexp.MustCompile(`(?m)^## v(\d+\.\d+\.\d+) `).FindSubmatch(raw)
 	switch {
 	case m == nil && !strings.HasSuffix(Version, "-dev"):
 		t.Errorf("CHANGELOG.md has no release, so Version %q should end in -dev", Version)

@@ -118,12 +118,16 @@ approved, a maintainer merges it.
 A maintainer releases from `main`:
 
 1. Move the entries under `Unreleased` in [CHANGELOG.md](CHANGELOG.md) to a
-   new `## [X.Y.Z] - YYYY-MM-DD` section, leaving an empty `Unreleased`
+   new `## vX.Y.Z - YYYY-MM-DD` section, leaving an empty `Unreleased`
    above it.
 2. Set `latere.Version` to `X.Y.Z`. A test fails while the two disagree;
    before the first release, `Version` is the coming version followed by
    `-dev`.
 3. Run `make check`, commit, and tag that commit `vX.Y.Z`.
+
+Pushing the tag publishes the GitHub release, with the tag's section as its
+body, once CI has passed on the tagged commit; a tag on a commit whose CI
+failed, or without a section, publishes nothing.
 
 ## License
 

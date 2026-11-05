@@ -1,0 +1,24 @@
+name: release
+
+# A tag is a release, and a release has notes. The shared pipeline checks
+# that ci.yml passed on the tagged commit, reads the CHANGELOG.md section for
+# the tag, refuses the tag when either fails, and otherwise publishes the
+# GitHub release with that section as the body. Nothing is built: Go takes
+# the module from the git tag.
+
+on:
+  push:
+    tags: ["v*"]
+
+permissions:
+  contents: write
+  # The release first checks that CI passed on the tagged commit.
+  actions: read
+
+jobs:
+  release:
+    uses: latere-ai/ci/.github/workflows/notes-release.yml@v1
+    with:
+      # This repository's per-push check, which runs no shared gate.
+      verify_workflow: ci.yml
+    secrets: inherit

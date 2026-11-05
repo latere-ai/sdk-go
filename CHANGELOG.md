@@ -5,9 +5,9 @@ All notable changes to this SDK are recorded here. The format follows
 follows [semantic versioning](https://semver.org/); while it is at v0, a
 minor version may break code, and every such change is marked **Breaking**.
 
-## [Unreleased]
+## Unreleased
 
-## [0.32.0] - 2026-11-03
+## v0.32.0 - 2026-11-03
 
 ### Added
 
@@ -19,7 +19,7 @@ minor version may break code, and every such change is marked **Breaking**.
   after a cursor or newest before it (`BackupOldest`, `BackupNewest`). The
   models are held to the messaging document of Sermo v0.2.0.
 
-## [0.31.0] - 2026-11-03
+## v0.31.0 - 2026-11-03
 
 ### Changed
 
@@ -49,7 +49,7 @@ minor version may break code, and every such change is marked **Breaking**.
     `SuggestionShown`, `Surface` and `Remembered`: how the person gave
     the answer, as the caller sent it.
 
-## [0.30.0] - 2026-11-03
+## v0.30.0 - 2026-11-03
 
 ### Added
 
@@ -70,7 +70,7 @@ minor version may break code, and every such change is marked **Breaking**.
   certificate of `OfLearned` holds; empty from a decision service without
   the report, where a client shows no chance.
 
-## [0.29.0] - 2026-11-03
+## v0.29.0 - 2026-11-03
 
 ### Changed
 
@@ -80,7 +80,7 @@ minor version may break code, and every such change is marked **Breaking**.
   Those servers are now released, so the consent fields of v0.28.0 no
   longer describe unreleased servers.
 
-## [0.28.0] - 2026-11-03
+## v0.28.0 - 2026-11-03
 
 ### Added
 
@@ -157,7 +157,7 @@ minor version may break code, and every such change is marked **Breaking**.
   `AskUnsure` says that more answers can move the suggestion, not that
   they will.
 
-## [0.27.0] - 2026-11-02
+## v0.27.0 - 2026-11-02
 
 ### Added
 
@@ -200,7 +200,7 @@ minor version may break code, and every such change is marked **Breaking**.
   outputs and self-reported values; a repeat of the same submission changes
   nothing.
 
-## [0.26.0] - 2026-11-02
+## v0.26.0 - 2026-11-02
 
 ### Added
 
@@ -232,7 +232,7 @@ minor version may break code, and every such change is marked **Breaking**.
   the decision service name the agent by; the spec is kept whole in
   `RawJSON`.
 
-## [0.25.0] - 2026-11-02
+## v0.25.0 - 2026-11-02
 
 ### Added
 
@@ -261,7 +261,7 @@ minor version may break code, and every such change is marked **Breaking**.
   sends its mode and the layer that decided a step, such as
   `topos/progressive/score`.
 
-## [0.24.0] - 2026-11-01
+## v0.24.0 - 2026-11-01
 
 ### Added
 
@@ -285,7 +285,7 @@ minor version may break code, and every such change is marked **Breaking**.
   serves each under, as `apps.BasePath` and `evals.BasePath` do, so a
   program that takes either address as one URL can name the base URL.
 
-## [0.23.0] - 2026-11-01
+## v0.23.0 - 2026-11-01
 
 ### Added
 
@@ -303,7 +303,7 @@ minor version may break code, and every such change is marked **Breaking**.
 - `VerdictBlock` documents that a current server records a refused call
   as `block`, and `VerdictDeny` that an older one recorded `deny`.
 
-## [0.22.0] - 2026-11-01
+## v0.22.0 - 2026-11-01
 
 ### Added
 
@@ -317,7 +317,7 @@ minor version may break code, and every such change is marked **Breaking**.
   `Answer` sends the person's answer about a step, once, never retried;
   `Forget` removes what the decision service holds about the person.
 
-## [0.21.0] - 2026-11-01
+## v0.21.0 - 2026-11-01
 
 ### Added
 
@@ -329,7 +329,7 @@ minor version may break code, and every such change is marked **Breaking**.
   empty `Handle`. The messaging document is vendored as the platform
   publishes it with the route's `id` parameter.
 
-## [0.20.0] - 2026-10-31
+## v0.20.0 - 2026-10-31
 
 ### Added
 
@@ -339,7 +339,7 @@ minor version may break code, and every such change is marked **Breaking**.
   handle no one holds is an error matching `ErrPersonNotFound`. The model
   is held to the messaging document, which now has the route.
 
-## [0.19.0] - 2026-10-31
+## v0.19.0 - 2026-10-31
 
 ### Added
 
@@ -359,7 +359,7 @@ minor version may break code, and every such change is marked **Breaking**.
   `ErrAuthorizerUnavailable`. The models are held to the service's
   OpenAPI document in `openapi/messaging.json`.
 
-## [0.18.0] - 2026-10-30
+## v0.18.0 - 2026-10-30
 
 ### Added
 
@@ -378,7 +378,7 @@ minor version may break code, and every such change is marked **Breaking**.
   sent now, and `ModelRequest` gains `FoldSeq`, `NamesReads` and
   `Purpose`.
 
-## [0.17.0] - 2026-10-30
+## v0.17.0 - 2026-10-30
 
 ### Added
 
@@ -388,7 +388,7 @@ minor version may break code, and every such change is marked **Breaking**.
   names no run, so a program links the memory to its run without
   restating the prefix.
 
-## [0.16.0] - 2026-10-30
+## v0.16.0 - 2026-10-30
 
 ### Added
 
@@ -436,7 +436,7 @@ minor version may break code, and every such change is marked **Breaking**.
   with the apply, such as Tidy memory, run at night in it; without it,
   in UTC. A call that passes no params is unchanged.
 
-## [0.15.0] - 2026-10-30
+## v0.15.0 - 2026-10-30
 
 Packages `mls` and `messaging` have had no external security audit yet.
 
@@ -542,7 +542,7 @@ Packages `mls` and `messaging` have had no external security audit yet.
   unchanged, and so is the JSON; a composite literal names them inside
   `Attachment: attachment.Attachment{...}`.
 
-## [0.14.0] - 2026-10-29
+## v0.14.0 - 2026-10-29
 
 ### Changed
 
@@ -555,7 +555,7 @@ Packages `mls` and `messaging` have had no external security audit yet.
   `subagent.message` and `subagent.ended`. Against an agents API that
   still sends `thread`, both fields read empty.
 
-## [0.13.0] - 2026-10-25
+## v0.13.0 - 2026-10-25
 
 ### Added
 
@@ -596,7 +596,7 @@ Packages `mls` and `messaging` have had no external security audit yet.
   `Manifest` takes `times` off a routine that comes to start another way,
   and `schedule`, `on` and `at` off one that comes to start on dates.
 
-## [0.12.0] - 2026-10-25
+## v0.12.0 - 2026-10-25
 
 ### Added
 
@@ -616,7 +616,7 @@ Packages `mls` and `messaging` have had no external security audit yet.
 - Package `account`: `Spend` and `SpendDay` are now held to the account
   document, which describes the spending read.
 
-## [0.11.0] - 2026-10-24
+## v0.11.0 - 2026-10-24
 
 ### Added
 
@@ -668,7 +668,7 @@ Packages `mls` and `messaging` have had no external security audit yet.
   `Manifest`, which keeps the stored allowance when the fields carry
   none; `WriteAllowance`, `CheckAllowance` and `ErrAllowanceInvalid`.
 
-## [0.10.0] - 2026-10-23
+## v0.10.0 - 2026-10-23
 
 ### Added
 
@@ -727,7 +727,7 @@ Packages `mls` and `messaging` have had no external security audit yet.
   refuse the name `hold` before any request, since its path is the
   hold's.
 
-## [0.9.1] - 2026-10-23
+## v0.9.1 - 2026-10-23
 
 ### Changed
 
@@ -740,7 +740,7 @@ Packages `mls` and `messaging` have had no external security audit yet.
   download, an HTML page and an SVG included. Nothing in the SDK's code
   changes; the docs and a test state the answer.
 
-## [0.9.0] - 2026-10-23
+## v0.9.0 - 2026-10-23
 
 ### Added
 
@@ -749,7 +749,7 @@ Packages `mls` and `messaging` have had no external security audit yet.
   the same rules Latere Chat and Latere Studio follow, and the package
   docs on how to apply them.
 
-## [0.8.0] - 2026-10-22
+## v0.8.0 - 2026-10-22
 
 ### Added
 
@@ -792,7 +792,7 @@ Packages `mls` and `messaging` have had no external security audit yet.
   the capability under, for a program that takes a capability's address
   as one URL with that path and cuts it off to name the base URL.
 
-## [0.7.0] - 2026-10-22
+## v0.7.0 - 2026-10-22
 
 ### Added
 
@@ -882,7 +882,7 @@ Packages `mls` and `messaging` have had no external security audit yet.
   into a `RoutineSchedule`. Answer it with `ConfirmTool`; only the person
   who started the session may.
 
-## [0.6.0] - 2026-10-22
+## v0.6.0 - 2026-10-22
 
 ### Added
 
@@ -913,7 +913,7 @@ Packages `mls` and `messaging` have had no external security audit yet.
   `routine`'s, so their text starts `routine:`. Matching them with
   `errors.Is` is unchanged.
 
-## [0.5.0] - 2026-10-21
+## v0.5.0 - 2026-10-21
 
 ### Added
 
@@ -931,7 +931,7 @@ Packages `mls` and `messaging` have had no external security audit yet.
   Storage by its owner and path, so a kept file's `Ref` names a file
   package `storage` reads, in the person's space or an organization's.
 
-## [0.4.0] - 2026-10-21
+## v0.4.0 - 2026-10-21
 
 ### Added
 
@@ -965,7 +965,7 @@ Packages `mls` and `messaging` have had no external security audit yet.
   only connections on which the server sent nothing count toward the
   limit.
 
-## [0.3.0] - 2026-10-21
+## v0.3.0 - 2026-10-21
 
 ### Added
 
@@ -1000,7 +1000,7 @@ Packages `mls` and `messaging` have had no external security audit yet.
   verifying it, for a program that is handed a token to present to the
   API.
 
-## [0.2.0] - 2026-10-20
+## v0.2.0 - 2026-10-20
 
 ### Added
 
@@ -1025,7 +1025,7 @@ Packages `mls` and `messaging` have had no external security audit yet.
   each attempt by the timeout and `TransferTime` for its length and sends
   an attempt cut off again. An error never names a signed URL's query.
 
-## [0.1.0] - 2026-10-20
+## v0.1.0 - 2026-10-20
 
 The first release.
 
